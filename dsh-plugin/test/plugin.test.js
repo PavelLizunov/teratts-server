@@ -61,8 +61,11 @@ test("client dependency graph includes every dynamic package", () => {
     "@deepseek-ai/dsh-client-runtime",
     "@deepseek-ai/dsh-api-remotes",
     "@deepseek-ai/dsh-client-ui-conversation",
-    "@deepseek-ai/dsh-client-ui-primitives",
   ]) {
     assert.ok(inject.includes(name), `missing client injection ${name}`);
   }
+  assert.ok(
+    !inject.includes("@deepseek-ai/dsh-client-ui-primitives"),
+    "static shell modules must not be declared as dynamic plugin injections",
+  );
 });
