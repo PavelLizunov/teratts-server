@@ -16,14 +16,14 @@ const packageJson = JSON.parse(packageRaw);
 test("client contains no direct TTS endpoint or credential handling", () => {
   assert.doesNotMatch(client, /tail9fd337|windows-brat|127\.0\.0\.1|TERATTS_TOKEN/);
   assert.doesNotMatch(client, /fetch\s*\(/);
-  assert.match(client, /ctx\.remote\.dynamicCordisRunner/);
 });
 
-test("client uses dynamicCordisRunner invoke instead of TypertRemoteService", () => {
-  assert.doesNotMatch(client, /\$mount/);
-  assert.doesNotMatch(client, /terattsVoice/);
-  assert.match(client, /runner\.invoke\("synthesize"/);
-  assert.match(client, /error\?\.code === "cancelled"/);
+test("client mounts strict Remote and reads it without inject deadlock", () => {
+  assert.match(client, /await ctx\.remote\.\$mount\(REMOTE\)/);
+  assert.match(client, /ctx\.get\("remote\.terattsVoice"\)/);
+  assert.doesNotMatch(client, /inject = \["remote\.terattsVoice"/);
+  assert.match(client, /mode:\s*"strict"/);
+  assert.match(client, /AbortError/);
 });
 
 test("client uses required playback and accessible UI primitives", () => {
@@ -37,11 +37,12 @@ test("client uses required playback and accessible UI primitives", () => {
   assert.match(client, /playback\.epoch/);
   assert.match(client, /playback\.owner/);
   assert.match(client, /URL\.revokeObjectURL/);
-  assert.doesNotMatch(client, /🔊|⏹|⏳/u);
+  assert.doesNotMatch(client, /\u{1F50A}|\u{23F9}|\u{23F3}/u);
 });
 
-test("host uses harness.handle for dynamic plugin invoke", () => {
-  assert.match(host, /ctx\.handle\("synthesize"/);
+test("host owns network configuration, timeout, voice, and token", () => {
+  assert.match(host, /TypertRemoteService/);
+  assert.match(host, /super\(ctx, "terattsVoice"\)/);
   assert.match(host, /endpoint:/);
   assert.match(host, /timeoutMs:/);
   assert.match(host, /voice:/);
@@ -50,21 +51,21 @@ test("host uses harness.handle for dynamic plugin invoke", () => {
   assert.match(host, /AbortSignal\.timeout/);
   assert.match(host, /authorization/);
   assert.match(host, /fetch\(endpoint/);
-  assert.doesNotMatch(host, /TypertRemoteService/);
-  assert.doesNotMatch(host, /Remote\(/);
+  assert.doesNotMatch(host, /ctx\.handle/);
 });
 
-test("client dependency graph includes every dynamic package", () => {
+test("client runtime inject declares only available services", () => {
+  assert.match(client, /const inject = \["remote", "slots"\]/);
+});
+
+test("package bundle inject avoids static shell modules", () => {
   const inject = packageJson.dsh.client.inject;
   for (const name of [
     "@deepseek-ai/dsh-client-runtime",
     "@deepseek-ai/dsh-api-remotes",
     "@deepseek-ai/dsh-client-ui-conversation",
   ]) {
-    assert.ok(inject.includes(name), `missing client injection ${name}`);
+    assert.ok(inject.includes(name), `missing bundle injection ${name}`);
   }
-  assert.ok(
-    !inject.includes("@deepseek-ai/dsh-client-ui-primitives"),
-    "static shell modules must not be declared as dynamic plugin injections",
-  );
+  assert.ok(!inject.includes("@deepseek-ai/dsh-client-ui-primitives"));
 });
