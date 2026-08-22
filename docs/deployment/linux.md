@@ -22,7 +22,10 @@ git checkout --detach <sha>
 test "$(git rev-parse HEAD)" = <sha>
 test -z "$(git status --porcelain)"
 deploy/linux/build-release.sh <sha> /srv/staging/teratts-server
-ldd /srv/staging/teratts-server | grep -q onnxruntime && { echo 'unexpected static/dynamic ELF dependency'; exit 1; } || true
+if ldd /srv/staging/teratts-server | grep -q onnxruntime; then
+  echo 'unexpected ONNX Runtime ELF dependency' >&2
+  exit 1
+fi
 ```
 
 `build-release.sh` runs `TERATTS_APP_GIT_SHA=<sha> cargo build --release --locked`, rejects a different `HEAD` or tracked changes, and prints the binary SHA-256. Transfer the binary and its recorded hash over an authenticated channel.

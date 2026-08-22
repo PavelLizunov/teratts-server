@@ -55,14 +55,18 @@ pub fn finalize(text: &str) -> ModelText {
 /// Split already-normalized/accented text for TTS without cutting language
 /// tags, words, or a Russian span containing an explicit/manual stress marker.
 /// Each returned chunk is independently valid tagged text.
-pub fn chunk_tagged(text: &str, max_chars: usize) -> Result<Vec<String>> {
+pub fn chunk_tagged(
+    text: &str,
+    max_chars: usize,
+    manual_language_spans: &[usize],
+) -> Result<Vec<String>> {
     validate_language_tags(text)?;
     let chars: Vec<char> = text.chars().collect();
     let mut output = Vec::new();
-    for (lang, start, end) in language_spans(text) {
+    for (index, (lang, start, end)) in language_spans(text).into_iter().enumerate() {
         let content: String = chars[start..end].iter().collect();
         let lang: String = lang.iter().collect();
-        if lang == "ru" && content.contains('+') {
+        if manual_language_spans.contains(&index) {
             output.push(format!("<{lang}>{content}</{lang}>"));
             continue;
         }
@@ -544,6 +548,20 @@ mod tests {
         assert_eq!(ranges.len(), 2);
         assert_eq!(&text[ranges[0].clone()], "ручной");
         assert_eq!(&text[ranges[1].clone()], "второй");
+    }
+
+    #[test]
+    fn tagged_chunking_keeps_tags_and_manual_spans_intact() {
+        let manual = format!("<ru>з+амок {}</ru>", "длинный ".repeat(30));
+        assert_eq!(chunk_tagged(&manual, 40).unwrap(), vec![manual]);
+
+        let chunks = chunk_tagged(
+            "<ru>первое короткое предложение второе длинное предложение</ru> <en>hello world</en>",
+            35,
+        )
+        .unwrap();
+        assert!(chunks.len() > 2);
+        assert!(chunks.iter().all(|part| validate_language_tags(part).is_ok()));
     }
 
     #[test]

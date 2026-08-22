@@ -484,10 +484,9 @@ impl TokenClassifier {
         }
         groups
             .into_iter()
-            .map(|(start, end, scores)| {
+            .map(|(_, _, scores)| {
                 let averaged = average_vectors(&scores)?;
                 let label = argmax(&averaged);
-                let _ = (start, end);
                 Ok(ClassifiedWord {
                     entity: self.labels.get(label).cloned().unwrap_or_default(),
                 })
