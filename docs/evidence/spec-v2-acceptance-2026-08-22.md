@@ -21,7 +21,7 @@
 
 ## Not verified / pending
 
-- CT 221 Tailscale enrollment: `tailscale status` reports logged out and supplies the human authorization URL.
+- CT 221 Tailnet re-enrollment on kernel TUN: the first userspace-mode login reached `machineAuthorized` but never received/persisted a netmap; CT remains unprivileged with only `/dev/net/tun` passed through and awaits one new authorization plus reboot-persistence proof.
 - Tailnet-only HTTPS Serve for CT 221.
 - Tailnet HTTPS bearer rejection and authenticated `/tts` from another Tailnet device.
 - DSH host-side endpoint/credential switch from Windows fallback to CT 221.
