@@ -27,9 +27,18 @@ printf '%s\n' "$listeners" | awk '{print $4}' | grep -Ev '^(127\.0\.0\.1|\[::1\]
 
 response=$(mktemp)
 trap 'rm -f "$response"' EXIT HUP INT TERM
+# shellcheck disable=SC1090
+. "$CONFIG_ROOT/teratts.env"
+[ -n "${TERATTS_BEARER_TOKEN:-}" ] || fail "TERATTS_BEARER_TOKEN is missing"
+unauthorized=$("$CURL" --silent --output /dev/null --write-out '%{http_code}' \
+    --header 'Content-Type: application/json' \
+    --data '{"text":"Проверка."}' \
+    http://127.0.0.1:8088/tts)
+[ "$unauthorized" = 401 ] || fail "unauthenticated TTS request returned HTTP $unauthorized"
 code=$("$CURL" --silent --show-error --max-time 120 --output "$response" --write-out '%{http_code}' \
     --header 'Content-Type: application/json' \
-    --data '{"text":"Проверка.","voice":"ru_f1","duration_scale":1.0}' \
+    --header "Authorization: Bearer $TERATTS_BEARER_TOKEN" \
+    --data '{"text":"Проверка.","voice":"ru_f1","language":"ru","duration_scale":1.0}' \
     http://127.0.0.1:8088/tts)
 [ "$code" = 200 ] || fail "TTS smoke test returned HTTP $code"
 [ "$(stat -c '%s' "$response")" -gt 44 ] || fail "TTS smoke WAV is empty"

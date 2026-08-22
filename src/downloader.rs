@@ -143,14 +143,14 @@ fn rename_no_replace(_source: &Path, _destination: &Path) -> Result<()> {
 pub async fn download_models(model_root: &Path) -> Result<()> {
     let manifest = Manifest::pinned()?;
     let release = manifest.release_dir(model_root);
-    if manifest::check_installed(&manifest, &release).is_ok() {
-        println!("models already installed: {}", release.display());
+    if manifest::verify_release(&manifest, &release).is_ok() {
+        println!("models already installed and verified: {}", release.display());
         return Ok(());
     }
 
     let _lock = DownloadLock::acquire(model_root)?;
     if release.exists() {
-        manifest::check_installed(&manifest, &release).with_context(|| {
+        manifest::verify_release(&manifest, &release).with_context(|| {
             format!(
                 "immutable model release already exists but is invalid: {}",
                 release.display()
@@ -216,6 +216,7 @@ async fn download_release(manifest: &Manifest, staging: &Path) -> Result<()> {
             file.write_all(&chunk).await?;
         }
         file.flush().await?;
+        file.sync_all().await?;
         drop(file);
         let digest = format!("{:x}", hash.finalize());
         if size != entry.size || digest != entry.sha256 {

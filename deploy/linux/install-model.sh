@@ -24,6 +24,7 @@ trap 'rm -rf "$staging"' EXIT HUP INT TERM
 install -d -o root -g root -m 0755 "$staging"
 cp -a "$source_dir/." "$staging/"
 find "$staging" -type l -print | grep -q . && fail "model release must not contain symbolic links"
+find "$staging" \( -type b -o -type c -o -type p -o -type s \) -print | grep -q . && fail "model release contains a special file"
 find "$staging" ! -user root -exec chown root:root {} +
 (
     cd "$staging"
