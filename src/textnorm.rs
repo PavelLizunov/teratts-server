@@ -52,6 +52,14 @@ pub fn finalize(text: &str) -> ModelText {
     }
 }
 
+pub fn language_span_contents(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    language_spans(text)
+        .into_iter()
+        .map(|(_, start, end)| chars[start..end].iter().collect())
+        .collect()
+}
+
 /// Split already-normalized/accented text for TTS without cutting language
 /// tags, words, or a Russian span containing an explicit/manual stress marker.
 /// Each returned chunk is independently valid tagged text.
@@ -553,15 +561,18 @@ mod tests {
     #[test]
     fn tagged_chunking_keeps_tags_and_manual_spans_intact() {
         let manual = format!("<ru>з+амок {}</ru>", "длинный ".repeat(30));
-        assert_eq!(chunk_tagged(&manual, 40).unwrap(), vec![manual]);
+        assert_eq!(chunk_tagged(&manual, 40, &[0]).unwrap(), vec![manual]);
 
         let chunks = chunk_tagged(
             "<ru>первое короткое предложение второе длинное предложение</ru> <en>hello world</en>",
             35,
+            &[],
         )
         .unwrap();
         assert!(chunks.len() > 2);
-        assert!(chunks.iter().all(|part| validate_language_tags(part).is_ok()));
+        assert!(chunks
+            .iter()
+            .all(|part| validate_language_tags(part).is_ok()));
     }
 
     #[test]

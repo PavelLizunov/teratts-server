@@ -990,12 +990,8 @@ mod tests {
 
     #[test]
     fn subword_scores_are_averaged_before_argmax() {
-        let averaged = average_vectors(&[
-            vec![0.90, 0.10],
-            vec![0.01, 0.99],
-            vec![0.01, 0.99],
-        ])
-        .unwrap();
+        let averaged =
+            average_vectors(&[vec![0.90, 0.10], vec![0.01, 0.99], vec![0.01, 0.99]]).unwrap();
         assert_eq!(argmax(&averaged), 1);
         assert!((averaged[1] - 0.6933333).abs() < 1e-6);
     }
@@ -1003,7 +999,9 @@ mod tests {
     #[test]
     fn predictions_follow_python_group_order() {
         let predictions = vec![
-            ClassifiedWord { entity: "NO".into() },
+            ClassifiedWord {
+                entity: "NO".into(),
+            },
             ClassifiedWord {
                 entity: "STRESS".into(),
             },

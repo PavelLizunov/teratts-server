@@ -74,6 +74,11 @@ pub struct SynthOutput {
     pub chunks: Vec<Vec<f32>>,
 }
 
+pub struct PreprocessedText {
+    text: String,
+    manual_language_spans: Vec<usize>,
+}
+
 impl TeraEngine {
     /// Load and verify the pinned release. Fails with `not-installed` reasons
     /// surfaced verbatim on the stdout protocol.
@@ -141,23 +146,42 @@ impl TeraEngine {
 
     /// Normalize and optionally accent one whole request before any TTS
     /// chunking. The returned text remains composed and language-tagged.
-    pub fn preprocess(&mut self, text: &str, lang: &str, russian_stress: bool) -> Result<String> {
+    pub fn preprocess(
+        &mut self,
+        text: &str,
+        lang: &str,
+        russian_stress: bool,
+    ) -> Result<PreprocessedText> {
         let tagged = textnorm::ensure_language_tags(text, lang);
+        let manual_language_spans = textnorm::language_span_contents(&tagged)
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, content)| content.contains('+').then_some(index))
+            .collect();
         let normalized = textnorm::normalize(&tagged, &self.indexer)
             .map_err(|e| anyhow!("invalid-text: {e}"))?;
-        if !russian_stress {
-            return Ok(normalized);
-        }
-        let russian_spans = textnorm::russian_span_ranges(&normalized);
-        self.ruaccent
-            .accent_ru_spans(&normalized, &russian_spans)
-            .map_err(|e| anyhow!("synth: RUAccent failed: {e}"))
+        let text = if russian_stress {
+            let russian_spans = textnorm::russian_span_ranges(&normalized);
+            self.ruaccent
+                .accent_ru_spans(&normalized, &russian_spans)
+                .map_err(|e| anyhow!("synth: RUAccent failed: {e}"))?
+        } else {
+            normalized
+        };
+        Ok(PreprocessedText {
+            text,
+            manual_language_spans,
+        })
     }
 
     /// Split whole-request preprocessing output into independently valid model
-    /// inputs while preserving language tags and manual Russian spans.
-    pub fn chunk_preprocessed(text: &str, max_chars: usize) -> Result<Vec<String>> {
-        textnorm::chunk_tagged(text, max_chars).map_err(|e| anyhow!("invalid-text: {e}"))
+    /// inputs while preserving language tags and manual spans.
+    pub fn chunk_preprocessed(
+        prepared: &PreprocessedText,
+        max_chars: usize,
+    ) -> Result<Vec<String>> {
+        textnorm::chunk_tagged(&prepared.text, max_chars, &prepared.manual_language_spans)
+            .map_err(|e| anyhow!("invalid-text: {e}"))
     }
 
     /// Synthesize one raw utterance. Request handlers with multiple chunks must
@@ -172,7 +196,7 @@ impl TeraEngine {
         russian_stress: bool,
     ) -> Result<SynthOutput> {
         let prepared = self.preprocess(text, lang, russian_stress)?;
-        self.synthesize_preprocessed(&prepared, voice, duration_scale, seed)
+        self.synthesize_preprocessed(&prepared.text, voice, duration_scale, seed)
     }
 
     /// Synthesize independently-valid tagged text produced by [`Self::preprocess`].
