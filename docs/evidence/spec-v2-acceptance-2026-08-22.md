@@ -16,8 +16,9 @@
 - Reboot recovery: CT 221 and enabled `teratts.service` returned to exact-SHA ready state after guest reboot in about 13 seconds.
 - Rollback drill: `dfe18e2 -> d62a0fb -> dfe18e2` completed with exact-SHA health checks and final authenticated WAV acceptance; later releases retained the same immutable activation contract.
 - DSH plugin source: `0.2.0` uses a Host Remote, host-side endpoint/credential, strict rc.8 codecs, DSH loading/stop primitives, one local `currentColor` speaker SVG, accessible error/loading state, global epoch-gated playback and cleanup. Five plugin tests pass.
-- DSH profile package dependency was updated to local `dsh-client-ui-teratts` `0.2.0` without restarting the active DSH host.
-- Durable Trajectory remediation prompt is stored at `docs/trajectory-prevention-prompt.md`.
+- DSH profile package dependency was updated to local `dsh-client-ui-teratts` `0.2.0` without restarting the active DSH host; `TERATTS_TOKEN` is configured write-only in the DSH credential service.
+- Cross-platform quality: Windows and Linux `cargo check --locked` passed; macOS and Linux full tests passed; strict `cargo clippy --all-targets -- -D warnings` passed on Rust/Clippy 1.96 and 1.98.
+- Durable Trajectory remediation prompt is stored at `docs/trajectory-prevention-prompt.md`; external restart/browser steps are stored at `docs/evidence/dsh-browser-acceptance.md`.
 
 ## Not verified / pending
 
