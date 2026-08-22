@@ -37,8 +37,23 @@
     {"mode": "dictionary", "input": "<ru>з+амок</ru> <ru>Привет</ru> <en>Hello</en>", "output": "<ru>з+амок</ru> <ru>Прив+ет</ru> <en>Hello</en>"}
   ],
   "neural_reference": {
-    "status": "generation-required-on-model-worker",
-    "required_records": [
+    "status": "generated-with-pinned-python-runtime",
+    "python_environment": {
+      "numpy": "2.0.2",
+      "onnxruntime": "1.19.2",
+      "transformers": "4.57.6",
+      "tokenizers": "0.22.2"
+    },
+    "cases": [
+      {"input":"ёлки-палки, замок!","output":"ёлки-п+алки, зам+ок!"},
+      {"input":"В старом замке стоял крепкий замок.","output":"В ст+аром з+амке сто+ял крепкий з+амок."},
+      {"input":"У меня мука на столе, а это настоящая мука.","output":"У мен+я мук+а на стол+е, а +это насто+ящая мук+а."},
+      {"input":"Острая коса лежала у берега, а рядом росла коса.","output":"+Острая кос+а леж+ала у б+ерега, а р+ядом росл+а к+оса."},
+      {"input":"Атлас мира лежал рядом с тканью атлас.","output":"+атлас м+ира леж+ал рядом с тк+анью +атлас."},
+      {"input":"Все пришли, и всё получилось.","output":"Вс+е пришл+и, и всё получ+илось."},
+      {"input":"Он сказал - привет.","output":"+Он сказ+ал- прив+ет."}
+    ],
+    "required_tensor_records": [
       "stress_usage_predictor tokenizer ids/offsets/special mask and labels",
       "yo_homograph_resolver tokenizer ids/offsets/special mask and labels",
       "turbo3.1 omograph pair tokenizer ids/masks and selected variant",

@@ -114,7 +114,7 @@ impl RuAccent {
     /// Load only assets required by the selected mode.
     pub fn new(config: RuAccentConfig) -> Result<Self> {
         let normalize = Regex::new(r#"[^a-zA-Z0-9\sа-яА-ЯёЁ—.,!?:;'(){}\[\]«»„“”\-]"#)?;
-        let words = Regex::new(r"\w*(?:\+\w+)*|[^\w\s]+")?;
+        let words = Regex::new(r"\w+(?:\+\w+)*|[^\w\s]+")?;
         let dictionary_words = Regex::new(r"[A-Za-zА-Яа-яЁё]+")?;
         let sentences = Regex::new(r#"[^.!?…]+[.!?…]*[\"»“]*"#)?;
         if config.mode == RuAccentMode::Disabled {
@@ -459,12 +459,12 @@ impl TokenClassifier {
             let unknown = encoding.get_ids().get(index).copied() == self.unknown_id;
             let subword = if unknown {
                 false
-            } else if self
+            } else if let Some(prefix) = self
                 .continuing_subword_prefix
                 .as_deref()
-                .is_some_and(|prefix| !prefix.is_empty())
+                .filter(|prefix| !prefix.is_empty())
             {
-                token.chars().count() != reference.chars().count()
+                token.starts_with(prefix) || token.chars().count() != reference.chars().count()
             } else {
                 start > 0
                     && text
@@ -915,7 +915,7 @@ mod tests {
             yo_words: HashMap::from([("елка".into(), "ёлка".into())]),
             yo_homographs: HashMap::new(),
             normalize: Regex::new(r#"[^a-zA-Z0-9\sа-яА-ЯёЁ—.,!?:;'(){}\[\]«»„“”\-]"#).unwrap(),
-            words: Regex::new(r"\w*(?:\+\w+)*|[^\w\s]+").unwrap(),
+            words: Regex::new(r"\w+(?:\+\w+)*|[^\w\s]+").unwrap(),
             dictionary_words: Regex::new(r"[A-Za-zА-Яа-яЁё]+").unwrap(),
             sentences: Regex::new(r#"[^.!?…]+[.!?…]*[\"»“]*"#).unwrap(),
             models: None,
@@ -994,6 +994,24 @@ mod tests {
             average_vectors(&[vec![0.90, 0.10], vec![0.01, 0.99], vec![0.01, 0.99]]).unwrap();
         assert_eq!(argmax(&averaged), 1);
         assert!((averaged[1] - 0.6933333).abs() < 1e-6);
+    }
+
+    #[test]
+    #[ignore = "requires pinned RUAccent model assets; run explicitly on a model worker"]
+    fn full_mode_matches_pinned_python_golden_corpus() {
+        let root = std::env::var_os("TERATTS_RUACCENT_ROOT")
+            .map(PathBuf::from)
+            .expect("TERATTS_RUACCENT_ROOT must name the pinned ruaccent directory");
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/ruaccent-reference-v2.json"))
+                .unwrap();
+        let cases = fixture["neural_reference"]["cases"].as_array().unwrap();
+        let mut runtime = RuAccent::load(root, RuAccentMode::Full).unwrap();
+        for case in cases {
+            let input = case["input"].as_str().unwrap();
+            let expected = case["output"].as_str().unwrap();
+            assert_eq!(runtime.accent(input).unwrap(), expected, "input: {input}");
+        }
     }
 
     #[test]
