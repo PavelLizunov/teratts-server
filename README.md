@@ -32,4 +32,4 @@ inference because one engine owns the four mutable ONNX Runtime sessions.
 Install it into the DSH Web profile, add the `ui-teratts` row from
 `dsh-plugin/cordis.patch.yml`, rebuild the Web artifacts, and refresh the
 existing DSH URL. The browser must be able to reach the configured TTS URL
-(default `http://127.0.0.1:8088`).
+(the homelab plugin defaults to the Tailnet-only HTTPS endpoint `https://windows-brat.tail9fd337.ts.net`; override it with `localStorage.setItem("teratts.url", "https://host")`).

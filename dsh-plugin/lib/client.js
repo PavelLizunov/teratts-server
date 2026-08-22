@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const module = { exports: {} };
     const React = require("react");
     const { Tooltip } = require("@deepseek-ai/dsh-client-ui-primitives");
-    const TTS_URL = window.localStorage.getItem("teratts.url") || "http://127.0.0.1:8088";
+    const TTS_URL = window.localStorage.getItem("teratts.url") || "https://windows-brat.tail9fd337.ts.net";
     const styleId = "dsh-client-ui-teratts/action";
     if (!document.querySelector(`style[data-plugin-css=${JSON.stringify(styleId)}]`)) {
       const style = document.createElement("style");
