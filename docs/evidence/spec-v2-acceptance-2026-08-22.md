@@ -2,12 +2,11 @@
 
 ## Verified
 
-- Repository source: `54a334b2159f2d727b10f434b11e8f470fe3c2fd` is pushed to `origin/main` and is the active Linux release.
+- Repository source and active Linux release: `b5e0cb0301e4d1111cf4435c99ae50fba5eaf6bd`; binary SHA-256 `bb9219cca8084b4f40ef385f5f21cf2e2a81612e5599ccc3a7629c5fe48ad8d6`.
 - macOS hermetic suite: 60 passed, 1 model-backed test ignored by default.
 - Debian model-backed differential test: pinned Python-generated full RUAccent corpus passed 7/7 cases; full Debian test suite passed 61 tests with the model-backed test ignored in the ordinary run.
 - Linux runtime: unprivileged Debian 12 LXC CT 221 `teratts` on `pve-ninitux3`, static LAN address `192.168.0.221`, 4 vCPU, 6 GiB RAM, Proxmox 1 GiB swap limit, 16 GiB local disk, onboot enabled.
-- Exact-SHA release: `/opt/teratts/releases/54a334b2159f2d727b10f434b11e8f470fe3c2fd`.
-- Binary SHA-256: `10494d65be9cbb49a21fe174ad4e495316f93c74ee21b991f92d91913d366116`.
+- Exact-SHA release path: `/opt/teratts/releases/b5e0cb0301e4d1111cf4435c99ae50fba5eaf6bd`.
 - Dynamic ONNX Runtime: official Microsoft 1.27.0, archive SHA-256 `547e40a48f1fe73e3f812d7c88a948612c23f896b91e4e2ee1e232d7b468246f`, dylib SHA-256 `4061866361d9a8d2872f5f419c5515ce35a830a0c5c77ce1723320ac0dbabfc7`; no ONNX Runtime dependency appears in `ldd`.
 - Clean standalone model install: all 57 pinned files downloaded into a fresh root and verified; installed model tree is about 871 MiB and includes full RUAccent assets.
 - Service: non-root `teratts.service`, exact app/model SHA in live `/health`, RUAccent `full`, loopback-only `127.0.0.1:8088`, mandatory bearer authentication, valid WAV smoke test, LAN-IP connection failure.
