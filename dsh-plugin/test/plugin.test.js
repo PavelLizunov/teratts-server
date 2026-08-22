@@ -16,17 +16,13 @@ const packageJson = JSON.parse(packageRaw);
 test("client contains no direct TTS endpoint or credential handling", () => {
   assert.doesNotMatch(client, /tail9fd337|windows-brat|127\.0\.0\.1|TERATTS_TOKEN/);
   assert.doesNotMatch(client, /fetch\s*\(/);
-  assert.match(client, /ctx\.remote\.terattsVoice/);
+  assert.match(client, /ctx\.remote\.dynamicCordisRunner/);
 });
 
-test("Remote descriptor uses rc.8 strict codecs and lifecycle cleanup", () => {
-  assert.doesNotMatch(client, /src-json/);
-  assert.equal((client.match(/mode:\s*"strict"/g) || []).length, 2);
-  assert.match(client, /schema:\s*textSchema/);
-  assert.match(client, /schema:\s*audioSchema/);
-  assert.match(client, /const disposeRemote = await ctx\.remote\.\$mount/);
-  assert.match(client, /await disposeRemote\(\)/);
-  assert.match(client, /disposeSlot\(\)/);
+test("client uses dynamicCordisRunner invoke instead of TypertRemoteService", () => {
+  assert.doesNotMatch(client, /\$mount/);
+  assert.doesNotMatch(client, /terattsVoice/);
+  assert.match(client, /runner\.invoke\("synthesize"/);
   assert.match(client, /error\?\.code === "cancelled"/);
 });
 
@@ -44,7 +40,8 @@ test("client uses required playback and accessible UI primitives", () => {
   assert.doesNotMatch(client, /🔊|⏹|⏳/u);
 });
 
-test("host owns network configuration, timeout, voice, and token", () => {
+test("host uses harness.handle for dynamic plugin invoke", () => {
+  assert.match(host, /ctx\.handle\("synthesize"/);
   assert.match(host, /endpoint:/);
   assert.match(host, /timeoutMs:/);
   assert.match(host, /voice:/);
@@ -53,6 +50,8 @@ test("host owns network configuration, timeout, voice, and token", () => {
   assert.match(host, /AbortSignal\.timeout/);
   assert.match(host, /authorization/);
   assert.match(host, /fetch\(endpoint/);
+  assert.doesNotMatch(host, /TypertRemoteService/);
+  assert.doesNotMatch(host, /Remote\(/);
 });
 
 test("client dependency graph includes every dynamic package", () => {

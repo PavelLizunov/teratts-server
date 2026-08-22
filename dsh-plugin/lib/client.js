@@ -10,57 +10,6 @@ window.__ModuleLoader__.load({
       Tooltip,
     } = require("@deepseek-ai/dsh-client-ui-primitives");
 
-    const textSchema = {
-      parse(value) {
-        if (typeof value !== "string") throw new TypeError("text must be a string");
-        return value;
-      },
-    };
-    const audioSchema = {
-      parse(value) {
-        if (
-          value === null ||
-          typeof value !== "object" ||
-          typeof value.audioBase64 !== "string" ||
-          typeof value.mimeType !== "string"
-        ) {
-          throw new TypeError("invalid TeraTTS audio response");
-        }
-        return value;
-      },
-    };
-
-    const REMOTE = {
-      package: "dsh-client-ui-teratts",
-      descriptors: [
-        {
-          id: "dsh-client-ui-teratts#terattsVoice/synthesize",
-          service: "terattsVoice",
-          namespace: "terattsVoice",
-          method: "synthesize",
-          invocation: { kind: "direct" },
-          parameters: [
-            {
-              name: "text",
-              wire: "text",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text",
-                schema: textSchema,
-              },
-            },
-          ],
-          cancellation: { parameter: "signal" },
-          result: {
-            mode: "strict",
-            typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
-            schema: audioSchema,
-          },
-        },
-      ],
-    };
-
     const styleId = "dsh-client-ui-teratts/action";
     if (!document.querySelector(`style[data-plugin-css=${JSON.stringify(styleId)}]`)) {
       const style = document.createElement("style");
@@ -190,7 +139,7 @@ window.__ModuleLoader__.load({
       return new Blob([bytes], { type: mimeType || "audio/wav" });
     }
 
-    async function startPlayback(owner, text, remote) {
+    async function startPlayback(owner, text, runner) {
       stopPlayback();
       const epoch = playback.epoch;
       const abort = new AbortController();
@@ -201,7 +150,7 @@ window.__ModuleLoader__.load({
       playback.abort = abort;
       publish();
       try {
-        const result = await remote.synthesize(text, abort.signal);
+        const result = await runner.invoke("synthesize", { text }, abort.signal);
         if (epoch !== playback.epoch) return;
         if (!result.ok) {
           if (result.error?.code === "cancelled") return;
@@ -239,7 +188,7 @@ window.__ModuleLoader__.load({
       return value;
     }
 
-    function TeraTtsAction({ messageId, useSession, remote }) {
+    function TeraTtsAction({ messageId, useSession, runner }) {
       const text = useSession((session) => messageText(session, messageId));
       const current = usePlayback();
       const owner = React.useRef(Symbol(messageId));
@@ -256,8 +205,8 @@ window.__ModuleLoader__.load({
 
       const toggle = React.useCallback(() => {
         if (active) stopPlayback();
-        else if (text) startPlayback(owner.current, text, remote);
-      }, [active, remote, text]);
+        else if (text) startPlayback(owner.current, text, runner);
+      }, [active, runner, text]);
 
       const label =
         state === "loading"
@@ -313,9 +262,8 @@ window.__ModuleLoader__.load({
       );
     }
 
-    const inject = ["remote", "remote.terattsVoice", "slots"];
+    const inject = ["slots", "remote"];
     async function apply(ctx) {
-      const disposeRemote = await ctx.remote.$mount(REMOTE);
       let disposeSlot;
       try {
         disposeSlot = ctx.slots.inject("conversation.chat.assistant-actions", () =>
@@ -328,18 +276,16 @@ window.__ModuleLoader__.load({
             (props) =>
               React.createElement(TeraTtsAction, {
                 ...props,
-                remote: ctx.remote.terattsVoice,
+                runner: ctx.remote.dynamicCordisRunner,
               }),
           ),
         );
       } catch (error) {
-        await disposeRemote();
         throw error;
       }
       return async () => {
         disposeSlot();
         stopPlayback();
-        await disposeRemote();
       };
     }
 
