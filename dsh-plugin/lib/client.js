@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     }
 
     function messageText(snapshot, messageId) {
-      const node = snapshot.chat.legacy.nodes.find(
+      const node = snapshot.chat?.legacy?.nodes?.find(
         (candidate) => candidate.kind === "assistant" && candidate.messageId === messageId,
       );
       return cleanMarkdown(
@@ -56,11 +56,14 @@ window.__ModuleLoader__.load({
       const audioRef = React.useRef(null);
       const urlRef = React.useRef(null);
       const abortRef = React.useRef(null);
+      const mountedRef = React.useRef(true);
 
       const stop = React.useCallback(() => {
         abortRef.current?.abort();
         abortRef.current = null;
         if (audioRef.current) {
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
           audioRef.current = null;
@@ -69,10 +72,13 @@ window.__ModuleLoader__.load({
           URL.revokeObjectURL(urlRef.current);
           urlRef.current = null;
         }
-        setState("idle");
+        if (mountedRef.current) setState("idle");
       }, []);
 
-      React.useEffect(() => stop, [stop]);
+      React.useEffect(() => () => {
+        mountedRef.current = false;
+        stop();
+      }, [stop]);
 
       const toggle = React.useCallback(async () => {
         if (state !== "idle") {

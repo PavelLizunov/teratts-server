@@ -81,22 +81,22 @@ impl TeraEngine {
         let models = release.join("models");
         let text_encoder = load_session(&models.join("text_encoder.onnx"))?;
         eprintln!(
-            "[suflyor-teratts] load stage=text-encoder elapsed_ms={}",
+            "[teratts-server] load stage=text-encoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let duration_predictor = load_session(&models.join("duration_predictor.onnx"))?;
         eprintln!(
-            "[suflyor-teratts] load stage=duration elapsed_ms={}",
+            "[teratts-server] load stage=duration elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let sampler = load_session(&models.join("sampler_distilled_cfg3_8step.onnx"))?;
         eprintln!(
-            "[suflyor-teratts] load stage=sampler elapsed_ms={}",
+            "[teratts-server] load stage=sampler elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let vocoder = load_session(&models.join("vocoder.onnx"))?;
         eprintln!(
-            "[suflyor-teratts] load stage=vocoder elapsed_ms={}",
+            "[teratts-server] load stage=vocoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let text_encoder_out = sole_declared_output(
@@ -173,7 +173,7 @@ impl TeraEngine {
             ])
             .map_err(|e| anyhow!("synth: text encoder failed: {e}"))?;
         eprintln!(
-            "[suflyor-teratts] synth stage=text-encoder elapsed_ms={}",
+            "[teratts-server] synth stage=text-encoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let (emb_shape, emb_data) = named_output_f32(&encoder_outputs, &self.text_encoder_out)?;
@@ -197,7 +197,7 @@ impl TeraEngine {
             ])
             .map_err(|e| anyhow!("synth: duration predictor failed: {e}"))?;
         eprintln!(
-            "[suflyor-teratts] synth stage=duration elapsed_ms={}",
+            "[teratts-server] synth stage=duration elapsed_ms={}",
             started.elapsed().as_millis()
         );
         let (dur_shape, dur_data) =
@@ -245,7 +245,7 @@ impl TeraEngine {
             ])
             .map_err(|e| anyhow!("synth: sampler failed: {e}"))?;
         eprintln!(
-            "[suflyor-teratts] synth stage=sampler frames={} elapsed_ms={}",
+            "[teratts-server] synth stage=sampler frames={} elapsed_ms={}",
             latent_length,
             started.elapsed().as_millis()
         );
@@ -296,7 +296,7 @@ impl TeraEngine {
         }
 
         eprintln!(
-            "[suflyor-teratts] synth stage=vocoder chunks={} samples={} elapsed_ms={}",
+            "[teratts-server] synth stage=vocoder chunks={} samples={} elapsed_ms={}",
             chunks.len(),
             emitted,
             started.elapsed().as_millis()

@@ -124,7 +124,7 @@ fn skip_unsupported(text: &str, indexer: &UnicodeIndexer, preserve_digits: bool)
     }
     if skipped > 0 {
         // Count only: the protocol must not echo user text into logs.
-        eprintln!("[suflyor-teratts] skipped {skipped} unsupported char(s)");
+        eprintln!("[teratts-server] skipped {skipped} unsupported char(s)");
     }
     kept
 }

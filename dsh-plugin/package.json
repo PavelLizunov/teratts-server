@@ -10,6 +10,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -20,6 +23,7 @@
   },
   "license": "GPL-3.0-or-later",
   "files": [
+    "cordis.patch.yml",
     "lib/index.js",
     "lib/client.js"
   ]
