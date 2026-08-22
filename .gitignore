@@ -1,0 +1,5 @@
+/target
+*.wav
+*.part
+/models
+.DS_Store
