@@ -52,6 +52,46 @@ pub fn finalize(text: &str) -> ModelText {
     }
 }
 
+/// Split already-normalized/accented text for TTS without cutting language
+/// tags, words, or a Russian span containing an explicit/manual stress marker.
+/// Each returned chunk is independently valid tagged text.
+pub fn chunk_tagged(text: &str, max_chars: usize) -> Result<Vec<String>> {
+    validate_language_tags(text)?;
+    let chars: Vec<char> = text.chars().collect();
+    let mut output = Vec::new();
+    for (lang, start, end) in language_spans(text) {
+        let content: String = chars[start..end].iter().collect();
+        let lang: String = lang.iter().collect();
+        if lang == "ru" && content.contains('+') {
+            output.push(format!("<{lang}>{content}</{lang}>"));
+            continue;
+        }
+        for part in split_content(&content, max_chars.saturating_sub(9).max(1)) {
+            output.push(format!("<{lang}>{part}</{lang}>"));
+        }
+    }
+    Ok(output)
+}
+
+fn split_content(text: &str, max_chars: usize) -> Vec<String> {
+    let mut output = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let extra = usize::from(!current.is_empty()) + word.chars().count();
+        if !current.is_empty() && current.chars().count() + extra > max_chars {
+            output.push(std::mem::take(&mut current));
+        }
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(word);
+    }
+    if !current.is_empty() {
+        output.push(current);
+    }
+    output
+}
+
 #[cfg(test)]
 fn prepare(raw_text: &str, indexer: &UnicodeIndexer) -> Result<ModelText> {
     Ok(finalize(&normalize(raw_text, indexer)?))

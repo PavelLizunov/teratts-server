@@ -144,7 +144,10 @@ pub async fn download_models(model_root: &Path) -> Result<()> {
     let manifest = Manifest::pinned()?;
     let release = manifest.release_dir(model_root);
     if manifest::verify_release(&manifest, &release).is_ok() {
-        println!("models already installed and verified: {}", release.display());
+        println!(
+            "models already installed and verified: {}",
+            release.display()
+        );
         return Ok(());
     }
 

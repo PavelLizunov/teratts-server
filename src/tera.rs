@@ -139,8 +139,29 @@ impl TeraEngine {
         })
     }
 
-    /// Synthesize one utterance. `duration_scale` follows the upstream meaning
-    /// (>1 = slower). `voice` must be an installed style directory.
+    /// Normalize and optionally accent one whole request before any TTS
+    /// chunking. The returned text remains composed and language-tagged.
+    pub fn preprocess(&mut self, text: &str, lang: &str, russian_stress: bool) -> Result<String> {
+        let tagged = textnorm::ensure_language_tags(text, lang);
+        let normalized = textnorm::normalize(&tagged, &self.indexer)
+            .map_err(|e| anyhow!("invalid-text: {e}"))?;
+        if !russian_stress {
+            return Ok(normalized);
+        }
+        let russian_spans = textnorm::russian_span_ranges(&normalized);
+        self.ruaccent
+            .accent_ru_spans(&normalized, &russian_spans)
+            .map_err(|e| anyhow!("synth: RUAccent failed: {e}"))
+    }
+
+    /// Split whole-request preprocessing output into independently valid model
+    /// inputs while preserving language tags and manual Russian spans.
+    pub fn chunk_preprocessed(text: &str, max_chars: usize) -> Result<Vec<String>> {
+        textnorm::chunk_tagged(text, max_chars).map_err(|e| anyhow!("invalid-text: {e}"))
+    }
+
+    /// Synthesize one raw utterance. Request handlers with multiple chunks must
+    /// call [`Self::preprocess`] once, then [`Self::synthesize_preprocessed`].
     pub fn synthesize(
         &mut self,
         text: &str,
@@ -150,25 +171,25 @@ impl TeraEngine {
         seed: u64,
         russian_stress: bool,
     ) -> Result<SynthOutput> {
+        let prepared = self.preprocess(text, lang, russian_stress)?;
+        self.synthesize_preprocessed(&prepared, voice, duration_scale, seed)
+    }
+
+    /// Synthesize independently-valid tagged text produced by [`Self::preprocess`].
+    pub fn synthesize_preprocessed(
+        &mut self,
+        text: &str,
+        voice: &str,
+        duration_scale: f32,
+        seed: u64,
+    ) -> Result<SynthOutput> {
         let started = Instant::now();
         if !duration_scale.is_finite() || duration_scale <= 0.0 {
             return Err(anyhow!("invalid-rate"));
         }
         let style_ttl = self.load_style(voice, "style_ttl.npy", &[1, 50, 256])?;
         let style_dp = self.load_style(voice, "style_dp.npy", &[1, 8, 16])?;
-
-        let tagged = textnorm::ensure_language_tags(text, lang);
-        let normalized = textnorm::normalize(&tagged, &self.indexer)
-            .map_err(|e| anyhow!("invalid-text: {e}"))?;
-        let accented = if russian_stress {
-            let russian_spans = textnorm::russian_span_ranges(&normalized);
-            self.ruaccent
-                .accent_ru_spans(&normalized, &russian_spans)
-                .map_err(|e| anyhow!("synth: RUAccent failed: {e}"))?
-        } else {
-            normalized
-        };
-        let model_text = textnorm::finalize(&accented);
+        let model_text = textnorm::finalize(text);
         let (text_ids, text_mask) = self
             .indexer
             .batch(&model_text.model_text)

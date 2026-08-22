@@ -17,7 +17,7 @@ use ort::session::{Session, SessionInputValue};
 use ort::value::Tensor;
 use regex::Regex;
 use serde::de::DeserializeOwned;
-use tokenizers::{EncodeInput, Encoding, Tokenizer};
+use tokenizers::{EncodeInput, Encoding, Tokenizer, TruncationParams, TruncationStrategy};
 
 const MODEL_SIZE: &str = "turbo3.1";
 const VOWELS: &str = "аеёиоуыэюяАЕЁИОУЫЭЮЯ";
@@ -88,6 +88,8 @@ struct TokenClassifier {
     output: String,
     labels: Vec<String>,
     tokenizer: Tokenizer,
+    continuing_subword_prefix: Option<String>,
+    unknown_id: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -95,13 +97,12 @@ struct PairClassifier {
     session: Session,
     output: String,
     tokenizer: Tokenizer,
+    pad_id: u32,
 }
 
 #[derive(Debug)]
 struct ClassifiedWord {
     entity: String,
-    start: usize,
-    end: usize,
 }
 
 impl RuAccent {
@@ -273,8 +274,11 @@ impl RuAccent {
             .models
             .as_mut()
             .ok_or_else(|| anyhow!("full RUAccent models are not loaded"))?;
-        let usages = models.stress_usage.classify_words(&prepared)?;
-        let lowered_sentence = prepared.to_lowercase();
+        // Python prepares `~` only for regex token rendering. Both neural token
+        // classifiers receive the original sentence and therefore keep the
+        // exact offsets/order produced by the reference pipeline.
+        let usages = models.stress_usage.classify_words(sentence)?;
+        let lowered_sentence = sentence.to_lowercase();
         let yo_predictions = if lowered_sentence.contains('е') {
             models.yo.classify_words(&lowered_sentence)?
         } else {
@@ -287,12 +291,7 @@ impl RuAccent {
                 word,
                 self.yo_words.get(&lowered).map_or(word, String::as_str),
             );
-            if prediction_for(
-                &yo_predictions,
-                matches[index].start(),
-                matches[index].end(),
-            ) == Some("YO")
-            {
+            if prediction_at(&yo_predictions, index) == Some("YO") {
                 *word = fix_capital(
                     word,
                     self.yo_homographs
@@ -304,27 +303,17 @@ impl RuAccent {
 
         for index in 0..words.len() {
             if let Some(variants) = self.omographs.get(&words[index].to_lowercase()) {
-                let mut context = String::with_capacity(prepared.len() + 7);
-                for part in 0..words.len() {
-                    context.push_str(&gaps[part]);
-                    if part == index {
-                        context.push_str("<w>");
-                    }
-                    context.push_str(&words[part]);
-                    if part == index {
-                        context.push_str("</w>");
-                    }
-                }
-                context.push_str(&gaps[words.len()]);
-                words[index] = models.omograph.choose(&context, variants)?;
+                // Exact Python context: copy the regex words, replace the
+                // target with a space-padded marker, then join every item with
+                // one space. Original punctuation gaps are deliberately absent.
+                let mut context = words.clone();
+                context[index] = format!(" <w>{}</w> ", words[index]);
+                words[index] = models.omograph.choose(&context.join(" "), variants)?;
             }
         }
 
         for (index, word) in words.iter_mut().enumerate() {
-            if word.contains('+')
-                || prediction_for(&usages, matches[index].start(), matches[index].end())
-                    != Some("STRESS")
-            {
+            if word.contains('+') || prediction_at(&usages, index) != Some("STRESS") {
                 continue;
             }
             let lowered = word.to_lowercase();
@@ -427,11 +416,15 @@ impl CharAccentModel {
 impl TokenClassifier {
     fn load(path: &Path) -> Result<Self> {
         let session = load_session(path)?;
+        let tokenizer = load_tokenizer(path)?;
+        let metadata = tokenizer_metadata(path, &tokenizer)?;
         Ok(Self {
             output: sole_output(&session)?,
             session,
             labels: read_labels(&path.join("config.json"))?,
-            tokenizer: load_tokenizer(path)?,
+            tokenizer,
+            continuing_subword_prefix: metadata.continuing_subword_prefix,
+            unknown_id: metadata.unknown_id,
         })
     }
 
@@ -444,7 +437,7 @@ impl TokenClassifier {
         let outputs = self.session.run(inputs)?;
         let (shape, logits) = output_f32(&outputs, &self.output)?;
         let classes = last_dimension(&shape, logits.len())?;
-        let mut pieces = Vec::new();
+        let mut groups: Vec<(usize, usize, Vec<Vec<f32>>)> = Vec::new();
         for (index, row) in logits.chunks_exact(classes).enumerate() {
             if encoding
                 .get_special_tokens_mask()
@@ -461,41 +454,58 @@ impl TokenClassifier {
             if start == end {
                 continue;
             }
-            let (label, _) = softmax_argmax(row);
-            pieces.push(ClassifiedWord {
-                entity: self.labels.get(label).cloned().unwrap_or_default(),
-                start,
-                end,
-            });
-        }
-        // Merge only lexical subpieces. Punctuation and whitespace delimit
-        // predictions, so later regex tokens cannot shift classifier alignment.
-        let mut grouped: Vec<ClassifiedWord> = Vec::new();
-        for piece in pieces {
-            if let Some(previous) = grouped.last_mut() {
-                let joined = previous.start <= piece.start
-                    && piece.start <= previous.end
+            let token = encoding.get_tokens().get(index).map_or("", String::as_str);
+            let reference = text.get(start..end).unwrap_or("");
+            let unknown = encoding.get_ids().get(index).copied() == self.unknown_id;
+            let subword = if unknown {
+                false
+            } else if self
+                .continuing_subword_prefix
+                .as_deref()
+                .is_some_and(|prefix| !prefix.is_empty())
+            {
+                token.chars().count() != reference.chars().count()
+            } else {
+                start > 0
                     && text
-                        .get(previous.start..piece.end)
-                        .is_some_and(|source| source.chars().all(char::is_alphanumeric));
-                if joined {
-                    previous.end = piece.end;
+                        .get(..start)
+                        .and_then(|prefix| prefix.chars().next_back())
+                        .is_some_and(|character| character != ' ')
+            };
+            let scores = softmax(row);
+            if subword {
+                if let Some(group) = groups.last_mut() {
+                    group.1 = end;
+                    group.2.push(scores);
                     continue;
                 }
             }
-            grouped.push(piece);
+            groups.push((start, end, vec![scores]));
         }
-        Ok(grouped)
+        groups
+            .into_iter()
+            .map(|(start, end, scores)| {
+                let averaged = average_vectors(&scores)?;
+                let label = argmax(&averaged);
+                let _ = (start, end);
+                Ok(ClassifiedWord {
+                    entity: self.labels.get(label).cloned().unwrap_or_default(),
+                })
+            })
+            .collect()
     }
 }
 
 impl PairClassifier {
     fn load(path: &Path) -> Result<Self> {
         let session = load_session(path)?;
+        let tokenizer = load_tokenizer(path)?;
+        let metadata = tokenizer_metadata(path, &tokenizer)?;
         Ok(Self {
             output: sole_output(&session)?,
             session,
-            tokenizer: load_tokenizer(path)?,
+            tokenizer,
+            pad_id: metadata.pad_id,
         })
     }
 
@@ -504,10 +514,18 @@ impl PairClassifier {
             return Err(anyhow!("omograph has no variants"));
         }
         let prepared = Regex::new(r"\s+([,.?!:;…])")?.replace_all(sentence, "$1");
+        let mut tokenizer = self.tokenizer.clone();
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: 512,
+                strategy: TruncationStrategy::LongestFirst,
+                ..Default::default()
+            }))
+            .map_err(|e| anyhow!("configure pair truncation: {e}"))?;
         let encodings = variants
             .iter()
             .map(|variant| {
-                self.tokenizer
+                tokenizer
                     .encode(
                         EncodeInput::Dual(prepared.as_ref().into(), variant.as_str().into()),
                         true,
@@ -515,15 +533,10 @@ impl PairClassifier {
                     .map_err(|e| anyhow!("tokenize pair: {e}"))
             })
             .collect::<Result<Vec<_>>>()?;
-        let max_len = encodings
-            .iter()
-            .map(Encoding::len)
-            .max()
-            .unwrap_or(0)
-            .min(512);
+        let max_len = encodings.iter().map(Encoding::len).max().unwrap_or(0);
         let mut best = (0usize, f32::NEG_INFINITY);
         for (index, encoding) in encodings.iter().enumerate() {
-            let inputs = padded_encoding_inputs(&self.session, encoding, max_len)?;
+            let inputs = padded_encoding_inputs(&self.session, encoding, max_len, self.pad_id)?;
             let outputs = self.session.run(inputs)?;
             let (shape, logits) = output_f32(&outputs, &self.output)?;
             let classes = last_dimension(&shape, logits.len())?;
@@ -551,6 +564,36 @@ fn load_tokenizer(path: &Path) -> Result<Tokenizer> {
     let tokenizer = path.join("tokenizer.json");
     Tokenizer::from_file(&tokenizer)
         .map_err(|e| anyhow!("load local tokenizer {}: {e}", tokenizer.display()))
+}
+
+#[derive(Debug)]
+struct TokenizerMetadata {
+    pad_id: u32,
+    unknown_id: Option<u32>,
+    continuing_subword_prefix: Option<String>,
+}
+
+fn tokenizer_metadata(path: &Path, tokenizer: &Tokenizer) -> Result<TokenizerMetadata> {
+    let config: serde_json::Value =
+        serde_json::from_reader(File::open(path.join("tokenizer_config.json"))?)?;
+    let pad_token = config
+        .get("pad_token")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("[PAD]");
+    let unknown_token = config.get("unk_token").and_then(serde_json::Value::as_str);
+    let tokenizer_json: serde_json::Value =
+        serde_json::from_reader(File::open(path.join("tokenizer.json"))?)?;
+    let continuing_subword_prefix = tokenizer_json
+        .pointer("/model/continuing_subword_prefix")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    Ok(TokenizerMetadata {
+        pad_id: tokenizer
+            .token_to_id(pad_token)
+            .ok_or_else(|| anyhow!("{} lacks pad token {pad_token}", path.display()))?,
+        unknown_id: unknown_token.and_then(|token| tokenizer.token_to_id(token)),
+        continuing_subword_prefix,
+    })
 }
 
 fn sole_output(session: &Session) -> Result<String> {
@@ -584,6 +627,7 @@ fn padded_encoding_inputs(
     session: &Session,
     encoding: &Encoding,
     length: usize,
+    pad_id: u32,
 ) -> Result<Vec<(String, SessionInputValue<'static>)>> {
     let mut ids: Vec<i64> = encoding
         .get_ids()
@@ -603,7 +647,7 @@ fn padded_encoding_inputs(
         .take(length)
         .map(|&v| i64::from(v))
         .collect();
-    ids.resize(length, 0);
+    ids.resize(length, i64::from(pad_id));
     mask.resize(length, 0);
     types.resize(length, 0);
     tensor_inputs(session, ids, mask, types)
@@ -660,22 +704,52 @@ fn last_dimension(shape: &[usize], data_len: usize) -> Result<usize> {
     Ok(classes)
 }
 
-fn prediction_for(predictions: &[ClassifiedWord], start: usize, end: usize) -> Option<&str> {
+fn prediction_at(predictions: &[ClassifiedWord], index: usize) -> Option<&str> {
     predictions
-        .iter()
-        .find(|prediction| prediction.start < end && prediction.end > start)
+        .get(index)
         .map(|prediction| prediction.entity.as_str())
 }
 
-fn softmax_argmax(values: &[f32]) -> (usize, f32) {
+fn softmax(values: &[f32]) -> Vec<f32> {
     let maximum = values.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     let denominator: f32 = values.iter().map(|value| (*value - maximum).exp()).sum();
     values
         .iter()
+        .map(|value| (*value - maximum).exp() / denominator)
+        .collect()
+}
+
+fn argmax(values: &[f32]) -> usize {
+    values
+        .iter()
         .enumerate()
-        .map(|(index, value)| (index, (*value - maximum).exp() / denominator))
-        .max_by(|left, right| left.1.total_cmp(&right.1))
-        .unwrap_or((0, 0.0))
+        .max_by(|left, right| left.1.total_cmp(right.1))
+        .map_or(0, |(index, _)| index)
+}
+
+fn average_vectors(vectors: &[Vec<f32>]) -> Result<Vec<f32>> {
+    let Some(first) = vectors.first() else {
+        return Err(anyhow!("cannot average empty score vectors"));
+    };
+    let mut average = vec![0.0; first.len()];
+    for vector in vectors {
+        if vector.len() != average.len() {
+            return Err(anyhow!("classifier score vector width mismatch"));
+        }
+        for (total, value) in average.iter_mut().zip(vector) {
+            *total += value;
+        }
+    }
+    for value in &mut average {
+        *value /= vectors.len() as f32;
+    }
+    Ok(average)
+}
+
+fn softmax_argmax(values: &[f32]) -> (usize, f32) {
+    let scores = softmax(values);
+    let label = argmax(&scores);
+    (label, scores.get(label).copied().unwrap_or(0.0))
 }
 
 fn softmax_probability(values: &[f32], index: usize) -> f32 {
@@ -913,5 +987,29 @@ mod tests {
     fn marker_transfer_is_unicode_and_case_safe() {
         assert_eq!(transfer_markers("МОЛОКО", "молок+о"), "МОЛОК+О");
         assert_eq!(fix_capital("Елка", "ёлка"), "Ёлка");
+    }
+
+    #[test]
+    fn subword_scores_are_averaged_before_argmax() {
+        let averaged = average_vectors(&[
+            vec![0.90, 0.10],
+            vec![0.01, 0.99],
+            vec![0.01, 0.99],
+        ])
+        .unwrap();
+        assert_eq!(argmax(&averaged), 1);
+        assert!((averaged[1] - 0.6933333).abs() < 1e-6);
+    }
+
+    #[test]
+    fn predictions_follow_python_group_order() {
+        let predictions = vec![
+            ClassifiedWord { entity: "NO".into() },
+            ClassifiedWord {
+                entity: "STRESS".into(),
+            },
+        ];
+        assert_eq!(prediction_at(&predictions, 0), Some("NO"));
+        assert_eq!(prediction_at(&predictions, 1), Some("STRESS"));
     }
 }

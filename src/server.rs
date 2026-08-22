@@ -183,7 +183,7 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
             "TERATTS_RUACCENT_MODE must be full, dictionary, or disabled"
         ));
     }
-    let ruaccent_ready = ruaccent_mode == "disabled" || release.join("ruaccent").is_dir();
+    let ruaccent_ready = ruaccent_mode != "disabled" && release.join("ruaccent").is_dir();
     let state = Arc::new(AppState {
         engine: Arc::new(Mutex::new(TeraEngine::load(model_root)?)),
         voices,
@@ -248,18 +248,13 @@ async fn tts(
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
     let Json(request) = request.map_err(ApiError::from_json_rejection)?;
-    if request.russian_stress == Some(true) && !state.ruaccent_ready {
-        return Err(ApiError::bad_request(
-            "russian_stress requires an RUAccent-capable backend",
-        ));
-    }
     let PreparedRequest {
         text,
         voice,
         language,
         scale,
         russian_stress,
-    } = prepare_request(request, &state.voices)?;
+    } = prepare_request(request, &state.voices, state.ruaccent_ready)?;
     let ticket = state.admission.try_reserve()?;
     let active = ticket.activate().await?;
     let remaining = REQUEST_DEADLINE
@@ -271,15 +266,13 @@ async fn tts(
         let mut engine = engine.blocking_lock();
         let mut all = Vec::new();
         let mut samples = 0usize;
-        for (index, part) in chunk::chunk_text(&text).into_iter().enumerate() {
-            let output = engine.synthesize(
-                &part,
-                &voice,
-                language.as_str(),
-                scale,
-                SEED + index as u64,
-                russian_stress,
-            )?;
+        let prepared = engine.preprocess(&text, language.as_str(), russian_stress)?;
+        for (index, part) in TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?
+            .into_iter()
+            .enumerate()
+        {
+            let output =
+                engine.synthesize_preprocessed(&part, &voice, scale, SEED + index as u64)?;
             for chunk in output.chunks {
                 samples = checked_audio_samples(samples, chunk.len())?;
                 all.try_reserve(1)
@@ -316,7 +309,11 @@ struct PreparedRequest {
     russian_stress: bool,
 }
 
-fn prepare_request(request: TtsRequest, voices: &[String]) -> Result<PreparedRequest, ApiError> {
+fn prepare_request(
+    request: TtsRequest,
+    voices: &[String],
+    ruaccent_capable: bool,
+) -> Result<PreparedRequest, ApiError> {
     let text = chunk::sanitize(request.text.trim());
     let text_chars = text.chars().count();
     if text_chars == 0 || text_chars > MAX_TEXT_CHARS {
@@ -346,9 +343,15 @@ fn prepare_request(request: TtsRequest, voices: &[String]) -> Result<PreparedReq
             "russian_stress is only valid for language ru",
         ));
     }
-    let russian_stress = request
-        .russian_stress
-        .unwrap_or(matches!(language, Language::Ru));
+    let russian_stress = match request.russian_stress {
+        Some(true) if !ruaccent_capable => {
+            return Err(ApiError::bad_request(
+                "russian_stress requires an RUAccent-capable backend",
+            ));
+        }
+        Some(value) => value,
+        None => matches!(language, Language::Ru) && ruaccent_capable,
+    };
     Ok(PreparedRequest {
         text,
         voice,
@@ -528,22 +531,38 @@ mod tests {
     #[test]
     fn enforces_text_language_rate_and_audio_limits() {
         let voices = vec!["ru_f1".to_string(), "eng_f3".to_string()];
-        let russian = prepare_request(request("hello"), &voices).unwrap();
+        let russian = prepare_request(request("hello"), &voices, true).unwrap();
         assert!(matches!(russian.language, Language::Ru));
         assert!(russian.russian_stress);
         let mut english_request = request("hello");
         english_request.voice = Some("eng_f3".into());
-        let english = prepare_request(english_request, &voices).unwrap();
+        let english = prepare_request(english_request, &voices, true).unwrap();
         assert!(matches!(english.language, Language::En));
         assert!(!english.russian_stress);
-        assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS + 1)), &voices).is_err());
+        assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS + 1)), &voices, true).is_err());
         let mut invalid = request("hello");
         invalid.language = Some(Language::En);
         invalid.russian_stress = Some(true);
-        assert!(prepare_request(invalid, &voices).is_err());
+        assert!(prepare_request(invalid, &voices, true).is_err());
         let mut unstressed = request("hello");
         unstressed.russian_stress = Some(false);
-        assert!(!prepare_request(unstressed, &voices).unwrap().russian_stress);
+        assert!(
+            !prepare_request(unstressed, &voices, true)
+                .unwrap()
+                .russian_stress
+        );
+        let disabled_default = prepare_request(request("привет"), &voices, false).unwrap();
+        assert!(!disabled_default.russian_stress);
+        let mut disabled_explicit = request("привет");
+        disabled_explicit.russian_stress = Some(true);
+        assert!(prepare_request(disabled_explicit, &voices, false).is_err());
+        let mut disabled_false = request("привет");
+        disabled_false.russian_stress = Some(false);
+        assert!(
+            !prepare_request(disabled_false, &voices, false)
+                .unwrap()
+                .russian_stress
+        );
         let maximum = SAMPLE_RATE as usize * MAX_AUDIO_SECONDS as usize;
         assert!(checked_audio_samples(0, maximum).is_ok());
         assert!(checked_audio_samples(0, maximum + 1).is_err());

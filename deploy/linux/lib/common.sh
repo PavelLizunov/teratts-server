@@ -13,6 +13,13 @@ CURL=${CURL:-curl}
 HEALTH_URL=${TERATTS_HEALTH_URL:-http://127.0.0.1:8088/health}
 SERVICE_USER=${TERATTS_SERVICE_USER:-teratts}
 SERVICE_GROUP=${TERATTS_SERVICE_GROUP:-teratts}
+ORT_METADATA_FILE=${TERATTS_ORT_METADATA_FILE:-$SCRIPT_DIR/ort-artifact.env}
+[ -r "$ORT_METADATA_FILE" ] || {
+    printf 'error: ORT artifact metadata not found: %s\n' "$ORT_METADATA_FILE" >&2
+    exit 1
+}
+# shellcheck disable=SC1090
+. "$ORT_METADATA_FILE"
 
 fail() {
     printf 'error: %s\n' "$*" >&2
@@ -45,6 +52,12 @@ validate_revision() {
         *[!0-9a-f]*|'') fail "model revision must be lowercase hexadecimal: $value" ;;
     esac
     [ "${#value}" -eq 40 ] || fail "model revision must contain exactly 40 hex characters"
+}
+
+verify_sha256() {
+    expected=$1
+    file=$2
+    printf '%s  %s\n' "$expected" "$file" | sha256sum -c - >/dev/null || fail "SHA-256 mismatch: $file"
 }
 
 assert_regular_nosymlink() {

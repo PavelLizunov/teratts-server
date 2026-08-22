@@ -18,6 +18,11 @@ validate_sha "$sha"
 [ "$active" = "$RELEASES_ROOT/$sha" ] || fail "current release points outside $RELEASES_ROOT"
 [ -z "$(find "$active" "$MODELS_ROOT/teratts-v2-$PINNED_MODEL_REVISION" -perm /0222 -print -quit)" ] || fail "active release or model tree is writable"
 [ "$(stat -c '%U:%G' "$active/teratts-server")" = root:root ] || fail "binary owner must be root:root"
+assert_regular_nosymlink "$active/lib/$ORT_DYLIB_NAME"
+verify_sha256 "$ORT_DYLIB_SHA256" "$active/lib/$ORT_DYLIB_NAME"
+# shellcheck disable=SC1090
+. "$active/release.env"
+[ "$ORT_DYLIB_PATH" = "$RELEASE_CURRENT/lib/$ORT_DYLIB_NAME" ] || fail "active ORT_DYLIB_PATH is not the approved absolute path"
 
 listeners=$(ss -H -ltnp 'sport = :8088' 2>/dev/null || true)
 [ -n "$listeners" ] || fail "no listener on TCP port 8088"

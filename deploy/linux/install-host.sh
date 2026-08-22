@@ -23,6 +23,7 @@ install -d -o root -g root -m 0755 /usr/local/libexec/teratts
 for script in activate.sh acceptance.sh install-model.sh install-release.sh rollback.sh verify-health.sh; do
     install -o root -g root -m 0755 "$SCRIPT_DIR/$script" "/usr/local/libexec/teratts/$script"
 done
+install -o root -g root -m 0644 "$SCRIPT_DIR/ort-artifact.env" /usr/local/libexec/teratts/ort-artifact.env
 install -d -o root -g root -m 0755 /usr/local/libexec/teratts/lib
 install -o root -g root -m 0644 "$SCRIPT_DIR/lib/common.sh" /usr/local/libexec/teratts/lib/common.sh
 install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/teratts.service" /etc/systemd/system/teratts.service
@@ -33,7 +34,6 @@ if [ ! -e "$CONFIG_ROOT/teratts.env" ]; then
     {
         printf 'TERATTS_BEARER_TOKEN=%s\n' "$token"
         printf 'TERATTS_RUACCENT_MODE=full\n'
-        printf 'TERATTS_EXPECTED_APP_GIT_SHA=SET_DURING_ACTIVATION\n'
     } > "$CONFIG_ROOT/teratts.env"
     chown root:"$SERVICE_GROUP" "$CONFIG_ROOT/teratts.env"
     chmod 0640 "$CONFIG_ROOT/teratts.env"

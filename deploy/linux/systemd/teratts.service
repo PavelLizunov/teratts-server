@@ -9,6 +9,7 @@ Type=simple
 User=teratts
 Group=teratts
 EnvironmentFile=/etc/teratts/teratts.env
+EnvironmentFile=/opt/teratts/current/release.env
 ExecStart=/opt/teratts/current/teratts-server --serve --host 127.0.0.1 --port 8088 --model-dir /var/lib/teratts/models
 Restart=on-failure
 RestartSec=5s
