@@ -508,6 +508,12 @@ impl IntoResponse for ApiError {
                 .headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         }
+        if let Some(retry_after_ms) = self.retry_after_ms {
+            let seconds = retry_after_ms.div_ceil(1_000).max(1).to_string();
+            if let Ok(value) = HeaderValue::from_str(&seconds) {
+                response.headers_mut().insert(header::RETRY_AFTER, value);
+            }
+        }
         response
     }
 }
@@ -579,6 +585,13 @@ mod tests {
         assert!(admission.try_reserve().is_err());
         drop((first, second, third));
         assert_eq!(admission.view().waiting, 0);
+    }
+
+    #[test]
+    fn busy_error_exposes_retry_after_header() {
+        let response = ApiError::busy().into_response();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers().get(header::RETRY_AFTER).unwrap(), "1");
     }
 
     #[test]
