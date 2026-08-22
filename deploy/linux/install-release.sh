@@ -43,6 +43,8 @@ ORT_DYLIB_PATH=$RELEASE_CURRENT/lib/$ORT_DYLIB_NAME
 EOF
 chmod 0444 "$staging/release.env"
 make_tree_immutable "$staging"
+chmod 0555 "$staging/teratts-server"
+[ -x "$staging/teratts-server" ] || fail "immutable release binary lost executable permission"
 mv "$staging" "$destination"
 trap - EXIT HUP INT TERM
 info "installed immutable release: $destination"

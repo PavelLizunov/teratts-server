@@ -18,6 +18,7 @@ validate_sha "$sha"
 [ "$active" = "$RELEASES_ROOT/$sha" ] || fail "current release points outside $RELEASES_ROOT"
 [ -z "$(find "$active" "$MODELS_ROOT/teratts-v2-$PINNED_MODEL_REVISION" -perm /0222 -print -quit)" ] || fail "active release or model tree is writable"
 [ "$(stat -c '%U:%G' "$active/teratts-server")" = root:root ] || fail "binary owner must be root:root"
+[ -x "$active/teratts-server" ] || fail "active binary is not executable"
 assert_regular_nosymlink "$active/lib/$ORT_DYLIB_NAME"
 verify_sha256 "$ORT_DYLIB_SHA256" "$active/lib/$ORT_DYLIB_NAME"
 # shellcheck disable=SC1090
