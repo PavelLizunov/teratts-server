@@ -28,6 +28,7 @@ impl DownloadLock {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(model_root.join(".teratts-v2.download.lock"))
             .context("open model download lock")?;
         lock_file(&file)?;

@@ -212,10 +212,8 @@ async fn health(State(state): State<Arc<AppState>>) -> Response {
     // Full hashes are verified before startup; keep the live probe bounded to markers and sizes.
     let models_ready = manifest::check_installed(&state.manifest, &state.release).is_ok();
     let expected_sha = std::env::var("TERATTS_EXPECTED_APP_GIT_SHA").ok();
-    let app_sha_verified = APP_GIT_SHA != "unknown"
-        && expected_sha
-            .as_deref()
-            .map_or(true, |sha| sha == APP_GIT_SHA);
+    let app_sha_verified =
+        APP_GIT_SHA != "unknown" && expected_sha.as_deref().is_none_or(|sha| sha == APP_GIT_SHA);
     let ruaccent_ok = state.ruaccent_mode == "disabled" || state.ruaccent_ready;
     let ready = models_ready && app_sha_verified && ruaccent_ok;
     (

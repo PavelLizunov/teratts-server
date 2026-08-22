@@ -174,6 +174,7 @@ impl RuAccent {
     /// Process contents of balanced `<ru>...</ru>` spans and preserve tags,
     /// English spans, and untagged text byte-for-byte. Nested language tags are
     /// rejected because Tera's language spans are not nestable.
+    #[cfg(test)]
     pub fn process_ru_spans(&mut self, text: &str) -> Result<String> {
         let spans = russian_tag_spans(text)?;
         self.accent_ru_spans(text, &spans)
@@ -706,7 +707,7 @@ fn last_dimension(shape: &[usize], data_len: usize) -> Result<usize> {
         .last()
         .copied()
         .ok_or_else(|| anyhow!("empty output shape"))?;
-    if classes == 0 || data_len == 0 || data_len % classes != 0 {
+    if classes == 0 || data_len == 0 || !data_len.is_multiple_of(classes) {
         return Err(anyhow!("invalid classifier output shape"));
     }
     Ok(classes)
@@ -816,7 +817,7 @@ fn transfer_markers(source: &str, accented_lowercase: &str) -> String {
     let mut output = String::with_capacity(source.len() + positions.len());
     let mut markers = positions.into_iter().peekable();
     for (index, character) in source.chars().enumerate() {
-        while markers.peek() == Some(&&index) {
+        while markers.peek() == Some(&index) {
             output.push('+');
             markers.next();
         }
@@ -855,6 +856,7 @@ fn delete_spaces_before_punctuation(mut text: String) -> String {
     text.replace('~', "-")
 }
 
+#[cfg(test)]
 fn russian_tag_spans(text: &str) -> Result<Vec<Range<usize>>> {
     let mut spans = Vec::new();
     let mut cursor = 0;
@@ -976,7 +978,8 @@ mod tests {
     #[test]
     fn spans_reject_overlap_and_non_utf8_boundaries() {
         let mut runtime = dictionary_runtime();
-        assert!(runtime.accent_ru_spans("абв", &[0..3]).is_err());
+        let invalid_boundary: Vec<_> = std::iter::once(0..3).collect();
+        assert!(runtime.accent_ru_spans("абв", &invalid_boundary).is_err());
         assert!(runtime.accent_ru_spans("abcdef", &[1..4, 3..5]).is_err());
     }
 

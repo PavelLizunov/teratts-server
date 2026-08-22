@@ -61,18 +61,16 @@ pub fn parse_f32(bytes: &[u8]) -> Result<NpyArray> {
             if raw.len() < elements * 4 {
                 return Err(anyhow!("data shorter than shape"));
             }
-            for chunk in raw[..elements * 4].chunks_exact(4) {
-                data.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+            for chunk in raw[..elements * 4].as_chunks::<4>().0 {
+                data.push(f32::from_le_bytes(*chunk));
             }
         }
         "<f8" => {
             if raw.len() < elements * 8 {
                 return Err(anyhow!("data shorter than shape"));
             }
-            for chunk in raw[..elements * 8].chunks_exact(8) {
-                let mut buf = [0u8; 8];
-                buf.copy_from_slice(chunk);
-                data.push(f64::from_le_bytes(buf) as f32);
+            for chunk in raw[..elements * 8].as_chunks::<8>().0 {
+                data.push(f64::from_le_bytes(*chunk) as f32);
             }
         }
         _ => return Err(anyhow!("unsupported dtype '{descr}'")),
