@@ -1,3 +1,8 @@
 - insert:
     - id: ui-teratts
       name: dsh-client-ui-teratts
+      config:
+        endpoint: http://127.0.0.1:8088
+        timeoutMs: 30000
+        voice: ru_f1
+        tokenEnv: TERATTS_TOKEN

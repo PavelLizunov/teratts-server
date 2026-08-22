@@ -1,13 +1,20 @@
 //! Pinned TeraTTSv2 model manifest and installed-release checks.
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::{Path, PathBuf},
+};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 pub const MANIFEST_JSON: &str = include_str!("../manifest/teratts-v2.json");
+pub const MANIFEST_FILE: &str = "manifest.json";
+pub const MANIFEST_DIGEST_FILE: &str = "manifest.sha256";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Manifest {
     pub model: String,
     pub revision: String,
@@ -15,7 +22,7 @@ pub struct Manifest {
     pub files: Vec<ManifestFile>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ManifestFile {
     pub path: String,
     pub size: u64,
@@ -73,19 +80,103 @@ impl Manifest {
     }
 }
 
+pub fn manifest_digest() -> String {
+    format!("{:x}", Sha256::digest(MANIFEST_JSON.as_bytes()))
+}
+
 pub fn check_installed(manifest: &Manifest, release_dir: &Path) -> Result<()> {
-    if !release_dir.join("manifest.json").is_file() {
-        return Err(anyhow!("publish marker missing"));
+    if manifest != &Manifest::pinned()? {
+        return Err(anyhow!(
+            "verification manifest does not match pinned manifest"
+        ));
+    }
+    check_release(manifest, release_dir)
+}
+
+fn check_release(manifest: &Manifest, release_dir: &Path) -> Result<()> {
+    require_regular_file(&release_dir.join(MANIFEST_FILE), "published manifest")?;
+    require_regular_file(
+        &release_dir.join(MANIFEST_DIGEST_FILE),
+        "manifest digest marker",
+    )?;
+    let published = std::fs::read(release_dir.join(MANIFEST_FILE))
+        .map_err(|_| anyhow!("published manifest missing"))?;
+    if published != MANIFEST_JSON.as_bytes() {
+        return Err(anyhow!("published manifest does not match pinned manifest"));
+    }
+    let marker = std::fs::read_to_string(release_dir.join(MANIFEST_DIGEST_FILE))
+        .map_err(|_| anyhow!("manifest digest marker missing"))?;
+    if marker.trim() != manifest_digest() {
+        return Err(anyhow!(
+            "manifest digest marker does not match pinned manifest"
+        ));
     }
     for entry in &manifest.files {
         let path = release_dir.join(&entry.path);
-        let meta = std::fs::metadata(&path).map_err(|_| anyhow!("missing {}", entry.path))?;
+        let meta =
+            std::fs::symlink_metadata(&path).map_err(|_| anyhow!("missing {}", entry.path))?;
+        if !meta.file_type().is_file() {
+            return Err(anyhow!("{} is not a regular file", entry.path));
+        }
         if meta.len() != entry.size {
             return Err(anyhow!(
                 "{}: size {} != pinned {}",
                 entry.path,
                 meta.len(),
                 entry.size
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn require_regular_file(path: &Path, description: &str) -> Result<()> {
+    let meta = std::fs::symlink_metadata(path).map_err(|_| anyhow!("{description} missing"))?;
+    if !meta.file_type().is_file() {
+        return Err(anyhow!("{description} is not a regular file"));
+    }
+    Ok(())
+}
+
+pub fn verify_models(model_root: &Path) -> Result<()> {
+    let manifest = Manifest::pinned()?;
+    let release = manifest.release_dir(model_root);
+    verify_release(&manifest, &release)
+}
+
+pub(crate) fn verify_release(manifest: &Manifest, release_dir: &Path) -> Result<()> {
+    if manifest != &Manifest::pinned()? {
+        return Err(anyhow!(
+            "verification manifest does not match pinned manifest"
+        ));
+    }
+    verify_release_files(manifest, release_dir)
+}
+
+fn verify_release_files(manifest: &Manifest, release_dir: &Path) -> Result<()> {
+    check_release(manifest, release_dir)?;
+    let mut buffer = [0u8; 64 * 1024];
+    for entry in &manifest.files {
+        let path = release_dir.join(&entry.path);
+        let file = File::open(&path).with_context(|| format!("open {}", entry.path))?;
+        let mut reader = BufReader::new(file);
+        let mut hash = Sha256::new();
+        loop {
+            let count = reader
+                .read(&mut buffer)
+                .with_context(|| format!("read {}", entry.path))?;
+            if count == 0 {
+                break;
+            }
+            hash.update(&buffer[..count]);
+        }
+        let digest = format!("{:x}", hash.finalize());
+        if digest != entry.sha256 {
+            return Err(anyhow!(
+                "{}: sha256 {} != pinned {}",
+                entry.path,
+                digest,
+                entry.sha256
             ));
         }
     }
@@ -126,7 +217,7 @@ mod tests {
             manifest.revision,
             "f05ea799094571a3553904a555df3834fb0b963b"
         );
-        assert_eq!(manifest.files.len(), 27);
+        assert_eq!(manifest.files.len(), 57);
         assert!(manifest.files.iter().all(|f| f.sha256.len() == 64));
         assert!(manifest
             .url_for("config.json")
@@ -143,22 +234,51 @@ mod tests {
         assert!(Manifest::from_json(&bad).is_err());
     }
 
-    #[test]
-    fn installed_check_requires_marker_and_sizes() {
-        let dir = tempfile::tempdir().unwrap();
-        let manifest = Manifest {
+    fn test_manifest(contents: &[u8]) -> Manifest {
+        Manifest {
             model: "TeraSpace/TeraTTSv2".into(),
             revision: "a".repeat(40),
             url_template: "https://huggingface.co/x/resolve/{revision}/{path}".into(),
             files: vec![ManifestFile {
                 path: "a.bin".into(),
-                size: 4,
-                sha256: "0".repeat(64),
+                size: contents.len() as u64,
+                sha256: format!("{:x}", Sha256::digest(contents)),
             }],
-        };
-        assert!(check_installed(&manifest, dir.path()).is_err());
-        std::fs::write(dir.path().join("manifest.json"), "{}").unwrap();
+        }
+    }
+
+    fn write_publish_markers(dir: &Path) {
+        std::fs::write(dir.join(MANIFEST_FILE), MANIFEST_JSON).unwrap();
+        std::fs::write(dir.join(MANIFEST_DIGEST_FILE), manifest_digest()).unwrap();
+    }
+
+    #[test]
+    fn installed_check_binds_exact_pinned_manifest_and_sizes() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = test_manifest(b"abcd");
         std::fs::write(dir.path().join("a.bin"), b"abcd").unwrap();
-        assert!(check_installed(&manifest, dir.path()).is_ok());
+        assert!(check_release(&manifest, dir.path()).is_err());
+
+        write_publish_markers(dir.path());
+        assert!(check_release(&manifest, dir.path()).is_ok());
+
+        std::fs::write(dir.path().join(MANIFEST_FILE), b"{}").unwrap();
+        assert!(check_release(&manifest, dir.path()).is_err());
+        std::fs::write(dir.path().join(MANIFEST_FILE), MANIFEST_JSON).unwrap();
+        std::fs::write(dir.path().join(MANIFEST_DIGEST_FILE), "0".repeat(64)).unwrap();
+        assert!(check_release(&manifest, dir.path()).is_err());
+    }
+
+    #[test]
+    fn explicit_verify_hashes_full_file_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = test_manifest(b"abcd");
+        write_publish_markers(dir.path());
+        std::fs::write(dir.path().join("a.bin"), b"abcd").unwrap();
+        assert!(verify_release_files(&manifest, dir.path()).is_ok());
+
+        std::fs::write(dir.path().join("a.bin"), b"wxyz").unwrap();
+        assert!(check_release(&manifest, dir.path()).is_ok());
+        assert!(verify_release_files(&manifest, dir.path()).is_err());
     }
 }

@@ -39,6 +39,156 @@
       "sha256": "d4e4cf9a9b9de8cca28f309c4cb7735327322b5a764ba61dfc3706c3c7942c07"
     },
     {
+      "path": "ruaccent/dictionary/accents.json.gz",
+      "size": 20954156,
+      "sha256": "aa460ebba90de00fbbf3d41d121961f605b98667e45efb7920f127473b15515e"
+    },
+    {
+      "path": "ruaccent/dictionary/omographs.json.gz",
+      "size": 219047,
+      "sha256": "04a9e81c68d65f65ba493fe0110f99e79087548c2beeec3032e2b66e28706f36"
+    },
+    {
+      "path": "ruaccent/dictionary/yo_homographs.json.gz",
+      "size": 5747,
+      "sha256": "c4ee777bbbab87f9eac838f370ad92974e079d02b21903e480c54b5f0c8c60d1"
+    },
+    {
+      "path": "ruaccent/dictionary/yo_words.json.gz",
+      "size": 548914,
+      "sha256": "a19fa89a964a0691d9fe4ee384783e3934904891843d8f59a1c480d67947a82a"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/config.json",
+      "size": 841,
+      "sha256": "e377f159a8fc8673e211f100d4a237d5fe3dceb3b6789a5a738bf50bda23be49"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/model.onnx",
+      "size": 803402,
+      "sha256": "4e393144e45626f6f1062a0784ef06f921b97321a8e7b87ac2a09a892286500a"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/ort_config.json",
+      "size": 727,
+      "sha256": "31dd1c06997b2c5097b558829e46b4e91a5ef8e5c6bea07dfc67e48b3bbc8775"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/special_tokens_map.json",
+      "size": 99,
+      "sha256": "2acac3fb89054158ccbeff3c52744ca93979f738002709c0aea001597213024b"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/tokenizer_config.json",
+      "size": 257,
+      "sha256": "efea18a18af2809330eb0f431ab86979304d2559571e887de7b6359e3f18f0d8"
+    },
+    {
+      "path": "ruaccent/nn/nn_accent/vocab.txt",
+      "size": 140,
+      "sha256": "242882b2f27800e49a6babf46867dabf6dc9b6535b600776a68815fe4d4f4382"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/added_tokens.json",
+      "size": 279418,
+      "sha256": "071c01df9ba59b64b9d0d9af0eaac5412a5fc558d540a214ada4ee7531d38096"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/config.json",
+      "size": 723,
+      "sha256": "fa47e006d2a15a164d36e0303b5f8344a795f2108a3e55724133a87710216136"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/merges.txt",
+      "size": 1213606,
+      "sha256": "120c75258d87ba748b2025f517819fd0e0386e8d31cc6b29a21f900d395dd825"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/model.onnx",
+      "size": 359306923,
+      "sha256": "2cb6a174c4cdb45bd3132b4f7c8a3779fc4b6869863180ed7d0e421bcd453dbd"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/special_tokens_map.json",
+      "size": 280,
+      "sha256": "06e405a36dfe4b9604f484f6a1e619af1a7f7d09e34a8555eb0b77b66318067f"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/tokenizer.json",
+      "size": 5532343,
+      "sha256": "eb84a77af38a91f6f327486c7827d8541f8d446250f8d408909999b6be817afa"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/tokenizer_config.json",
+      "size": 492,
+      "sha256": "f159df92d0b0be03e1ceb0768222aa4c21dcfd37c5763b6b395b6864e023c7fb"
+    },
+    {
+      "path": "ruaccent/nn/nn_omograph/turbo3.1/vocab.json",
+      "size": 1555282,
+      "sha256": "ba028ba89c029a473ac369716b4d52bb252a38004fc5dd085d18f4ada4a760b3"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/config.json",
+      "size": 822,
+      "sha256": "aa0638edf56254f123e593e96f034c2b5e68303ac207b29f64f0878dc4c22631"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/model.onnx",
+      "size": 116473561,
+      "sha256": "3d547500637b4ddfec8880ed6d1405fd50ee9d3f0131ef8a2a69dcf961dbefeb"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/special_tokens_map.json",
+      "size": 125,
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/tokenizer.json",
+      "size": 2413536,
+      "sha256": "ce51cde5df60ecb167abec4c90db11360482150628f7a91f3e316df6d6ff6f6f"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/tokenizer_config.json",
+      "size": 368,
+      "sha256": "4466c2e475c434d35bce0f4a46f918730155386b50582fa3742b7b7d67897e96"
+    },
+    {
+      "path": "ruaccent/nn/nn_stress_usage_predictor/vocab.txt",
+      "size": 1080667,
+      "sha256": "f056a69b097422652053bf87565c35543e5d81540ca4b7dddd28de4157a969e0"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/config.json",
+      "size": 625,
+      "sha256": "adf7fd2c67be1498071f447ec4a23dbe84904c49f95d1d3e6c7d9df269b9a2e9"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/model.onnx",
+      "size": 14332169,
+      "sha256": "42cc85bf0c4b319dfe3d89fa17b162a92fd5e1c651a657cb3d5f44978d4e70ac"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/special_tokens_map.json",
+      "size": 125,
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/tokenizer.json",
+      "size": 126952,
+      "sha256": "f2bf174f2fe62ff11c28d56555f9c0cf16b24e162ef53bcf42ff85ebcf6ebfa8"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/tokenizer_config.json",
+      "size": 401,
+      "sha256": "804b8a4b4a02c9d38af8c88706206718759061ff9a102ad8483e9ac00011188c"
+    },
+    {
+      "path": "ruaccent/nn/nn_yo_homograph_resolver/vocab.txt",
+      "size": 48576,
+      "sha256": "9276b81ff34cd9560563a476de6735abf5ed9a3871131644992230dc4e630056"
+    },
+    {
       "path": "styles/eng_f3/style_dp.npy",
       "size": 640,
       "sha256": "8471b25d2db5281feebc6e03af5bfb413c647368d75cdd8cebc44be36def7948"

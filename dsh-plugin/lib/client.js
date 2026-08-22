@@ -3,20 +3,76 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const module = { exports: {} };
     const React = require("react");
-    const { Tooltip } = require("@deepseek-ai/dsh-client-ui-primitives");
-    const TTS_URL = window.localStorage.getItem("teratts.url") || "https://windows-brat.tail9fd337.ts.net";
+    const {
+      IconLoadingOutline16,
+      IconStopFill16,
+      Toast,
+      Tooltip,
+    } = require("@deepseek-ai/dsh-client-ui-primitives");
+
+    const textSchema = {
+      parse(value) {
+        if (typeof value !== "string") throw new TypeError("text must be a string");
+        return value;
+      },
+    };
+    const audioSchema = {
+      parse(value) {
+        if (
+          value === null ||
+          typeof value !== "object" ||
+          typeof value.audioBase64 !== "string" ||
+          typeof value.mimeType !== "string"
+        ) {
+          throw new TypeError("invalid TeraTTS audio response");
+        }
+        return value;
+      },
+    };
+
+    const REMOTE = {
+      package: "dsh-client-ui-teratts",
+      descriptors: [
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/synthesize",
+          service: "terattsVoice",
+          namespace: "terattsVoice",
+          method: "synthesize",
+          invocation: { kind: "direct" },
+          parameters: [
+            {
+              name: "text",
+              wire: "text",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text",
+                schema: textSchema,
+              },
+            },
+          ],
+          cancellation: { parameter: "signal" },
+          result: {
+            mode: "strict",
+            typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
+            schema: audioSchema,
+          },
+        },
+      ],
+    };
+
     const styleId = "dsh-client-ui-teratts/action";
     if (!document.querySelector(`style[data-plugin-css=${JSON.stringify(styleId)}]`)) {
       const style = document.createElement("style");
       style.dataset.plugin = "dsh-client-ui-teratts";
       style.dataset.pluginCss = styleId;
-      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex;font-size:16px}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-playing]{color:var(--dsw-alias-label-primary)}";
+      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(style);
     }
 
     function cleanMarkdown(text) {
       return text
-        .replace(/```[\s\S]*?```/g, " блок кода ")
+        .replace(/```[\s\S]*?```/g, " code block ")
         .replace(/`([^`]+)`/g, "$1")
         .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
@@ -42,107 +98,249 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function SpeakerIcon({ stop }) {
+    function SpeakerIcon() {
       return React.createElement(
-        "span",
-        { "aria-hidden": true },
-        stop ? "⏹" : "🔊",
+        "svg",
+        {
+          "aria-hidden": true,
+          width: 16,
+          height: 16,
+          viewBox: "0 0 16 16",
+          fill: "none",
+        },
+        React.createElement("path", {
+          d: "M2 6.25h2.25L7.5 3.5v9L4.25 9.75H2v-3.5Zm7.1-.85a3.25 3.25 0 0 1 0 5.2M10.8 3.7a5.5 5.5 0 0 1 0 8.6",
+          stroke: "currentColor",
+          strokeWidth: 1.25,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+        }),
       );
     }
 
-    function TeraTtsAction({ messageId, useSession }) {
-      const text = useSession((snapshot) => messageText(snapshot, messageId));
-      const [state, setState] = React.useState("idle");
-      const audioRef = React.useRef(null);
-      const urlRef = React.useRef(null);
-      const abortRef = React.useRef(null);
-      const mountedRef = React.useRef(true);
+    const playback = {
+      epoch: 0,
+      owner: null,
+      state: "idle",
+      error: null,
+      errorOwner: null,
+      errorSeq: 0,
+      abort: null,
+      audio: null,
+      url: null,
+      listeners: new Set(),
+    };
 
-      const stop = React.useCallback(() => {
-        abortRef.current?.abort();
-        abortRef.current = null;
-        if (audioRef.current) {
-          audioRef.current.onended = null;
-          audioRef.current.onerror = null;
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current = null;
+    function snapshot() {
+      return {
+        owner: playback.owner,
+        state: playback.state,
+        error: playback.error,
+        errorOwner: playback.errorOwner,
+        errorSeq: playback.errorSeq,
+      };
+    }
+
+    function publish() {
+      const next = snapshot();
+      for (const listener of playback.listeners) listener(next);
+    }
+
+    function releaseMedia() {
+      playback.abort?.abort();
+      playback.abort = null;
+      if (playback.audio) {
+        playback.audio.onended = null;
+        playback.audio.onerror = null;
+        playback.audio.pause();
+        playback.audio.removeAttribute("src");
+        playback.audio.load();
+        playback.audio = null;
+      }
+      if (playback.url) {
+        URL.revokeObjectURL(playback.url);
+        playback.url = null;
+      }
+    }
+
+    function stopPlayback() {
+      playback.epoch += 1;
+      releaseMedia();
+      playback.owner = null;
+      playback.state = "idle";
+      publish();
+    }
+
+    function failPlayback(epoch, message) {
+      if (epoch !== playback.epoch) return;
+      const errorOwner = playback.owner;
+      releaseMedia();
+      playback.owner = null;
+      playback.state = "idle";
+      playback.error = message;
+      playback.errorOwner = errorOwner;
+      playback.errorSeq += 1;
+      publish();
+    }
+
+    function decodeAudio({ audioBase64, mimeType }) {
+      const binary = atob(audioBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return new Blob([bytes], { type: mimeType || "audio/wav" });
+    }
+
+    async function startPlayback(owner, text, remote) {
+      stopPlayback();
+      const epoch = playback.epoch;
+      const abort = new AbortController();
+      playback.owner = owner;
+      playback.state = "loading";
+      playback.error = null;
+      playback.errorOwner = null;
+      playback.abort = abort;
+      publish();
+      try {
+        const result = await remote.synthesize(text, abort.signal);
+        if (epoch !== playback.epoch) return;
+        if (!result.ok) {
+          if (result.error?.code === "cancelled") return;
+          throw new Error(result.error?.message || "Speech generation failed");
         }
-        if (urlRef.current) {
-          URL.revokeObjectURL(urlRef.current);
-          urlRef.current = null;
-        }
-        if (mountedRef.current) setState("idle");
-      }, []);
-
-      React.useEffect(() => () => {
-        mountedRef.current = false;
-        stop();
-      }, [stop]);
-
-      const toggle = React.useCallback(async () => {
-        if (state !== "idle") {
-          stop();
+        const url = URL.createObjectURL(decodeAudio(result.value));
+        if (epoch !== playback.epoch) {
+          URL.revokeObjectURL(url);
           return;
         }
-        if (!text) return;
-        const controller = new AbortController();
-        abortRef.current = controller;
-        setState("loading");
-        try {
-          const response = await fetch(`${TTS_URL}/tts`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ text, voice: "ru_f1", duration_scale: 1.0 }),
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const url = URL.createObjectURL(await response.blob());
-          urlRef.current = url;
-          const audio = new Audio(url);
-          audioRef.current = audio;
-          audio.onended = stop;
-          audio.onerror = stop;
-          await audio.play();
-          setState("playing");
-        } catch (error) {
-          if (error?.name !== "AbortError") console.error("[ui-teratts]", error);
-          stop();
-        }
-      }, [state, stop, text]);
+        const audio = new Audio(url);
+        playback.abort = null;
+        playback.audio = audio;
+        playback.url = url;
+        audio.onended = () => {
+          if (epoch === playback.epoch) stopPlayback();
+        };
+        audio.onerror = () => failPlayback(epoch, "Audio playback failed");
+        await audio.play();
+        if (epoch !== playback.epoch) return;
+        playback.state = "playing";
+        publish();
+      } catch (error) {
+        if (epoch !== playback.epoch || error?.name === "AbortError") return;
+        failPlayback(epoch, error instanceof Error ? error.message : "Speech playback failed");
+      }
+    }
 
-      const label = state === "loading" ? "Генерация речи" : state === "playing" ? "Остановить озвучку" : "Озвучить ответ";
+    function usePlayback() {
+      const [value, setValue] = React.useState(snapshot);
+      React.useEffect(() => {
+        playback.listeners.add(setValue);
+        return () => playback.listeners.delete(setValue);
+      }, []);
+      return value;
+    }
+
+    function TeraTtsAction({ messageId, useSession, remote }) {
+      const text = useSession((session) => messageText(session, messageId));
+      const current = usePlayback();
+      const owner = React.useRef(Symbol(messageId));
+      const buttonRef = React.useRef(null);
+      const active = current.owner === owner.current;
+      const state = active ? current.state : "idle";
+
+      React.useEffect(
+        () => () => {
+          if (playback.owner === owner.current) stopPlayback();
+        },
+        [],
+      );
+
+      const toggle = React.useCallback(() => {
+        if (active) stopPlayback();
+        else if (text) startPlayback(owner.current, text, remote);
+      }, [active, remote, text]);
+
+      const label =
+        state === "loading"
+          ? "Generating speech"
+          : state === "playing"
+            ? "Stop speech"
+            : "Read response aloud";
+      const error =
+        current.errorOwner === owner.current && current.errorSeq ? current.error : null;
+
       return React.createElement(
-        Tooltip,
-        { label, side: "bottom" },
+        React.Fragment,
+        null,
         React.createElement(
-          "button",
-          {
-            type: "button",
-            className: "teratts-action",
-            "aria-label": label,
-            "aria-pressed": state === "playing",
-            "data-playing": state === "playing" || undefined,
-            disabled: !text,
-            onClick: toggle,
-          },
-          state === "loading" ? "⏳" : React.createElement(SpeakerIcon, { stop: state === "playing" }),
+          Tooltip,
+          { label, side: "bottom" },
+          React.createElement(
+            "button",
+            {
+              ref: buttonRef,
+              type: "button",
+              className: "teratts-action",
+              "aria-label": label,
+              "aria-busy": state === "loading" || undefined,
+              "data-active": active || undefined,
+              disabled: !text,
+              onClick: toggle,
+            },
+            state === "loading"
+              ? React.createElement(IconLoadingOutline16, { className: "teratts-loading" })
+              : state === "playing"
+                ? React.createElement(IconStopFill16, {})
+                : React.createElement(SpeakerIcon),
+          ),
         ),
+        error &&
+          React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(Toast, {
+              key: current.errorSeq,
+              text: error,
+              anchor: buttonRef.current,
+              onDone: () => {
+                if (playback.errorSeq === current.errorSeq) {
+                  playback.error = null;
+                  playback.errorOwner = null;
+                  publish();
+                }
+              },
+            }),
+          ),
       );
     }
 
-    const inject = ["slots"];
-    function apply(ctx) {
-      ctx.slots.inject("conversation.chat.assistant-actions", () =>
-        ctx.slots.register(
-          {
-            name: "conversation.chat.assistant-actions",
-            id: "teratts",
-            order: 20,
-          },
-          TeraTtsAction,
-        ),
-      );
+    const inject = ["remote", "slots"];
+    async function apply(ctx) {
+      const disposeRemote = await ctx.remote.$mount(REMOTE);
+      let disposeSlot;
+      try {
+        disposeSlot = ctx.slots.inject("conversation.chat.assistant-actions", () =>
+          ctx.slots.register(
+            {
+              name: "conversation.chat.assistant-actions",
+              id: "teratts",
+              order: 20,
+            },
+            (props) =>
+              React.createElement(TeraTtsAction, {
+                ...props,
+                remote: ctx.remote.terattsVoice,
+              }),
+          ),
+        );
+      } catch (error) {
+        await disposeRemote();
+        throw error;
+      }
+      return async () => {
+        disposeSlot();
+        stopPlayback();
+        await disposeRemote();
+      };
     }
 
     module.exports.apply = apply;

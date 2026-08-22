@@ -1,0 +1,48 @@
+{
+  "source": {
+    "model": "TeraSpace/TeraTTSv2",
+    "revision": "f05ea799094571a3553904a555df3834fb0b963b",
+    "reference": "teratts_ruaccent.py",
+    "ruaccent_source_revision": "3ac0ad5f6508f6c1a4a604220042232c70a7baf9",
+    "asset_revision": "b78ae5ea1e62beaf138bed1865cd8c3b0b5ca855"
+  },
+  "generation": "Run the pinned Python teratts_ruaccent.py with local-only assets from the pinned TeraTTSv2 revision. Record normalized text, tokenizer encodings (ids, attention mask, token type ids when declared, offsets and special-token mask), raw argmax decisions for stress usage, yo resolver, homograph choice and character accent, then final text. Never regenerate from floating main/master revisions.",
+  "pipeline": [
+    "NFC",
+    "punctuation spacing",
+    "number-word spacing",
+    "vocabulary filter preserving digits",
+    "language tag validation",
+    "tagged number expansion",
+    "vocabulary filter",
+    "RUAccent per eligible ru span",
+    "NFKD"
+  ],
+  "precedence": {
+    "manual_span": "Any + in one <ru>...</ru> span bypasses all automatic RUAccent processing for that span.",
+    "manual_word": "The internal accent stage never adds another marker to a word already containing +.",
+    "other_spans": "Manual stress in one Russian span does not disable automatic processing in another span. English spans are never changed."
+  },
+  "dictionary_cases": [
+    {"input": "Привет, мир!", "output": "Прив+ет, м+ир!"},
+    {"input": "Елка и ежик.", "output": "+Ёлка и +ёжик."},
+    {"input": "замок и коса", "output": "з+амок и кос+а"},
+    {"input": "Один простой неизвестный квазисловарь", "output": "Од+ин прост+ой неизв+естный квазисловарь"},
+    {"input": "ручка двери", "output": "р+учка дв+ери"}
+  ],
+  "mode_cases": [
+    {"mode": "disabled", "input": "<ru>Привет</ru>", "output": "<ru>Привет</ru>"},
+    {"mode": "dictionary", "input": "<ru>Привет</ru>", "output": "<ru>Прив+ет</ru>"},
+    {"mode": "dictionary", "input": "<ru>з+амок привет</ru>", "output": "<ru>з+амок привет</ru>", "reason": "whole-span manual precedence"},
+    {"mode": "dictionary", "input": "<ru>з+амок</ru> <ru>Привет</ru> <en>Hello</en>", "output": "<ru>з+амок</ru> <ru>Прив+ет</ru> <en>Hello</en>"}
+  ],
+  "neural_reference": {
+    "status": "generation-required-on-model-worker",
+    "required_records": [
+      "stress_usage_predictor tokenizer ids/offsets/special mask and labels",
+      "yo_homograph_resolver tokenizer ids/offsets/special mask and labels",
+      "turbo3.1 omograph pair tokenizer ids/masks and selected variant",
+      "nn_accent character ids/masks and primary-stress decisions"
+    ]
+  }
+}

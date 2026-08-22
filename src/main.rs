@@ -19,6 +19,7 @@ fn usage() -> &'static str {
      \n\
      Usage:\n\
        teratts-server --download-models [--model-dir PATH]\n\
+       teratts-server --verify-models [--model-dir PATH]\n\
        teratts-server --serve [--host HOST] [--port PORT] [--model-dir PATH]\n\
        teratts-server --speak TEXT [--voice ID] [--duration-scale N] [--output FILE] [--model-dir PATH]\n\
      \n\
@@ -28,6 +29,9 @@ fn usage() -> &'static str {
 #[derive(Debug, PartialEq)]
 enum Command {
     Download {
+        model_dir: PathBuf,
+    },
+    Verify {
         model_dir: PathBuf,
     },
     Serve {
@@ -87,7 +91,7 @@ fn parse_args(args: Vec<String>) -> Result<Command> {
     let mut index = 0usize;
     while index < args.len() {
         match args[index].as_str() {
-            "--download-models" | "--serve" => {
+            "--download-models" | "--verify-models" | "--serve" => {
                 if mode.replace(args[index].as_str()).is_some() {
                     return Err(anyhow!("choose exactly one command"));
                 }
@@ -118,6 +122,7 @@ fn parse_args(args: Vec<String>) -> Result<Command> {
     }
     match mode {
         Some("--download-models") => Ok(Command::Download { model_dir }),
+        Some("--verify-models") => Ok(Command::Verify { model_dir }),
         Some("--serve") => Ok(Command::Serve {
             model_dir,
             host,
@@ -139,6 +144,10 @@ async fn main() -> Result<()> {
     match parse_args(std::env::args().skip(1).collect())? {
         Command::Help => print!("{}", usage()),
         Command::Download { model_dir } => downloader::download_models(&model_dir).await?,
+        Command::Verify { model_dir } => {
+            manifest::verify_models(&model_dir)?;
+            println!("models verified: {}", model_dir.display());
+        }
         Command::Serve {
             model_dir,
             host,
@@ -162,8 +171,9 @@ fn speak(
     duration_scale: f32,
     output: &Path,
 ) -> Result<()> {
-    if text.trim().is_empty() {
-        return Err(anyhow!("text is empty"));
+    let text_chars = text.trim().chars().count();
+    if text_chars == 0 || text_chars > 2_000 {
+        return Err(anyhow!("text must contain 1..=2000 characters"));
     }
     if !duration_scale.is_finite() || !(0.25..=4.0).contains(&duration_scale) {
         return Err(anyhow!("duration-scale must be between 0.25 and 4.0"));
@@ -182,12 +192,12 @@ fn speak(
                     "ru",
                     duration_scale,
                     tera::SEED + index as u64,
+                    true,
                 )?
                 .chunks,
         );
     }
-    std::fs::write(output, wav::encode_mono_i16(&chunks)?)
-        .with_context(|| format!("write {}", output.display()))?;
+    wav::write_atomic(output, &wav::encode_mono_i16(&chunks)?)?;
     println!("wrote {}", output.display());
     Ok(())
 }
@@ -204,6 +214,8 @@ mod tests {
         assert!(matches!(command, Command::Serve { port: 9000, .. }));
         let command = parse_args(vec!["--speak".into(), "привет".into()]).unwrap();
         assert!(matches!(command, Command::Speak { text, .. } if text == "привет"));
+        let command = parse_args(vec!["--verify-models".into()]).unwrap();
+        assert!(matches!(command, Command::Verify { .. }));
         assert!(parse_args(vec!["--serve".into(), "--speak".into(), "x".into()]).is_err());
     }
 }

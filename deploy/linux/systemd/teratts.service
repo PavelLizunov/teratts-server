@@ -1,0 +1,45 @@
+[Unit]
+Description=TeraTTSv2 loopback inference service
+After=network.target
+ConditionPathExists=/opt/teratts/current/teratts-server
+ConditionPathIsDirectory=/var/lib/teratts/models/teratts-v2-f05ea799094571a3553904a555df3834fb0b963b
+
+[Service]
+Type=simple
+User=teratts
+Group=teratts
+EnvironmentFile=/etc/teratts/teratts.env
+ExecStart=/opt/teratts/current/teratts-server --serve --host 127.0.0.1 --port 8088 --model-dir /var/lib/teratts/models
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=180s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
+# ONNX Runtime may use mmap, executable mappings, threads, and CPU feature probes.
+# Deliberately omit MemoryDenyWriteExecute and aggressive SystemCallFilter rules.
+CPUAccounting=true
+CPUQuota=400%
+MemoryAccounting=true
+TasksAccounting=true
+TasksMax=512
+LimitNOFILE=4096
+MemoryHigh=5G
+MemoryMax=5500M
+MemorySwapMax=1G
+
+[Install]
+WantedBy=multi-user.target

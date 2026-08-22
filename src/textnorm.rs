@@ -1,9 +1,9 @@
 //! Text normalization for the TeraTTSv2 encoder, a faithful port of the
 //! reference pipeline in `teratts.py` (NFC → punctuation spacing → digit/word
 //! spacing → vocabulary filter → language-tag validation → tagged number
-//! expansion → NFKD). One deliberate RC17 gap: automatic Russian stress via
-//! the bundled RUAccent graphs is not orchestrated yet, so manual `+` markers
-//! pass through unchanged and unmarked Russian text is synthesized as-is.
+//! expansion → RUAccent on eligible Russian spans → NFKD). RUAccent is called
+//! by the engine between [`normalize`] and [`finalize`], so composed `й`/`ё`
+//! reach the accentizer and only encoder-ready text is decomposed.
 
 use anyhow::{anyhow, Result};
 use unicode_normalization::UnicodeNormalization;
@@ -29,21 +29,50 @@ pub fn ensure_language_tags(text: &str, lang: &str) -> String {
     }
 }
 
-/// Full reference pipeline minus RUAccent stress marking.
-pub fn prepare(raw_text: &str, indexer: &UnicodeIndexer) -> Result<ModelText> {
+/// Normalize through number expansion while retaining composed Russian text for
+/// RUAccent. This is the exact upstream prefix before `add_russian_stress`.
+pub fn normalize(raw_text: &str, indexer: &UnicodeIndexer) -> Result<String> {
     let text: String = raw_text.nfc().collect();
     let text = add_punctuation_spaces(&text);
     let text = add_number_word_spaces(&text);
     let text = skip_unsupported(&text, indexer, true);
     validate_language_tags(&text)?;
     let text = expand_tagged_numbers(&text);
-    let text = skip_unsupported(&text, indexer, false);
+    Ok(skip_unsupported(&text, indexer, false))
+}
+
+/// Convert stress-marked normalized text to the text-encoder and duration-
+/// predictor forms. The latter differs only by removal of `+` markers.
+pub fn finalize(text: &str) -> ModelText {
     let model_text: String = text.nfkd().collect();
     let duration_text = model_text.replace('+', "");
-    Ok(ModelText {
+    ModelText {
         model_text,
         duration_text,
-    })
+    }
+}
+
+#[cfg(test)]
+fn prepare(raw_text: &str, indexer: &UnicodeIndexer) -> Result<ModelText> {
+    Ok(finalize(&normalize(raw_text, indexer)?))
+}
+
+/// UTF-8 byte ranges of validated `<ru>...</ru>` contents. Nested language
+/// spans are rejected by validation; this scanner therefore returns disjoint
+/// ranges suitable for RUAccent replacement without touching tags or English.
+pub fn russian_span_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut cursor = 0;
+    while let Some(relative_start) = text[cursor..].find("<ru>") {
+        let start = cursor + relative_start + "<ru>".len();
+        let Some(relative_end) = text[start..].find("</ru>") else {
+            break;
+        };
+        let end = start + relative_end;
+        ranges.push(start..end);
+        cursor = end + "</ru>".len();
+    }
+    ranges
 }
 
 // ---------------------------------------------------------------------------
@@ -466,6 +495,15 @@ mod tests {
         let mt = prepare("<ru>з+амок</ru>", &idx).unwrap();
         assert!(mt.model_text.contains("+а"));
         assert!(!mt.duration_text.contains('+'));
+    }
+
+    #[test]
+    fn russian_ranges_select_contents_only() {
+        let text = "<ru>ручной</ru> <en>plain</en> <ru>второй</ru>";
+        let ranges = russian_span_ranges(text);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(&text[ranges[0].clone()], "ручной");
+        assert_eq!(&text[ranges[1].clone()], "второй");
     }
 
     #[test]

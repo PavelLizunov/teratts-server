@@ -36,6 +36,10 @@ use crate::npy::{self, NpyArray};
 use crate::rng::Rng;
 use crate::textnorm;
 
+#[path = "ruaccent.rs"]
+mod ruaccent;
+use ruaccent::{RuAccent, RuAccentMode};
+
 pub const SAMPLE_RATE: u32 = 44_100;
 pub const SAMPLES_PER_COMPRESSED_FRAME: usize = 3_072;
 pub const VOCODER_CONTEXT_FRAMES: usize = 20;
@@ -46,6 +50,7 @@ pub const LATENT_CHANNELS: usize = 144;
 pub const SPEED: f32 = 1.05;
 pub const SEED: u64 = 1234;
 pub const GUIDANCE: f32 = 3.0;
+pub const MAX_AUDIO_SECONDS: f32 = 180.0;
 
 #[derive(Debug)]
 pub struct TeraEngine {
@@ -60,6 +65,7 @@ pub struct TeraEngine {
     sampler_out: String,
     vocoder_out: String,
     indexer: UnicodeIndexer,
+    ruaccent: RuAccent,
 }
 
 /// Synthesized utterance: mono f32 chunks at the engine's fixed 44.1 kHz
@@ -112,6 +118,11 @@ impl TeraEngine {
         let vocoder_out =
             sole_declared_output("vocoder", vocoder.outputs().iter().map(|o| o.name()))?;
         let indexer = UnicodeIndexer::load(&release.join("unicode_indexer.json"))?;
+        let ruaccent = RuAccent::load(release.join("ruaccent"), configured_ruaccent_mode()?)?;
+        eprintln!(
+            "[teratts-server] load stage=ruaccent elapsed_ms={}",
+            started.elapsed().as_millis()
+        );
 
         Ok(TeraEngine {
             release,
@@ -124,6 +135,7 @@ impl TeraEngine {
             sampler_out,
             vocoder_out,
             indexer,
+            ruaccent,
         })
     }
 
@@ -136,6 +148,7 @@ impl TeraEngine {
         lang: &str,
         duration_scale: f32,
         seed: u64,
+        russian_stress: bool,
     ) -> Result<SynthOutput> {
         let started = Instant::now();
         if !duration_scale.is_finite() || duration_scale <= 0.0 {
@@ -145,8 +158,17 @@ impl TeraEngine {
         let style_dp = self.load_style(voice, "style_dp.npy", &[1, 8, 16])?;
 
         let tagged = textnorm::ensure_language_tags(text, lang);
-        let model_text =
-            textnorm::prepare(&tagged, &self.indexer).map_err(|e| anyhow!("invalid-text: {e}"))?;
+        let normalized = textnorm::normalize(&tagged, &self.indexer)
+            .map_err(|e| anyhow!("invalid-text: {e}"))?;
+        let accented = if russian_stress {
+            let russian_spans = textnorm::russian_span_ranges(&normalized);
+            self.ruaccent
+                .accent_ru_spans(&normalized, &russian_spans)
+                .map_err(|e| anyhow!("synth: RUAccent failed: {e}"))?
+        } else {
+            normalized
+        };
+        let model_text = textnorm::finalize(&accented);
         let (text_ids, text_mask) = self
             .indexer
             .batch(&model_text.model_text)
@@ -210,25 +232,38 @@ impl TeraEngine {
         if !duration_seconds.is_finite() || duration_seconds <= 0.0 {
             return Err(anyhow!("synth: non-positive duration"));
         }
+        if duration_seconds > MAX_AUDIO_SECONDS {
+            return Err(anyhow!("synth: predicted duration exceeds 180 seconds"));
+        }
         let latent_length = (duration_seconds * SAMPLE_RATE as f32
             / SAMPLES_PER_COMPRESSED_FRAME as f32)
             .ceil()
             .max(1.0) as usize;
         let maximum_samples = (duration_seconds * SAMPLE_RATE as f32).round() as usize;
+        let latent_elements = LATENT_CHANNELS
+            .checked_mul(latent_length)
+            .ok_or_else(|| anyhow!("synth: latent allocation overflow"))?;
 
         // --- distilled 8-step sampler ---------------------------------------
-        let mut latent = vec![0.0_f32; LATENT_CHANNELS * latent_length];
+        let mut latent = Vec::new();
+        latent
+            .try_reserve_exact(latent_elements)
+            .map_err(|_| anyhow!("synth: latent allocation failed"))?;
+        latent.resize(latent_elements, 0.0_f32);
         Rng::new(seed).fill_normal_f32(&mut latent);
         let initial_latent_t = Tensor::from_array((
             [1, LATENT_CHANNELS, latent_length],
             latent.into_boxed_slice(),
         ))
         .map_err(|e| anyhow!("synth: {e}"))?;
-        let latent_mask_t = Tensor::from_array((
-            [1, 1, latent_length],
-            vec![1.0_f32; latent_length].into_boxed_slice(),
-        ))
-        .map_err(|e| anyhow!("synth: {e}"))?;
+        let mut latent_mask = Vec::new();
+        latent_mask
+            .try_reserve_exact(latent_length)
+            .map_err(|_| anyhow!("synth: latent mask allocation failed"))?;
+        latent_mask.resize(latent_length, 1.0_f32);
+        let latent_mask_t =
+            Tensor::from_array(([1, 1, latent_length], latent_mask.into_boxed_slice()))
+                .map_err(|e| anyhow!("synth: {e}"))?;
         let text_emb_t = Tensor::from_array((emb_shape.clone(), emb_data.into_boxed_slice()))
             .map_err(|e| anyhow!("synth: {e}"))?;
         let guidance_t = Tensor::from_array(([1], [GUIDANCE].into_iter().collect::<Box<[f32]>>()))
@@ -344,6 +379,25 @@ fn slice_latent_frames(
         window.extend_from_slice(&latent[channel_start + start..channel_start + end]);
     }
     Ok(window)
+}
+
+fn configured_ruaccent_mode() -> Result<RuAccentMode> {
+    match std::env::var("TERATTS_RUACCENT_MODE") {
+        Ok(value) => parse_ruaccent_mode(&value),
+        Err(std::env::VarError::NotPresent) => Ok(RuAccentMode::Full),
+        Err(error) => Err(anyhow!("invalid RUAccent mode environment: {error}")),
+    }
+}
+
+fn parse_ruaccent_mode(value: &str) -> Result<RuAccentMode> {
+    match value.to_ascii_lowercase().as_str() {
+        "full" => Ok(RuAccentMode::Full),
+        "dictionary" => Ok(RuAccentMode::Dictionary),
+        "disabled" => Ok(RuAccentMode::Disabled),
+        _ => Err(anyhow!(
+            "invalid RUAccent mode; use full, dictionary, or disabled"
+        )),
+    }
 }
 
 fn load_session(path: &Path) -> Result<Session> {
@@ -464,6 +518,21 @@ mod tests {
         assert_eq!(SPEED, 1.05);
         assert_eq!(SEED, 1234);
         assert_eq!(GUIDANCE, 3.0);
+        assert_eq!(MAX_AUDIO_SECONDS, 180.0);
+    }
+
+    #[test]
+    fn ruaccent_modes_parse_and_default_to_full() {
+        assert_eq!(parse_ruaccent_mode("full").unwrap(), RuAccentMode::Full);
+        assert_eq!(
+            parse_ruaccent_mode("dictionary").unwrap(),
+            RuAccentMode::Dictionary
+        );
+        assert_eq!(
+            parse_ruaccent_mode("disabled").unwrap(),
+            RuAccentMode::Disabled
+        );
+        assert!(parse_ruaccent_mode("other").is_err());
     }
 
     #[test]
