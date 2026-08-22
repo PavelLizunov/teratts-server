@@ -11,6 +11,8 @@ export const Config = s.object({
   endpoint: s.string().default("http://127.0.0.1:8088"),
   timeoutMs: s.number().step(1).min(1).default(30_000),
   voice: s.string().default("ru_f1"),
+  language: s.string().default("ru"),
+  stress: s.boolean().default(false),
   tokenEnv: s.string().role("credential-ref").default(DEFAULT_TOKEN_REF),
 });
 
@@ -29,6 +31,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     }
 
     const config = this.current();
+    const language = config.language === "en" ? "en" : "ru";
     const endpoint = new URL("/tts", config.endpoint).toString();
     const timeout = AbortSignal.timeout(config.timeoutMs);
     const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -45,7 +48,13 @@ export class TeraTtsVoiceService extends TypertRemoteService {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token.value}` } : {}),
         },
-        body: JSON.stringify({ text, voice: config.voice, duration_scale: 1 }),
+        body: JSON.stringify({
+          text,
+          voice: config.voice,
+          language,
+          russian_stress: config.stress === true,
+          duration_scale: 1,
+        }),
         signal: requestSignal,
       });
     } catch (error) {
@@ -86,6 +95,8 @@ export function apply(ctx, config = {}) {
     endpoint: config.endpoint ?? "http://127.0.0.1:8088",
     timeoutMs: config.timeoutMs ?? 30_000,
     voice: config.voice ?? "ru_f1",
+    language: config.language ?? "ru",
+    stress: config.stress ?? false,
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
   };
   let current = () => base;

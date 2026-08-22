@@ -10,6 +10,57 @@ window.__ModuleLoader__.load({
       Tooltip,
     } = require("@deepseek-ai/dsh-client-ui-primitives");
 
+    const textSchema = {
+      parse(value) {
+        if (typeof value !== "string") throw new TypeError("text must be a string");
+        return value;
+      },
+    };
+    const audioSchema = {
+      parse(value) {
+        if (
+          value === null ||
+          typeof value !== "object" ||
+          typeof value.audioBase64 !== "string" ||
+          typeof value.mimeType !== "string"
+        ) {
+          throw new TypeError("invalid TeraTTS audio response");
+        }
+        return value;
+      },
+    };
+
+    const REMOTE = {
+      package: "dsh-client-ui-teratts",
+      descriptors: [
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/synthesize",
+          service: "terattsVoice",
+          namespace: "terattsVoice",
+          method: "synthesize",
+          invocation: { kind: "direct" },
+          parameters: [
+            {
+              name: "text",
+              wire: "text",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text",
+                schema: textSchema,
+              },
+            },
+          ],
+          cancellation: { parameter: "signal" },
+          result: {
+            mode: "strict",
+            typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
+            schema: audioSchema,
+          },
+        },
+      ],
+    };
+
     const styleId = "dsh-client-ui-teratts/action";
     if (!document.querySelector(`style[data-plugin-css=${JSON.stringify(styleId)}]`)) {
       const style = document.createElement("style");
@@ -21,7 +72,7 @@ window.__ModuleLoader__.load({
 
     function cleanMarkdown(text) {
       return text
-        .replace(/```[\s\S]*?```/g, " code block ")
+        .replace(/```[\s\S]*?```/g, ". ")
         .replace(/`([^`]+)`/g, "$1")
         .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
@@ -139,7 +190,16 @@ window.__ModuleLoader__.load({
       return new Blob([bytes], { type: mimeType || "audio/wav" });
     }
 
-    async function startPlayback(owner, text, runner) {
+    function unwrapAudio(result) {
+      if (result && typeof result.audioBase64 === "string") return result;
+      if (result && result.ok === true && result.value) return result.value;
+      if (result && result.ok === false) {
+        throw new Error(result.error?.message || "Speech generation failed");
+      }
+      throw new TypeError("invalid TeraTTS audio response");
+    }
+
+    async function startPlayback(owner, text, voice) {
       stopPlayback();
       const epoch = playback.epoch;
       const abort = new AbortController();
@@ -150,26 +210,24 @@ window.__ModuleLoader__.load({
       playback.abort = abort;
       publish();
       try {
-        const result = await runner.invoke("synthesize", { text }, abort.signal);
+        if (!voice) throw new Error("TeraTTS voice service is unavailable");
+        const result = await voice.synthesize(text, abort.signal);
         if (epoch !== playback.epoch) return;
-        if (!result.ok) {
-          if (result.error?.code === "cancelled") return;
-          throw new Error(result.error?.message || "Speech generation failed");
-        }
-        const url = URL.createObjectURL(decodeAudio(result.value));
+        const audio = unwrapAudio(result);
+        const url = URL.createObjectURL(decodeAudio(audio));
         if (epoch !== playback.epoch) {
           URL.revokeObjectURL(url);
           return;
         }
-        const audio = new Audio(url);
+        const element = new Audio(url);
         playback.abort = null;
-        playback.audio = audio;
+        playback.audio = element;
         playback.url = url;
-        audio.onended = () => {
+        element.onended = () => {
           if (epoch === playback.epoch) stopPlayback();
         };
-        audio.onerror = () => failPlayback(epoch, "Audio playback failed");
-        await audio.play();
+        element.onerror = () => failPlayback(epoch, "Audio playback failed");
+        await element.play();
         if (epoch !== playback.epoch) return;
         playback.state = "playing";
         publish();
@@ -188,7 +246,7 @@ window.__ModuleLoader__.load({
       return value;
     }
 
-    function TeraTtsAction({ messageId, useSession, runner }) {
+    function TeraTtsAction({ messageId, useSession, voice }) {
       const text = useSession((session) => messageText(session, messageId));
       const current = usePlayback();
       const owner = React.useRef(Symbol(messageId));
@@ -205,8 +263,8 @@ window.__ModuleLoader__.load({
 
       const toggle = React.useCallback(() => {
         if (active) stopPlayback();
-        else if (text) startPlayback(owner.current, text, runner);
-      }, [active, runner, text]);
+        else if (text) startPlayback(owner.current, text, voice);
+      }, [active, voice, text]);
 
       const label =
         state === "loading"
@@ -262,30 +320,33 @@ window.__ModuleLoader__.load({
       );
     }
 
-    const inject = ["slots", "remote"];
+    const inject = ["remote", "slots"];
     async function apply(ctx) {
-      let disposeSlot;
+      let disposeRemote = null;
       try {
-        disposeSlot = ctx.slots.inject("conversation.chat.assistant-actions", () =>
-          ctx.slots.register(
-            {
-              name: "conversation.chat.assistant-actions",
-              id: "teratts",
-              order: 20,
-            },
-            (props) =>
-              React.createElement(TeraTtsAction, {
-                ...props,
-                runner: ctx.remote.dynamicCordisRunner,
-              }),
-          ),
-        );
+        disposeRemote = await ctx.remote.$mount(REMOTE);
       } catch (error) {
-        throw error;
+        console.error("[dsh-client-ui-teratts] remote mount failed:", error);
       }
+      const voice = ctx.get("remote.terattsVoice");
+      const disposeSlot = ctx.slots.inject("conversation.chat.assistant-actions", () =>
+        ctx.slots.register(
+          {
+            name: "conversation.chat.assistant-actions",
+            id: "teratts",
+            order: 20,
+          },
+          (props) =>
+            React.createElement(TeraTtsAction, {
+              ...props,
+              voice,
+            }),
+        ),
+      );
       return async () => {
         disposeSlot();
         stopPlayback();
+        if (disposeRemote) await disposeRemote();
       };
     }
 

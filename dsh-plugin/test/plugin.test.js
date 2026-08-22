@@ -54,6 +54,19 @@ test("host owns network configuration, timeout, voice, and token", () => {
   assert.doesNotMatch(host, /ctx\.handle/);
 });
 
+test("host pins request language and sends plain text", () => {
+  assert.match(host, /language,/);
+  assert.match(host, /language: s\.string\(\)\.default\("ru"\)/);
+  assert.match(host, /config\.language === "en" \? "en" : "ru"/);
+  assert.doesNotMatch(host, /tagForeignRuns/);
+});
+
+test("host exposes stress toggle defaulting to suflyor parity (off)", () => {
+  assert.match(host, /stress: s\.boolean\(\)\.default\(false\)/);
+  assert.match(host, /russian_stress: config\.stress === true/);
+  assert.match(host, /stress: config\.stress \?\? false/);
+});
+
 test("client runtime inject declares only available services", () => {
   assert.match(client, /const inject = \["remote", "slots"\]/);
 });

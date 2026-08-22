@@ -19,14 +19,28 @@
 - Cross-platform quality: Windows and Linux `cargo check --locked` passed; macOS and Linux full tests passed; strict `cargo clippy --all-targets -- -D warnings` passed on Rust/Clippy 1.96 and 1.98.
 - Durable Trajectory remediation prompt is stored at `docs/trajectory-prevention-prompt.md`; external restart/browser steps are stored at `docs/evidence/dsh-browser-acceptance.md`.
 
+## Verified (browser acceptance, 0.6.x)
+
+- DSH plugin `0.6.1` is live; the voice action renders and plays. User confirmed a
+  clean Russian sentence sounds **excellent**, matching suflyor/horizon quality.
+- Full server pipeline proven byte-identical to the known-good `suflyor-teratts`
+  reference: the four core ONNX graphs, `ru_f1` `style_ttl`/`style_dp` embeddings,
+  and `indexer/rng/chunk/num2words` plus sampler/vocoder math all match. Hence
+  identical input yields identical audio.
+- `russian_stress` defaults to **off** (suflyor parity); full RUAccent remains a
+  settings toggle (`stress`). A/B showed the flag changes the waveform.
+- Markdown-heavy input reads less naturally than clean prose; the read-aloud is
+  optimized for prose. `cleanMarkdown` no longer injects English ("code block").
+- Synthesis is CPU-bound on the 4-vCPU LXC: ~1.1s sampler + ~1.7s vocoder per
+  short phrase; a 371-frame paragraph ≈ 9–10s. Matches the distilled 8-step
+  diffusion cost; suflyor is faster only on faster hardware.
+
 ## Not verified / pending
 
 - Tailnet edge is verified: the still-unprivileged CT uses `keyctl=1`, only `/dev/net/tun`, persistent profile/IP `100.112.26.106`, MagicDNS `teratts.tail9fd337.ts.net`, bidirectional direct peer ping and reboot persistence. A narrow OUTPUT reject for Tailscale control pool TCP/80 forces the client around a confirmed controlhttp upgrade hang onto TCP/443; Tailscale 1.102.2 is pinned pending upgrade acceptance.
 - Tailnet-only HTTPS Serve is verified with a valid Let's Encrypt certificate; health works from DSH and macOS, unauthenticated synthesis returns `401`, and authenticated synthesis returns a valid WAV.
 - DSH host-side endpoint is staged to `https://teratts.tail9fd337.ts.net`; credential `TERATTS_TOKEN` is configured.
-- DSH `0.2.0` activation: the current DSH process has not been restarted, deliberately avoiding self-termination from an active DSH session.
-- Real browser acceptance: DOM placement, click/loading/play/stop/replay, keyboard/focus/ARIA, Toast, console cleanliness and media cleanup.
-- Windows Scheduled Task/Tailscale Serve retirement. Windows remains the rollback fallback until Linux browser acceptance passes.
+- Windows Scheduled Task/Tailscale Serve retirement. Windows remains the rollback fallback until the user confirms the Linux voice action for regular use.
 - Client cancellation cannot interrupt an in-flight ONNX `Session::run`; it prevents later chunks/results but the current native call completes.
 
 ## Current human gate
