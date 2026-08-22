@@ -70,18 +70,39 @@ window.__ModuleLoader__.load({
       document.head.appendChild(style);
     }
 
-    function cleanMarkdown(text) {
-      return text
-        .replace(/```[\s\S]*?```/g, ". ")
+    const STRUCTURAL = /^\s{0,3}#{1,6}\s|^\s*>|^\s*[-*+]\s|^\s*\d+[.)]\s/;
+
+    function cleanLine(line) {
+      return line
         .replace(/`([^`]+)`/g, "$1")
         .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-        .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-        .replace(/^\s*>\s?/gm, "")
-        .replace(/^\s*[-*+]\s+/gm, "")
-        .replace(/^\s*\d+[.)]\s+/gm, "")
+        .replace(/^\s{0,3}#{1,6}\s+/g, "")
+        .replace(/^\s*>\s?/g, "")
+        .replace(/^\s*[-*+]\s+/g, "")
+        .replace(/^\s*\d+[.)]\s+/g, "")
         .replace(/[*_~]/g, "")
         .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function cleanMarkdown(text) {
+      return text
+        .replace(/\r/g, "")
+        .replace(/```[\s\S]*?```/g, " . ")
+        .split("\n")
+        .map((line) => {
+          const structural = STRUCTURAL.test(line);
+          const cleaned = cleanLine(line);
+          if (!cleaned) return "";
+          // Headings/list items/quotes are separate thoughts: give the TTS a
+          // sentence boundary so it pauses instead of running them together.
+          if (structural && !/[.!?…:]$/.test(cleaned)) return cleaned + ".";
+          return cleaned;
+        })
+        .filter(Boolean)
+        .join(" ")
         .replace(/\s+/g, " ")
         .trim();
     }
