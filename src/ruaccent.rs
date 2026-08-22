@@ -553,8 +553,17 @@ impl PairClassifier {
 
 fn load_session(path: &Path) -> Result<Session> {
     let model = path.join("model.onnx");
+    let threads = std::env::var("TERATTS_ORT_THREADS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value: &usize| *value > 0)
+        .unwrap_or(4);
     Session::builder()
         .context("ort session builder")?
+        .with_intra_threads(threads)
+        .map_err(|error| anyhow!("ort intra threads: {error}"))?
+        .with_inter_threads(1)
+        .map_err(|error| anyhow!("ort inter threads: {error}"))?
         .commit_from_file(&model)
         .with_context(|| format!("load {}", model.display()))
 }

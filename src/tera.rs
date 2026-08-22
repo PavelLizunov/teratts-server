@@ -445,9 +445,21 @@ fn parse_ruaccent_mode(value: &str) -> Result<RuAccentMode> {
     }
 }
 
+fn ort_threads() -> usize {
+    std::env::var("TERATTS_ORT_THREADS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value: &usize| *value > 0)
+        .unwrap_or(4)
+}
+
 fn load_session(path: &Path) -> Result<Session> {
     Session::builder()
         .map_err(|e| anyhow!("ort session builder: {e}"))?
+        .with_intra_threads(ort_threads())
+        .map_err(|e| anyhow!("ort intra threads: {e}"))?
+        .with_inter_threads(1)
+        .map_err(|e| anyhow!("ort inter threads: {e}"))?
         .commit_from_file(path)
         .map_err(|e| anyhow!("load {}: {e}", path.display()))
 }
