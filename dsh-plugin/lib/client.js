@@ -313,7 +313,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    const inject = ["remote", "slots"];
+    const inject = ["remote", "remote.terattsVoice", "slots"];
     async function apply(ctx) {
       const disposeRemote = await ctx.remote.$mount(REMOTE);
       let disposeSlot;
