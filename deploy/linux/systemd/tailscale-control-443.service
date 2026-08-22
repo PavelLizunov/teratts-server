@@ -1,0 +1,12 @@
+[Unit]
+Description=Force Tailscale control transport to TCP 443
+Before=tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'iptables -C OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || iptables -I OUTPUT 1 -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset'
+ExecStop=/bin/sh -c 'iptables -D OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

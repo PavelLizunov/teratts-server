@@ -21,10 +21,9 @@
 
 ## Not verified / pending
 
-- CT 221 Tailnet re-enrollment on kernel TUN: the first userspace-mode login reached `machineAuthorized` but never received/persisted a netmap; CT remains unprivileged with only `/dev/net/tun` passed through and awaits one new authorization plus reboot-persistence proof.
-- Tailnet-only HTTPS Serve for CT 221.
-- Tailnet HTTPS bearer rejection and authenticated `/tts` from another Tailnet device.
-- DSH host-side endpoint/credential switch from Windows fallback to CT 221.
+- Tailnet edge is verified: the still-unprivileged CT uses `keyctl=1`, only `/dev/net/tun`, persistent profile/IP `100.112.26.106`, MagicDNS `teratts.tail9fd337.ts.net`, bidirectional direct peer ping and reboot persistence. A narrow OUTPUT reject for Tailscale control pool TCP/80 forces the client around a confirmed controlhttp upgrade hang onto TCP/443; Tailscale 1.102.2 is pinned pending upgrade acceptance.
+- Tailnet-only HTTPS Serve is verified with a valid Let's Encrypt certificate; health works from DSH and macOS, unauthenticated synthesis returns `401`, and authenticated synthesis returns a valid WAV.
+- DSH host-side endpoint is staged to `https://teratts.tail9fd337.ts.net`; credential `TERATTS_TOKEN` is configured.
 - DSH `0.2.0` activation: the current DSH process has not been restarted, deliberately avoiding self-termination from an active DSH session.
 - Real browser acceptance: DOM placement, click/loading/play/stop/replay, keyboard/focus/ARIA, Toast, console cleanliness and media cleanup.
 - Windows Scheduled Task/Tailscale Serve retirement. Windows remains the rollback fallback until Linux browser acceptance passes.
@@ -32,4 +31,4 @@
 
 ## Current human gate
 
-Authorize the Tailnet device `teratts` using the URL emitted by `tailscale up`. After authorization, configure Tailscale Serve, verify HTTPS, switch DSH host settings/credential, restart DSH only through an external management channel, perform browser acceptance, then retire the Windows fallback.
+Restart DSH only through the verified external `mac-worker -> harness-test` SSH channel after ending the active DSH session, then perform the browser acceptance checklist. Retire the Windows fallback only after the Linux voice action passes that browser gate.
