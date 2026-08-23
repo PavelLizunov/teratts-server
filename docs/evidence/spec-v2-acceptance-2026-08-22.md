@@ -7,6 +7,12 @@
   (`TERATTS_PARALLEL_CHUNKS=2`, `TERATTS_ORT_THREADS=2`) → 4-sentence paragraph 3.65s → 1.6s
   (~2.3×). INT8 rejected (text_encoder 95% rel error under synthetic calibration). See
   `docs/specs/teratts-perf-optimization.md`.
+- Speech-front (2026-08-23, release `b11b631`): vendored `speech-front` normalizer
+  (`src/speechfront.rs` + `src/lexicon.toml`, chislo=0.3.1) as opt-in `TERATTS_SPEECH_FRONT=1`
+  (enabled on the LXC). Expands versions/numbers/dates/percents/units + approved lexicon to
+  natural Russian before TTS (e.g. «v0.8.0» → «вэ ноль восемь ноль», «15%» → «пятнадцать
+  процентов»). Unknown tech identifiers (hex SHAs, CamelCase) are preserved per speech-front
+  philosophy — add a drop/spell policy if they must not be spoken.
 - macOS hermetic suite: 60 passed, 1 model-backed test ignored by default.
 - Debian model-backed differential test: pinned Python-generated full RUAccent corpus passed 7/7 cases; full Debian test suite passed 61 tests with the model-backed test ignored in the ordinary run.
 - Linux runtime: unprivileged Debian 12 LXC CT 221 `teratts` on `pve-ninitux3`, static LAN address `192.168.0.221`, 4 vCPU, 6 GiB RAM, Proxmox 1 GiB swap limit, 16 GiB local disk, onboot enabled.
