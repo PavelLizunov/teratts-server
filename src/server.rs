@@ -29,7 +29,11 @@ const APP_GIT_SHA: &str = match option_env!("TERATTS_APP_GIT_SHA") {
 };
 
 struct AppState {
-    engine: Arc<Mutex<TeraEngine>>,
+    /// Phase B (perf spec): one engine per parallel chunk slot. Per-chunk seeds
+    /// are deterministic (`SEED + index`), so parallel synthesis is byte-identical
+    /// to sequential; no crossfade is required because chunks already concatenate
+    /// cleanly.
+    pool: Arc<Vec<Mutex<TeraEngine>>>,
     voices: Vec<String>,
     manifest: Manifest,
     release: PathBuf,
@@ -37,6 +41,18 @@ struct AppState {
     bearer_token: Option<String>,
     ruaccent_mode: String,
     ruaccent_ready: bool,
+}
+
+/// Parallel chunk slots (Phase B). 1 = sequential (legacy); >1 = bounded
+/// parallel synthesis. Capped at 4 to avoid ORT thread oversubscription on the
+/// 4-vCPU LXC when intra_op=4.
+fn parallel_chunks() -> usize {
+    std::env::var("TERATTS_PARALLEL_CHUNKS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value: &usize| *value > 0)
+        .unwrap_or(1)
+        .min(4)
 }
 
 struct Admission {
@@ -184,8 +200,14 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         ));
     }
     let ruaccent_ready = ruaccent_mode != "disabled" && release.join("ruaccent").is_dir();
+    let slots = parallel_chunks();
+    let mut pool = Vec::with_capacity(slots);
+    for _ in 0..slots {
+        pool.push(Mutex::new(TeraEngine::load(model_root)?));
+    }
+    println!("[teratts-server] parallel chunk slots: {slots}");
     let state = Arc::new(AppState {
-        engine: Arc::new(Mutex::new(TeraEngine::load(model_root)?)),
+        pool: Arc::new(pool),
         voices,
         manifest,
         release,
@@ -258,24 +280,72 @@ async fn tts(
     let remaining = REQUEST_DEADLINE
         .checked_sub(started.elapsed())
         .ok_or_else(ApiError::deadline)?;
-    let engine = Arc::clone(&state.engine);
+    let pool = Arc::clone(&state.pool);
     let task = tokio::task::spawn_blocking(move || {
         let _active = active;
-        let mut engine = engine.blocking_lock();
-        let mut all = Vec::new();
-        let mut samples = 0usize;
-        let prepared = engine.preprocess(&text, language.as_str(), russian_stress)?;
-        for (index, part) in TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?
-            .into_iter()
-            .enumerate()
-        {
-            let output =
-                engine.synthesize_preprocessed(&part, &voice, scale, SEED + index as u64)?;
+        let prepared = pool[0]
+            .blocking_lock()
+            .preprocess(&text, language.as_str(), russian_stress)?;
+        let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
+
+        // Per-chunk synthesis; seeds are `SEED + index` so output is identical
+        // regardless of execution order. Sequential when the pool has one slot.
+        let synthesize_into = |all: &mut Vec<Vec<f32>>,
+                               samples: &mut usize,
+                               index: usize,
+                               part: &str,
+                               engine: &mut TeraEngine|
+         -> Result<()> {
+            let output = engine.synthesize_preprocessed(part, &voice, scale, SEED + index as u64)?;
             for chunk in output.chunks {
-                samples = checked_audio_samples(samples, chunk.len())?;
+                *samples = checked_audio_samples(*samples, chunk.len())?;
                 all.try_reserve(1)
                     .map_err(|_| anyhow!("audio allocation failed"))?;
                 all.push(chunk);
+            }
+            Ok(())
+        };
+
+        let mut all = Vec::new();
+        let mut samples = 0usize;
+        if pool.len() == 1 {
+            let mut engine = pool[0].blocking_lock();
+            for (index, part) in parts.iter().enumerate() {
+                synthesize_into(&mut all, &mut samples, index, part, &mut engine)?;
+            }
+        } else {
+            // Bounded parallelism: part `i` runs on slot `i % pool.len()`, so at
+            // most `pool.len()` engines run concurrently. Join in index order to
+            // preserve audio ordering.
+            let handles: Vec<_> = parts
+                .iter()
+                .enumerate()
+                .map(|(index, part)| {
+                    let pool = Arc::clone(&pool);
+                    let voice = voice.clone();
+                    let part = part.clone();
+                    std::thread::spawn(move || {
+                        let mut engine = pool[index % pool.len()].blocking_lock();
+                        let output = engine.synthesize_preprocessed(
+                            &part,
+                            &voice,
+                            scale,
+                            SEED + index as u64,
+                        )?;
+                        Ok::<_, anyhow::Error>(output)
+                    })
+                })
+                .collect();
+            for handle in handles {
+                let output = handle
+                    .join()
+                    .map_err(|_| anyhow!("synthesis thread panicked"))??;
+                for chunk in output.chunks {
+                    samples = checked_audio_samples(samples, chunk.len())?;
+                    all.try_reserve(1)
+                        .map_err(|_| anyhow!("audio allocation failed"))?;
+                    all.push(chunk);
+                }
             }
         }
         wav::encode_mono_i16(&all)
