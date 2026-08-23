@@ -2,7 +2,11 @@
 
 ## Verified
 
-- Repository source and active Linux release: `b5e0cb0301e4d1111cf4435c99ae50fba5eaf6bd`; binary SHA-256 `bb9219cca8084b4f40ef385f5f21cf2e2a81612e5599ccc3a7629c5fe48ad8d6`.
+- Repository source and active Linux release: `49eb9c45b559e7b1884104fc85f2a382c3ab4699`; binary SHA-256 `bc20a61c0eea82d2f2f81e6bfdbc94b36e40c09b8594c92ee26d0d2556ebf4f8`.
+- Perf release (2026-08-23): Phase A (ORT graph opts + mimalloc) + bounded parallel chunks
+  (`TERATTS_PARALLEL_CHUNKS=2`, `TERATTS_ORT_THREADS=2`) → 4-sentence paragraph 3.65s → 1.6s
+  (~2.3×). INT8 rejected (text_encoder 95% rel error under synthetic calibration). See
+  `docs/specs/teratts-perf-optimization.md`.
 - macOS hermetic suite: 60 passed, 1 model-backed test ignored by default.
 - Debian model-backed differential test: pinned Python-generated full RUAccent corpus passed 7/7 cases; full Debian test suite passed 61 tests with the model-backed test ignored in the ordinary run.
 - Linux runtime: unprivileged Debian 12 LXC CT 221 `teratts` on `pve-ninitux3`, static LAN address `192.168.0.221`, 4 vCPU, 6 GiB RAM, Proxmox 1 GiB swap limit, 16 GiB local disk, onboot enabled.
