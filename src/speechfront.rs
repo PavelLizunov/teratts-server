@@ -958,6 +958,18 @@ match = "word"
     }
 
     #[test]
+    fn does_not_eat_technical_sentence() {
+        let normalizer = Normalizer::builtin().unwrap_or_else(|error| panic!("{error}"));
+        let input = "Релиз v0.8.0 (b11b631) ускорил синтез в 2.3 раза, INT8 отклонён, качество прежнее.";
+        let out = normalizer.normalize(input);
+        println!("SF-IN : {input}");
+        println!("SF-OUT: {out}");
+        for word in ["Релиз", "ускорил", "синтез", "раза", "отклонён", "качество", "прежнее"] {
+            assert!(out.contains(word), "lost word {word}: {out}");
+        }
+    }
+
+    #[test]
     fn production_lexicon_keeps_horizon_migration_baseline() {
         let lexicon = include_str!("lexicon.toml");
         let normalizer = Normalizer::from_toml(lexicon).unwrap_or_else(|error| panic!("{error}"));
