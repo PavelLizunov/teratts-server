@@ -90,9 +90,16 @@ window.__ModuleLoader__.load({
     function cleanMarkdown(text) {
       return text
         .replace(/\r/g, "")
-        .replace(/```[\s\S]*?```/g, " . ")
+        .replace(/```[\s\S]*?```/g, " блок кода. ")
         .split("\n")
         .map((line) => {
+          const trimmed = line.trim();
+          // Markdown tables: read rows as "key, value."; drop separator rows.
+          if (trimmed.startsWith("|")) {
+            if (/^[\s|:\-–—]+$/.test(trimmed)) return "";
+            const cells = trimmed.split("|").map((c) => c.trim()).filter(Boolean);
+            return cells.length ? cells.join(", ") + "." : "";
+          }
           const structural = STRUCTURAL.test(line);
           const cleaned = cleanLine(line);
           if (!cleaned) return "";
@@ -103,6 +110,9 @@ window.__ModuleLoader__.load({
         })
         .filter(Boolean)
         .join(" ")
+        .replace(/→/g, " даёт ")
+        .replace(/×/g, " умножить ")
+        .replace(/(\d+(?:[.,]\d+)?)\s*с(?![а-яёa-z0-9])/gi, "$1 секунд")
         .replace(/\s+/g, " ")
         .trim();
     }
