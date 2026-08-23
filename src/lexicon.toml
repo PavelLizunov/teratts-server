@@ -1,0 +1,1793 @@
+schema_version = 1
+
+# Imported read-only from Horizon _TERA_PRONUNCIATIONS on 2026-08-15.
+# These 162 entries were manually reviewed in Horizon. Engine overrides
+# preserve the original Tera mapping without making Tera part of the schema.
+
+[[entry]]
+written = "/v1/chat/completions"
+language = "ru-RU"
+spoken = "ви один, чат комплишнс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "ви один, чат комплишнс"
+
+[[entry]]
+written = "Dynamic Resource Allocation"
+language = "ru-RU"
+spoken = "Дайнэмик Ресурс Аллокейшн"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дайнэмик Ресурс Аллокейшн"
+
+[[entry]]
+written = "Argonne National Laboratory"
+language = "ru-RU"
+spoken = "Аргонн Нэшнл Лэборатори"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Аргонн Нэшнл Лэборатори"
+
+[[entry]]
+written = "Open Shortest Path First"
+language = "ru-RU"
+spoken = "Оупен Шортест Пас Фёрст"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оупен Шортест Пас Фёрст"
+
+[[entry]]
+written = "google-deepmind/weathernext"
+language = "ru-RU"
+spoken = "Гугл Дипмайнд слэш Уэзер Некст"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гугл Дипмайнд слэш Уэзер Некст"
+
+[[entry]]
+written = "NetworkChuck Academy"
+language = "ru-RU"
+spoken = "Нетворк Чак Академи"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Нетворк Чак Академи"
+
+[[entry]]
+written = "Reasoning/Max Effort"
+language = "ru-RU"
+spoken = "Ризонинг слэш Макс Эфорт"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Ризонинг слэш Макс Эфорт"
+
+[[entry]]
+written = "The New York Times"
+language = "ru-RU"
+spoken = "Зэ Нью-Йорк Таймс"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Зэ Нью-Йорк Таймс"
+
+[[entry]]
+written = "GraphCast/GenCast"
+language = "ru-RU"
+spoken = "Графкаст слэш Дженкаст"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Графкаст слэш Дженкаст"
+
+[[entry]]
+written = "Steering Committee"
+language = "ru-RU"
+spoken = "Стиринг Комити"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Стиринг Комити"
+
+[[entry]]
+written = "Trajectory Labs"
+language = "ru-RU"
+spoken = "Трэджектори Лэбс"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Трэджектори Лэбс"
+
+[[entry]]
+written = "Raccoon Heist"
+language = "ru-RU"
+spoken = "Рэкун Хайст"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Рэкун Хайст"
+
+[[entry]]
+written = "Terminal Bench"
+language = "ru-RU"
+spoken = "Терминал Бенч"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Терминал Бенч"
+
+[[entry]]
+written = "NetworkChuck"
+language = "ru-RU"
+spoken = "Нетворк Чак"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Нетворк Чак"
+
+[[entry]]
+written = "Sound Blaster"
+language = "ru-RU"
+spoken = "Саунд Бластер"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Саунд Бластер"
+
+[[entry]]
+written = "The Register"
+language = "ru-RU"
+spoken = "Зэ Реджистер"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Зэ Реджистер"
+
+[[entry]]
+written = "OpenCode Go"
+language = "ru-RU"
+spoken = "Оупен Код Гоу"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оупен Код Гоу"
+
+[[entry]]
+written = "Oh My Pi"
+language = "ru-RU"
+spoken = "Оу Май Пай"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оу Май Пай"
+
+[[entry]]
+written = "Help Center"
+language = "ru-RU"
+spoken = "Хелп Сентер"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хелп Сентер"
+
+[[entry]]
+written = "think harder"
+language = "ru-RU"
+spoken = "синк хардер"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "синк хардер"
+
+[[entry]]
+written = "prompt injection"
+language = "ru-RU"
+spoken = "промпт инджекшн"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "промпт инджекшн"
+
+[[entry]]
+written = "policy-as-code"
+language = "ru-RU"
+spoken = "полиси эз код"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "полиси эз код"
+
+[[entry]]
+written = "cloud-native"
+language = "ru-RU"
+spoken = "клауд нейтив"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "клауд нейтив"
+
+[[entry]]
+written = "pre-commit"
+language = "ru-RU"
+spoken = "пре-коммит"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "пре-коммит"
+
+[[entry]]
+written = "feature gate"
+language = "ru-RU"
+spoken = "фича гейт"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "фича гейт"
+
+[[entry]]
+written = "ResourceClaims"
+language = "ru-RU"
+spoken = "Ресурс Клеймс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Ресурс Клеймс"
+
+[[entry]]
+written = "ResourceClaim"
+language = "ru-RU"
+spoken = "Ресурс Клейм"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Ресурс Клейм"
+
+[[entry]]
+written = "ResourceSlice"
+language = "ru-RU"
+spoken = "Ресурс Слайс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Ресурс Слайс"
+
+[[entry]]
+written = "ServiceAccount"
+language = "ru-RU"
+spoken = "Сервис Аккаунт"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Сервис Аккаунт"
+
+[[entry]]
+written = "DeviceClass"
+language = "ru-RU"
+spoken = "Девайс Класс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Девайс Класс"
+
+[[entry]]
+written = "libvgpu.so"
+language = "ru-RU"
+spoken = "либ ви-джи-пи-ю эс-оу"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "либ ви-джи-пи-ю эс-оу"
+
+[[entry]]
+written = "nvidia.com/gpu"
+language = "ru-RU"
+spoken = "энвидиа точка ком слэш джи-пи-ю"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "энвидиа точка ком слэш джи-пи-ю"
+
+[[entry]]
+written = "Fall Comdex"
+language = "ru-RU"
+spoken = "Фол Комдекс"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Фол Комдекс"
+
+[[entry]]
+written = "Visi On"
+language = "ru-RU"
+spoken = "Визи Он"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Визи Он"
+
+[[entry]]
+written = "HAMi-core"
+language = "ru-RU"
+spoken = "Хэми кор"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хэми кор"
+
+[[entry]]
+written = "klepton-ld"
+language = "ru-RU"
+spoken = "Клептон эл-ди"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клептон эл-ди"
+
+[[entry]]
+written = "Android/Quest"
+language = "ru-RU"
+spoken = "Андроид слэш Квест"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Андроид слэш Квест"
+
+[[entry]]
+written = "docker/kubernetes"
+language = "ru-RU"
+spoken = "Докер слэш Кубернетес"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Докер слэш Кубернетес"
+
+[[entry]]
+written = "DeepSWE"
+language = "ru-RU"
+spoken = "Дип эс-дабл-ю-и"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дип эс-дабл-ю-и"
+
+[[entry]]
+written = "WeatherNext"
+language = "ru-RU"
+spoken = "Уэзер Некст"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Уэзер Некст"
+
+[[entry]]
+written = "OpenJDK"
+language = "ru-RU"
+spoken = "Оупен джей-ди-кей"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оупен джей-ди-кей"
+
+[[entry]]
+written = "ClickHouse"
+language = "ru-RU"
+spoken = "Кликхаус"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Кликхаус"
+
+[[entry]]
+written = "ClickPipes"
+language = "ru-RU"
+spoken = "Кликпайпс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Кликпайпс"
+
+[[entry]]
+written = "GoldenGate"
+language = "ru-RU"
+spoken = "Голденгейт"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Голденгейт"
+
+[[entry]]
+written = "Artifactory"
+language = "ru-RU"
+spoken = "Артифактори"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Артифактори"
+
+[[entry]]
+written = "DeepMind"
+language = "ru-RU"
+spoken = "Дипмайнд"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дипмайнд"
+
+[[entry]]
+written = "Databricks"
+language = "ru-RU"
+spoken = "Датабрикс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Датабрикс"
+
+[[entry]]
+written = "Accenture"
+language = "ru-RU"
+spoken = "Эксенчер"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Эксенчер"
+
+[[entry]]
+written = "GraphCast"
+language = "ru-RU"
+spoken = "Графкаст"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Графкаст"
+
+[[entry]]
+written = "GenCast"
+language = "ru-RU"
+spoken = "Дженкаст"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дженкаст"
+
+[[entry]]
+written = "DeepSeek"
+language = "ru-RU"
+spoken = "Дипсик"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дипсик"
+
+[[entry]]
+written = "Nixpkgs"
+language = "ru-RU"
+spoken = "Никс пэкэджес"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Никс пэкэджес"
+
+[[entry]]
+written = "NixOS"
+language = "ru-RU"
+spoken = "Никс оу-эс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Никс оу-эс"
+
+[[entry]]
+written = "Slashdot"
+language = "ru-RU"
+spoken = "Слэшдот"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Слэшдот"
+
+[[entry]]
+written = "Blackwell"
+language = "ru-RU"
+spoken = "Блэквелл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Блэквелл"
+
+[[entry]]
+written = "Markdown"
+language = "ru-RU"
+spoken = "Маркдаун"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Маркдаун"
+
+[[entry]]
+written = "MySQL"
+language = "ru-RU"
+spoken = "Май эс-кью-эл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Май эс-кью-эл"
+
+[[entry]]
+written = "Shopify"
+language = "ru-RU"
+spoken = "Шопифай"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Шопифай"
+
+[[entry]]
+written = "VisiCorp"
+language = "ru-RU"
+spoken = "Визикорп"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Визикорп"
+
+[[entry]]
+written = "Macintosh"
+language = "ru-RU"
+spoken = "Макинтош"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Макинтош"
+
+[[entry]]
+written = "Minesweeper"
+language = "ru-RU"
+spoken = "Майнсвипер"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Майнсвипер"
+
+[[entry]]
+written = "Toastytech"
+language = "ru-RU"
+spoken = "Тоусти Тек"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Тоусти Тек"
+
+[[entry]]
+written = "Snowflake"
+language = "ru-RU"
+spoken = "Сноуфлейк"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Сноуфлейк"
+
+[[entry]]
+written = "microVM"
+language = "ru-RU"
+spoken = "микро ви-эм"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "микро ви-эм"
+
+[[entry]]
+written = "PeerDB"
+language = "ru-RU"
+spoken = "Пир ди-би"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Пир ди-би"
+
+[[entry]]
+written = "SQLite"
+language = "ru-RU"
+spoken = "эс-кью-эл-лайт"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "эс-кью-эл-лайт"
+
+[[entry]]
+written = "Zstandard"
+language = "ru-RU"
+spoken = "зи-стандарт"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "зи-стандарт"
+
+[[entry]]
+written = "iPadOS"
+language = "ru-RU"
+spoken = "айпэд оу-эс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "айпэд оу-эс"
+
+[[entry]]
+written = "visionOS"
+language = "ru-RU"
+spoken = "вижн оу-эс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "вижн оу-эс"
+
+[[entry]]
+written = "macOS"
+language = "ru-RU"
+spoken = "мак оу-эс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "мак оу-эс"
+
+[[entry]]
+written = "coreutils"
+language = "ru-RU"
+spoken = "кор ютилс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "кор ютилс"
+
+[[entry]]
+written = "gpumem"
+language = "ru-RU"
+spoken = "джи-пи-ю мем"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джи-пи-ю мем"
+
+[[entry]]
+written = "gpucores"
+language = "ru-RU"
+spoken = "джи-пи-ю корс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джи-пи-ю корс"
+
+[[entry]]
+written = "Gitsign"
+language = "ru-RU"
+spoken = "Гитсайн"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гитсайн"
+
+[[entry]]
+written = "gitleaks"
+language = "ru-RU"
+spoken = "Гитликс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гитликс"
+
+[[entry]]
+written = "pytest"
+language = "ru-RU"
+spoken = "пайтест"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "пайтест"
+
+[[entry]]
+written = "uvx"
+language = "ru-RU"
+spoken = "ю-ви-икс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "ю-ви-икс"
+
+[[entry]]
+written = "dylib"
+language = "ru-RU"
+spoken = "дайлиб"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "дайлиб"
+
+[[entry]]
+written = "MiB"
+language = "ru-RU"
+spoken = "мебибайт"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "мебибайт"
+
+[[entry]]
+written = "HAMi"
+language = "ru-RU"
+spoken = "Хэми"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хэми"
+
+[[entry]]
+written = "Kubernetes"
+language = "ru-RU"
+spoken = "Кубернетес"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Кубернетес"
+
+[[entry]]
+written = "Anthropic"
+language = "ru-RU"
+spoken = "Антропик"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Антропик"
+
+[[entry]]
+written = "Prometheus"
+language = "ru-RU"
+spoken = "Прометеус"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Прометеус"
+
+[[entry]]
+written = "Instagram"
+language = "ru-RU"
+spoken = "Инстаграм"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Инстаграм"
+
+[[entry]]
+written = "TikTok"
+language = "ru-RU"
+spoken = "Тикток"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Тикток"
+
+[[entry]]
+written = "Reuters"
+language = "ru-RU"
+spoken = "Рейтерс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Рейтерс"
+
+[[entry]]
+written = "Google"
+language = "ru-RU"
+spoken = "Гугл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гугл"
+
+[[entry]]
+written = "Meta"
+language = "ru-RU"
+spoken = "Мета"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Мета"
+
+[[entry]]
+written = "Cisco"
+language = "ru-RU"
+spoken = "Сиско"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Сиско"
+
+[[entry]]
+written = "Voyager"
+language = "ru-RU"
+spoken = "Вояджер"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Вояджер"
+
+[[entry]]
+written = "Oracle"
+language = "ru-RU"
+spoken = "Оракл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оракл"
+
+[[entry]]
+written = "Llama"
+language = "ru-RU"
+spoken = "Ллама"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Ллама"
+
+[[entry]]
+written = "Nix"
+language = "ru-RU"
+spoken = "Никс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Никс"
+
+[[entry]]
+written = "Redis"
+language = "ru-RU"
+spoken = "Рэдис"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Рэдис"
+
+[[entry]]
+written = "Apple"
+language = "ru-RU"
+spoken = "Эпл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Эпл"
+
+[[entry]]
+written = "Docker"
+language = "ru-RU"
+spoken = "Докер"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Докер"
+
+[[entry]]
+written = "Android"
+language = "ru-RU"
+spoken = "Андроид"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Андроид"
+
+[[entry]]
+written = "Klepton"
+language = "ru-RU"
+spoken = "Клептон"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клептон"
+
+[[entry]]
+written = "Postgres"
+language = "ru-RU"
+spoken = "Постгрес"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Постгрес"
+
+[[entry]]
+written = "Spark"
+language = "ru-RU"
+spoken = "Спарк"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Спарк"
+
+[[entry]]
+written = "Darwin"
+language = "ru-RU"
+spoken = "Дарвин"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Дарвин"
+
+[[entry]]
+written = "Quest"
+language = "ru-RU"
+spoken = "Квест"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Квест"
+
+[[entry]]
+written = "Willison"
+language = "ru-RU"
+spoken = "Уиллисон"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Уиллисон"
+
+[[entry]]
+written = "Onyx"
+language = "ru-RU"
+spoken = "Оникс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оникс"
+
+[[entry]]
+written = "Incus"
+language = "ru-RU"
+spoken = "Инкус"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Инкус"
+
+[[entry]]
+written = "Vertica"
+language = "ru-RU"
+spoken = "Вертика"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Вертика"
+
+[[entry]]
+written = "Apache"
+language = "ru-RU"
+spoken = "Апачи"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Апачи"
+
+[[entry]]
+written = "Python"
+language = "ru-RU"
+spoken = "Пайтон"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Пайтон"
+
+[[entry]]
+written = "Gondolin"
+language = "ru-RU"
+spoken = "Гондолин"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гондолин"
+
+[[entry]]
+written = "Linux"
+language = "ru-RU"
+spoken = "Линукс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Линукс"
+
+[[entry]]
+written = "Shadow"
+language = "ru-RU"
+spoken = "Шэдоу"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Шэдоу"
+
+[[entry]]
+written = "Sol"
+language = "ru-RU"
+spoken = "Сол"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Сол"
+
+[[entry]]
+written = "Luna"
+language = "ru-RU"
+spoken = "Луна"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Луна"
+
+[[entry]]
+written = "reasoning"
+language = "ru-RU"
+spoken = "ризонинг"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "ризонинг"
+
+[[entry]]
+written = "medium"
+language = "ru-RU"
+spoken = "мидиум"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "мидиум"
+
+[[entry]]
+written = "high"
+language = "ru-RU"
+spoken = "хай"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "хай"
+
+[[entry]]
+written = "IoT"
+language = "ru-RU"
+spoken = "ай-оу-ти"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "ай-оу-ти"
+
+[[entry]]
+written = "Opus"
+language = "ru-RU"
+spoken = "Опус"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Опус"
+
+[[entry]]
+written = "Fable"
+language = "ru-RU"
+spoken = "Фэйбл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Фэйбл"
+
+[[entry]]
+written = "Sonnet"
+language = "ru-RU"
+spoken = "Соннет"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Соннет"
+
+[[entry]]
+written = "Day-2-сценарии"
+language = "ru-RU"
+spoken = "сценарии второго дня"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "сценарии второго дня"
+
+[[entry]]
+written = "claude-sonnet-5"
+language = "ru-RU"
+spoken = "Клод Соннет пять"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клод Соннет пять"
+
+[[entry]]
+written = "claude-fable-5"
+language = "ru-RU"
+spoken = "Клод Фэйбл пять"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клод Фэйбл пять"
+
+[[entry]]
+written = "claude-opus-5"
+language = "ru-RU"
+spoken = "Клод Опус пять"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клод Опус пять"
+
+[[entry]]
+written = "k8s-dra-driver"
+language = "ru-RU"
+spoken = "кей восемь эс ди-ар-эй драйвер"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "кей восемь эс ди-ар-эй драйвер"
+
+[[entry]]
+written = "джи-пи-ти-4o-mini"
+language = "ru-RU"
+spoken = "джипити четыре-оу мини"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джипити четыре-оу мини"
+
+[[entry]]
+written = "gpt-4o-mini"
+language = "ru-RU"
+spoken = "джипити четыре-оу мини"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джипити четыре-оу мини"
+
+[[entry]]
+written = "gpt-image-2"
+language = "ru-RU"
+spoken = "джипити имидж два"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джипити имидж два"
+
+[[entry]]
+written = "Gemma4-31B"
+language = "ru-RU"
+spoken = "Гемма четыре, тридцать один миллиард параметров"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гемма четыре, тридцать один миллиард параметров"
+
+[[entry]]
+written = "ди-эй-эл-эл-E"
+language = "ru-RU"
+spoken = "далли"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "далли"
+
+[[entry]]
+written = "дабл-ю-эй-эс-эм"
+language = "ru-RU"
+spoken = "васм"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "васм"
+
+[[entry]]
+written = "эн-ви-ай-ди-ай-эй"
+language = "ru-RU"
+spoken = "энвидиа"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "энвидиа"
+
+[[entry]]
+written = "ар-и-эй-ди-эм-и"
+language = "ru-RU"
+spoken = "ридми"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "ридми"
+
+[[entry]]
+written = "джи-пи-ти-4o"
+language = "ru-RU"
+spoken = "джипити четыре-оу"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джипити четыре-оу"
+
+[[entry]]
+written = "джи-пи-ти"
+language = "ru-RU"
+spoken = "джипити"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "джипити"
+
+[[entry]]
+written = "эн-эй-эс-эй"
+language = "ru-RU"
+spoken = "наса"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "наса"
+
+[[entry]]
+written = "Claude Code"
+language = "ru-RU"
+spoken = "Клод Код"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клод Код"
+
+[[entry]]
+written = "Hugging Face"
+language = "ru-RU"
+spoken = "Хаггинг Фэйс"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хаггинг Фэйс"
+
+[[entry]]
+written = "Hacker News"
+language = "ru-RU"
+spoken = "Хакер Ньюс"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хакер Ньюс"
+
+[[entry]]
+written = "MiniMax-H3"
+language = "ru-RU"
+spoken = "Минимакс эйч три"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Минимакс эйч три"
+
+[[entry]]
+written = "Os8088"
+language = "ru-RU"
+spoken = "Оу-эс восемь тысяч восемьдесят восемь"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оу-эс восемь тысяч восемьдесят восемь"
+
+[[entry]]
+written = "PostgreSQL"
+language = "ru-RU"
+spoken = "Постгрес-кью-эл"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Постгрес-кью-эл"
+
+[[entry]]
+written = "Muse Glimmer"
+language = "ru-RU"
+spoken = "Мьюз Глиммер"
+match = "phrase"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Мьюз Глиммер"
+
+[[entry]]
+written = "HackerOne"
+language = "ru-RU"
+spoken = "Хакер Уан"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Хакер Уан"
+
+[[entry]]
+written = "Shieldstral"
+language = "ru-RU"
+spoken = "Шилдстрал"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Шилдстрал"
+
+[[entry]]
+written = "ChatGPT"
+language = "ru-RU"
+spoken = "Чат-джипити"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Чат-джипити"
+
+[[entry]]
+written = "MI300X"
+language = "ru-RU"
+spoken = "эм-ай триста икс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "эм-ай триста икс"
+
+[[entry]]
+written = "5800H"
+language = "ru-RU"
+spoken = "пять тысяч восемьсот эйч"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "пять тысяч восемьсот эйч"
+
+[[entry]]
+written = "Border0"
+language = "ru-RU"
+spoken = "Бордер зиро"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Бордер зиро"
+
+[[entry]]
+written = "OpenAI"
+language = "ru-RU"
+spoken = "Оупен Эй Ай"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Оупен Эй Ай"
+
+[[entry]]
+written = "GitHub"
+language = "ru-RU"
+spoken = "Гитхаб"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Гитхаб"
+
+[[entry]]
+written = "Claude"
+language = "ru-RU"
+spoken = "Клод"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Клод"
+
+[[entry]]
+written = "Codex"
+language = "ru-RU"
+spoken = "Кодекс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Кодекс"
+
+[[entry]]
+written = "Qwen"
+language = "ru-RU"
+spoken = "Квэн"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Квэн"
+
+[[entry]]
+written = "Muse"
+language = "ru-RU"
+spoken = "Мьюз"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Мьюз"
+
+[[entry]]
+written = "Zen6"
+language = "ru-RU"
+spoken = "Зен шесть"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "Зен шесть"
+
+[[entry]]
+written = "8bit"
+language = "ru-RU"
+spoken = "восемь бит"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "восемь бит"
+
+[[entry]]
+written = "12c"
+language = "ru-RU"
+spoken = "двенадцать си"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "двенадцать си"
+
+[[entry]]
+written = "4o"
+language = "ru-RU"
+spoken = "четыре-оу"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "четыре-оу"
+
+[[entry]]
+written = "4K"
+language = "ru-RU"
+spoken = "четыре ка"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "четыре ка"
+
+[[entry]]
+written = "3D"
+language = "ru-RU"
+spoken = "три дэ"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "три дэ"
+
+[[entry]]
+written = "2x"
+language = "ru-RU"
+spoken = "два икс"
+match = "word"
+sources = ["horizon"]
+
+[entry.engines]
+tera = "два икс"
+
+[[entry]]
+written = "MD"
+language = "ru-RU"
+spoken = "эм ди"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "ИИ"
+language = "ru-RU"
+spoken = "И иИ"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "ТП"
+language = "ru-RU"
+spoken = "Т Пэ"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "AуE-контроль"
+language = "ru-RU"
+spoken = "A у иEе-контроль"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Aчипах"
+language = "ru-RU"
+spoken = "Эй Ай чипах"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Dстов"
+language = "ru-RU"
+spoken = "Даст-Ов"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "F1-то"
+language = "ru-RU"
+spoken = "Эф один -то"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Googleже"
+language = "ru-RU"
+spoken = "Google же"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "GoлDog"
+language = "ru-RU"
+spoken = "Google doc"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "PNгэшку"
+language = "ru-RU"
+spoken = "PN гэшку"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Qivi-кas"
+language = "ru-RU"
+spoken = "QV Кэш"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "raйbel"
+language = "ru-RU"
+spoken = "fable"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Telgram-канал"
+language = "ru-RU"
+spoken = "Telegram-канал"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "ТАЛС"
+language = "ru-RU"
+spoken = "ТАЛАС"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "GPT"
+language = "ru-RU"
+spoken = "джи пи ти"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "IP"
+language = "ru-RU"
+spoken = "ай пи"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "LLM"
+language = "ru-RU"
+spoken = "эл эл эм"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "AI"
+language = "ru-RU"
+spoken = "эй ай"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "CP"
+language = "ru-RU"
+spoken = "цэ пэ"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "F8"
+language = "ru-RU"
+spoken = "Эф восемь"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "GM5.2"
+language = "ru-RU"
+spoken = "джи эл эм пять точка два"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "GTA"
+language = "ru-RU"
+spoken = "джи ти эй"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "деЭш"
+language = "ru-RU"
+spoken = "дЭш"
+match = "word"
+sources = ["suflyor"]
+
+[[entry]]
+written = "Discord"
+language = "ru-RU"
+spoken = "ДискОрд"
+match = "word"
+sources = ["suflyor"]

@@ -17,6 +17,8 @@ tokenizers = "=0.23.1"
 flate2 = "1"
 regex = "1"
 mimalloc = "0.1"
+chislo = "=0.3.1"
+toml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
 unicode-normalization = "0.1"
 

@@ -15,6 +15,7 @@ use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use crate::chunk;
 use crate::manifest::{self, Manifest};
+use crate::speechfront;
 use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
 use crate::wav;
 
@@ -144,6 +145,8 @@ pub struct TtsRequest {
     pub language: Option<Language>,
     pub duration_scale: Option<f32>,
     pub russian_stress: Option<bool>,
+    #[serde(default)]
+    pub speech_front: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -377,12 +380,31 @@ struct PreparedRequest {
     russian_stress: bool,
 }
 
+/// Phase D (speech-front): opt-in Russian text front-end (lexicon + versions /
+/// numbers / dates / percents / units) so technical tokens speak naturally.
+fn speech_front_enabled() -> bool {
+    std::env::var("TERATTS_SPEECH_FRONT").map(|value| value == "1").unwrap_or(false)
+}
+
+fn speech_front() -> Option<&'static speechfront::Normalizer> {
+    use std::sync::OnceLock;
+    static NORM: OnceLock<Option<speechfront::Normalizer>> = OnceLock::new();
+    NORM.get_or_init(|| match speechfront::Normalizer::builtin() {
+        Ok(normalizer) => Some(normalizer),
+        Err(error) => {
+            eprintln!("[teratts-server] speech-front lexicon failed: {error}");
+            None
+        }
+    })
+    .as_ref()
+}
+
 fn prepare_request(
     request: TtsRequest,
     voices: &[String],
     ruaccent_capable: bool,
 ) -> Result<PreparedRequest, ApiError> {
-    let text = chunk::sanitize(request.text.trim());
+    let mut text = chunk::sanitize(request.text.trim());
     let text_chars = text.chars().count();
     if text_chars == 0 || text_chars > MAX_TEXT_CHARS {
         return Err(ApiError::bad_request(format!(
@@ -420,6 +442,12 @@ fn prepare_request(
         Some(value) => value,
         None => matches!(language, Language::Ru) && ruaccent_capable,
     };
+    let want_speech_front = request.speech_front.unwrap_or(false) || speech_front_enabled();
+    if matches!(language, Language::Ru) && want_speech_front {
+        if let Some(normalizer) = speech_front() {
+            text = normalizer.normalize(&text);
+        }
+    }
     Ok(PreparedRequest {
         text,
         voice,
@@ -599,6 +627,7 @@ mod tests {
             language: None,
             duration_scale: None,
             russian_stress: None,
+            speech_front: None,
         }
     }
 

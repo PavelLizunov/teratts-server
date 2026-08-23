@@ -6,6 +6,7 @@ mod npy;
 mod num2words;
 mod rng;
 mod server;
+mod speechfront;
 mod tera;
 mod textnorm;
 mod wav;
