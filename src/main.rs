@@ -14,6 +14,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
+// Phase A (perf spec): mimalloc reduces allocator contention/fragmentation for
+// ORT's per-step tensor allocations; zero numerical impact.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn usage() -> &'static str {
     "teratts-server\n\
      \n\

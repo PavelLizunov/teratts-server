@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
+use ort::session::builder::GraphOptimizationLevel;
 use ort::session::{Session, SessionInputValue};
 use ort::value::Tensor;
 use regex::Regex;
@@ -561,6 +562,12 @@ fn load_session(path: &Path) -> Result<Session> {
         .unwrap_or(4);
     Session::builder()
         .context("ort session builder")?
+        .with_optimization_level(GraphOptimizationLevel::All)
+        .map_err(|error| anyhow!("ort optimization level: {error}"))?
+        .with_parallel_execution(false)
+        .map_err(|error| anyhow!("ort execution mode: {error}"))?
+        .with_memory_pattern(true)
+        .map_err(|error| anyhow!("ort memory pattern: {error}"))?
         .with_intra_threads(threads)
         .map_err(|error| anyhow!("ort intra threads: {error}"))?
         .with_inter_threads(1)

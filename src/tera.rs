@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{anyhow, Result};
+use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use ort::value::Tensor;
 
@@ -454,8 +455,16 @@ fn ort_threads() -> usize {
 }
 
 fn load_session(path: &Path) -> Result<Session> {
+    // Phase A (perf spec): full graph optimizations + sequential execution +
+    // memory pattern are numerically-safe, zero-risk latency wins on CPU.
     Session::builder()
         .map_err(|e| anyhow!("ort session builder: {e}"))?
+        .with_optimization_level(GraphOptimizationLevel::All)
+        .map_err(|e| anyhow!("ort optimization level: {e}"))?
+        .with_parallel_execution(false)
+        .map_err(|e| anyhow!("ort execution mode: {e}"))?
+        .with_memory_pattern(true)
+        .map_err(|e| anyhow!("ort memory pattern: {e}"))?
         .with_intra_threads(ort_threads())
         .map_err(|e| anyhow!("ort intra threads: {e}"))?
         .with_inter_threads(1)
