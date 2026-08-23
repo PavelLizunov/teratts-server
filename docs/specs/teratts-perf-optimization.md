@@ -67,5 +67,11 @@ All changes keep FP32 fallback behind env flags (`TERATTS_STREAM`,
 - Lesson: keep `intra_op × parallel_slots ≈ vCPU count`.
 - Phase A (graph opts + mimalloc) is on by default; it changes numerics slightly
   (WAV bytes differ, same length) — listen-verify before treating as identical.
-- INT8 (C1) not yet enabled: generate `.int8.onnx` via `tools/quantize_int8.py`,
-  validate mel-MSE <1%, then set `TERATTS_INT8=1`.
+- INT8 (C1) **validated and REJECTED with synthetic calibration**:
+  duration_predictor rel_l2=0.021 (ok), but text_encoder rel_l2=0.954 (95% — unusable).
+  Uniform-random id calibration does not represent real phoneme sequences and the
+  transformer's LayerNorm/Softmax quantize badly. DO NOT set TERATTS_INT8=1 for the
+  encoder with this calibration. Safe INT8 would need real text→id calibration data
+  or QAT; expected gain (~10-15%) does not justify the risk now that A+B give 1.5×.
+- DSH connection stage is NOT a bottleneck: short-phrase `terattsVoice/synthesize`
+  RPC = 0.48s (connect+synth+base64). Paragraph synthesis = 1.58s with parallel=2+intra=2.

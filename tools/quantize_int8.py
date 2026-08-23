@@ -23,24 +23,38 @@ import numpy as np
 SAFE_GRAPHS = ["text_encoder", "duration_predictor"]
 
 
+def _concrete_shape(dims, seq_len: int):
+    """Replace dynamic dims (str/None) with seq_len; keep static ints."""
+    shape = []
+    for dim in dims:
+        if isinstance(dim, int) and dim > 0:
+            shape.append(dim)
+        else:
+            shape.append(seq_len)
+    return shape
+
+
 def build_calibration(model_path: str, n: int = 64, seq_len: int = 48):
-    """Yield representative inputs for the text_encoder / duration graphs."""
+    """Yield representative inputs shaped from the graph's declared inputs."""
     import onnx
 
     onnx_model = onnx.load(model_path)
-    input_names = [i.name for i in onnx_model.graph.input]
+    inputs = [
+        (i.name, [d.dim_value if d.HasField("dim_value") else d.dim_param for d in i.type.tensor_type.shape.dim])
+        for i in onnx_model.graph.input
+    ]
     rng = np.random.default_rng(0)
     for _ in range(n):
         feed = {}
-        for name in input_names:
+        for name, dims in inputs:
+            shape = _concrete_shape(dims, seq_len)
             if "ids" in name:
-                feed[name] = rng.integers(1, 1000, (1, seq_len)).astype(np.int64)
+                # Tera char-embedder vocab is 135; keep indices in [0, 134].
+                feed[name] = rng.integers(0, 135, shape).astype(np.int64)
             elif "mask" in name:
-                feed[name] = np.ones((1, 1, seq_len), dtype=np.float32)
-            elif "style" in name:
-                feed[name] = rng.normal(0, 1, (1, 50, 256)).astype(np.float32)
+                feed[name] = np.ones(shape, dtype=np.float32)
             else:
-                feed[name] = rng.normal(0, 1, (1, 1)).astype(np.float32)
+                feed[name] = rng.normal(0, 1, shape).astype(np.float32)
         yield feed
 
 
