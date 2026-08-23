@@ -91,12 +91,13 @@ impl TeraEngine {
             .map_err(|e| anyhow!("not-installed: {e}"))?;
 
         let models = release.join("models");
-        let text_encoder = load_session(&models.join("text_encoder.onnx"))?;
+        let text_encoder = load_session(&int8_variant(&models.join("text_encoder.onnx")))?;
         eprintln!(
             "[teratts-server] load stage=text-encoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let duration_predictor = load_session(&models.join("duration_predictor.onnx"))?;
+        let duration_predictor =
+            load_session(&int8_variant(&models.join("duration_predictor.onnx")))?;
         eprintln!(
             "[teratts-server] load stage=duration elapsed_ms={}",
             started.elapsed().as_millis()
@@ -452,6 +453,34 @@ fn ort_threads() -> usize {
         .and_then(|value| value.parse().ok())
         .filter(|value: &usize| *value > 0)
         .unwrap_or(4)
+}
+
+/// Phase C1 (perf spec): when `TERATTS_INT8=1` and a sibling `<stem>.int8.onnx`
+/// exists, prefer the statically-quantized graph (text_encoder / duration only —
+/// the safe INT8 candidates). FP32 remains the default and fallback.
+fn int8_variant(path: &Path) -> PathBuf {
+    let enabled = std::env::var("TERATTS_INT8").map(|value| value == "1").unwrap_or(false);
+    if !enabled {
+        return path.to_path_buf();
+    }
+    let file_name = match path.file_name().and_then(|name| name.to_str()) {
+        Some(name) => name,
+        None => return path.to_path_buf(),
+    };
+    let stem = match file_name.strip_suffix(".onnx") {
+        Some(stem) => stem,
+        None => return path.to_path_buf(),
+    };
+    let candidate = path.with_file_name(format!("{stem}.int8.onnx"));
+    if candidate.is_file() {
+        eprintln!(
+            "[teratts-server] using INT8 variant: {}",
+            candidate.display()
+        );
+        candidate
+    } else {
+        path.to_path_buf()
+    }
 }
 
 fn load_session(path: &Path) -> Result<Session> {
