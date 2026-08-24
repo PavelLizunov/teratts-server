@@ -385,34 +385,43 @@ async fn tts(
                 let next_chunk = Arc::clone(&next_chunk);
                 let voice = voice.clone();
                 handles.push(std::thread::spawn(move || {
-                    let mut engine = pool[worker_idx].blocking_lock();
-                    let mut outputs = Vec::new();
-                    loop {
-                        if cancel.load(Ordering::Acquire) {
-                            return Err(anyhow!("synthesis cancelled"));
-                        }
-                        let idx = next_chunk.fetch_add(1, Ordering::Relaxed);
-                        if idx >= parts.len() {
-                            break;
-                        }
-                        if cancel.load(Ordering::Acquire) {
-                            return Err(anyhow!("synthesis cancelled"));
-                        }
-                        let res = engine.synthesize_preprocessed(
-                            &parts[idx],
-                            &voice,
-                            scale,
-                            SEED + idx as u64,
-                        );
-                        match res {
-                            Ok(output) => outputs.push((idx, output)),
-                            Err(err) => {
-                                cancel.store(true, Ordering::Release);
-                                return Err(err);
+                    let guarded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let mut engine = pool[worker_idx].blocking_lock();
+                        let mut outputs = Vec::new();
+                        loop {
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(anyhow!("synthesis cancelled"));
+                            }
+                            let idx = next_chunk.fetch_add(1, Ordering::Relaxed);
+                            if idx >= parts.len() {
+                                break;
+                            }
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(anyhow!("synthesis cancelled"));
+                            }
+                            let res = engine.synthesize_preprocessed(
+                                &parts[idx],
+                                &voice,
+                                scale,
+                                SEED + idx as u64,
+                            );
+                            match res {
+                                Ok(output) => outputs.push((idx, output)),
+                                Err(err) => {
+                                    cancel.store(true, Ordering::Release);
+                                    return Err(err);
+                                }
                             }
                         }
+                        Ok(outputs)
+                    }));
+                    match guarded {
+                        Ok(result) => result,
+                        Err(payload) => {
+                            cancel.store(true, Ordering::Release);
+                            std::panic::resume_unwind(payload)
+                        }
                     }
-                    Ok(outputs)
                 }));
             }
 
@@ -436,11 +445,29 @@ async fn tts(
             }
 
             let mut collected: Vec<Option<_>> = (0..parts.len()).map(|_| None).collect();
+            let mut root_error = None;
+            let mut cancellation_error = None;
             for res in worker_results {
-                let outputs = res?;
-                for (idx, output) in outputs {
-                    collected[idx] = Some(output);
+                match res {
+                    Ok(outputs) => {
+                        for (idx, output) in outputs {
+                            collected[idx] = Some(output);
+                        }
+                    }
+                    Err(error) if error.to_string() == "synthesis cancelled" => {
+                        if cancellation_error.is_none() {
+                            cancellation_error = Some(error);
+                        }
+                    }
+                    Err(error) => {
+                        if root_error.is_none() {
+                            root_error = Some(error);
+                        }
+                    }
                 }
+            }
+            if let Some(error) = root_error.or(cancellation_error) {
+                return Err(error);
             }
 
             for (idx, opt) in collected.into_iter().enumerate() {
@@ -506,6 +533,54 @@ fn speech_front() -> Option<&'static speechfront::Normalizer> {
     .as_ref()
 }
 
+/// Apply Russian normalization to untagged/Russian spans while preserving
+/// explicit English spans byte-for-byte. Malformed tags are left for the
+/// downstream language-tag validator to reject.
+fn normalize_russian_spans(text: &str, normalizer: &speechfront::Normalizer) -> String {
+    if !text.contains("<ru>") && !text.contains("<en>") {
+        return normalizer.normalize(text);
+    }
+    let mut output = String::with_capacity(text.len());
+    let normalize_gap = |gap: &str| {
+        if gap.chars().all(char::is_whitespace) {
+            gap.to_string()
+        } else {
+            normalizer.normalize(gap)
+        }
+    };
+    let mut cursor = 0;
+    while let Some(relative) = text[cursor..].find('<') {
+        let start = cursor + relative;
+        output.push_str(&normalize_gap(&text[cursor..start]));
+        if text[start..].starts_with("<ru>") {
+            let content_start = start + 4;
+            let Some(relative_end) = text[content_start..].find("</ru>") else {
+                output.push_str(&text[start..]);
+                return output;
+            };
+            let content_end = content_start + relative_end;
+            output.push_str("<ru>");
+            output.push_str(&normalizer.normalize(&text[content_start..content_end]));
+            output.push_str("</ru>");
+            cursor = content_end + 5;
+        } else if text[start..].starts_with("<en>") {
+            let content_start = start + 4;
+            let Some(relative_end) = text[content_start..].find("</en>") else {
+                output.push_str(&text[start..]);
+                return output;
+            };
+            let content_end = content_start + relative_end;
+            output.push_str(&text[start..content_end + 5]);
+            cursor = content_end + 5;
+        } else {
+            output.push('<');
+            cursor = start + 1;
+        }
+    }
+    output.push_str(&normalize_gap(&text[cursor..]));
+    output
+}
+
 fn prepare_request(
     request: TtsRequest,
     voices: &[String],
@@ -552,7 +627,7 @@ fn prepare_request(
     let want_speech_front = request.speech_front.unwrap_or(false) || speech_front_enabled();
     if matches!(language, Language::Ru) && want_speech_front {
         if let Some(normalizer) = speech_front() {
-            text = normalizer.normalize(&text);
+            text = normalize_russian_spans(&text, normalizer);
         }
     }
     Ok(PreparedRequest {
@@ -586,7 +661,12 @@ fn authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError
     let supplied = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
+        .and_then(|value| {
+            let mut parts = value.split_ascii_whitespace();
+            let scheme = parts.next()?;
+            let token = parts.next()?;
+            (parts.next().is_none() && scheme.eq_ignore_ascii_case("bearer")).then_some(token)
+        });
     if supplied.is_some_and(|value| constant_time_eq(value.as_bytes(), expected.as_bytes())) {
         Ok(())
     } else {
@@ -808,6 +888,16 @@ mod tests {
             HeaderValue::from_static("Bearer secret"),
         );
         assert!(authorize(&headers, Some("secret")).is_ok());
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("bearer secret"),
+        );
+        assert!(authorize(&headers, Some("secret")).is_ok());
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("BEARER secret"),
+        );
+        assert!(authorize(&headers, Some("secret")).is_ok());
         assert!(authorize(&headers, Some("other")).is_err());
         assert!(!is_loopback_host("0.0.0.0"));
     }
@@ -834,6 +924,18 @@ mod tests {
         // clamping bounds
         assert_eq!(determine_parallel_slots(0, 0, 0), 1);
         assert_eq!(determine_parallel_slots(10, 1, 16), 4);
+    }
+
+    #[test]
+    fn speech_front_preserves_english_spans_and_whitespace() {
+        let normalizer = speechfront::Normalizer::builtin().unwrap();
+        assert_eq!(
+            normalize_russian_spans(
+                "<ru>Релиз 15%</ru> <en>section 2026-08-12</en>",
+                &normalizer,
+            ),
+            "<ru>Релиз пятнадцать процентов</ru> <en>section 2026-08-12</en>"
+        );
     }
 
     #[test]
