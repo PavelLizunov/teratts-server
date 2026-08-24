@@ -6,8 +6,8 @@ use std::ops::Range;
 use std::path::Path;
 
 use chislo::{
-    Gender, USD, decimal_to_words_precision, decline, int_to_words, int_to_words_gender,
-    money_from_str, percent, percent_decimal_precision, time_to_words, year_to_words,
+    decimal_to_words_precision, decline, int_to_words, int_to_words_gender, money_from_str,
+    percent, percent_decimal_precision, time_to_words, year_to_words, Gender, USD,
 };
 use serde::Deserialize;
 use unicode_normalization::UnicodeNormalization;
@@ -187,11 +187,10 @@ fn end_after_chars(text: &str, start: usize, count: usize) -> Option<usize> {
 }
 
 fn boundaries_match(text: &str, start: usize, end: usize, written: &str) -> bool {
-    let first = written.chars().next();
     let last = written.chars().next_back();
     let previous = text[..start].chars().next_back();
     let next = text[end..].chars().next();
-    (!first.is_some_and(is_identifier_char) || !previous.is_some_and(is_identifier_char))
+    !previous.is_some_and(is_identifier_char)
         && (!last.is_some_and(is_identifier_char) || !next.is_some_and(is_identifier_char))
 }
 
@@ -216,6 +215,7 @@ fn parse_at(text: &str, position: usize) -> Option<(usize, String)> {
         .or_else(|| parse_version(text, position))
         .or_else(|| parse_text_date(text, position))
         .or_else(|| parse_numeric_date(text, position))
+        .or_else(|| parse_iso_date(text, position))
         .or_else(|| parse_time(text, position))
         .or_else(|| parse_number(text, position))
 }
@@ -361,6 +361,48 @@ fn parse_numeric_date(text: &str, position: usize) -> Option<(usize, String)> {
     Some((used, spoken_date(day, month_name(month)?, year)))
 }
 
+fn parse_iso_date(text: &str, position: usize) -> Option<(usize, String)> {
+    if previous_is_identifier(text, position) {
+        return None;
+    }
+    let rest = &text[position..];
+    let year_len = ascii_digits(rest);
+    if year_len != 4 {
+        return None;
+    }
+    let separator = rest[year_len..].chars().next()?;
+    if !matches!(separator, '-' | '−') {
+        return None;
+    }
+    let month_start = year_len + separator.len_utf8();
+    let month_len = ascii_digits(&rest[month_start..]);
+    if !(1..=2).contains(&month_len) {
+        return None;
+    }
+    let second_separator = rest[month_start + month_len..].chars().next()?;
+    if second_separator != separator {
+        return None;
+    }
+    let day_start = month_start + month_len + separator.len_utf8();
+    let day_len = ascii_digits(&rest[day_start..]);
+    if !(1..=2).contains(&day_len) {
+        return None;
+    }
+    let year = rest[..year_len].parse::<u32>().ok()?;
+    let month = rest[month_start..month_start + month_len]
+        .parse::<u32>()
+        .ok()?;
+    let day = rest[day_start..day_start + day_len].parse::<u32>().ok()?;
+    let used = day_start + day_len;
+    if next_is_identifier(text, position + used) {
+        return None;
+    }
+    if !valid_date(year, month, day) {
+        return Some((used, rest[..used].to_string()));
+    }
+    Some((used, spoken_date(day, month_name(month)?, year)))
+}
+
 fn parse_time(text: &str, position: usize) -> Option<(usize, String)> {
     if previous_is_identifier(text, position) {
         return None;
@@ -458,10 +500,12 @@ fn parse_number(text: &str, position: usize) -> Option<(usize, String)> {
         return Some((suffix_start + 1, spoken));
     }
 
-    if !decimal {
-        if let Some((suffix_len, spoken)) = number_with_suffix(value, &rest[suffix_start..]) {
+    if decimal {
+        if let Some((suffix_len, spoken)) = decimal_with_suffix(value, &rest[suffix_start..]) {
             return Some((suffix_start + suffix_len, spoken));
         }
+    } else if let Some((suffix_len, spoken)) = number_with_suffix(value, &rest[suffix_start..]) {
+        return Some((suffix_start + suffix_len, spoken));
     }
 
     let spoken = if decimal {
@@ -488,47 +532,81 @@ fn parse_range(rest: &str) -> Option<(usize, String, i64)> {
     ))
 }
 
+struct UnitVariant {
+    written: &'static str,
+    gender: Gender,
+    forms: [&'static str; 3],
+    tail: &'static str,
+}
+
+const UNIT_VARIANTS: &[UnitVariant] = &[
+    UnitVariant {
+        written: "км/ч",
+        gender: Gender::Masculine,
+        forms: ["километр", "километра", "километров"],
+        tail: " в час",
+    },
+    UnitVariant {
+        written: "км",
+        gender: Gender::Masculine,
+        forms: ["километр", "километра", "километров"],
+        tail: "",
+    },
+    UnitVariant {
+        written: "кг",
+        gender: Gender::Masculine,
+        forms: ["килограмм", "килограмма", "килограммов"],
+        tail: "",
+    },
+    UnitVariant {
+        written: "тыс.",
+        gender: Gender::Feminine,
+        forms: ["тысяча", "тысячи", "тысяч"],
+        tail: "",
+    },
+    UnitVariant {
+        written: "тыс",
+        gender: Gender::Feminine,
+        forms: ["тысяча", "тысячи", "тысяч"],
+        tail: "",
+    },
+    UnitVariant {
+        written: "млн",
+        gender: Gender::Masculine,
+        forms: ["миллион", "миллиона", "миллионов"],
+        tail: "",
+    },
+    UnitVariant {
+        written: "млрд",
+        gender: Gender::Masculine,
+        forms: ["миллиард", "миллиарда", "миллиардов"],
+        tail: "",
+    },
+];
+
 fn number_with_suffix(value: &str, suffix: &str) -> Option<(usize, String)> {
     let value = parse_i64(value)?;
-    let variants = [
-        (
-            "км/ч",
-            Gender::Masculine,
-            ["километр", "километра", "километров"],
-            " в час",
-        ),
-        (
-            "км",
-            Gender::Masculine,
-            ["километр", "километра", "километров"],
-            "",
-        ),
-        (
-            "кг",
-            Gender::Masculine,
-            ["килограмм", "килограмма", "килограммов"],
-            "",
-        ),
-        ("тыс.", Gender::Feminine, ["тысяча", "тысячи", "тысяч"], ""),
-        ("тыс", Gender::Feminine, ["тысяча", "тысячи", "тысяч"], ""),
-        (
-            "млн",
-            Gender::Masculine,
-            ["миллион", "миллиона", "миллионов"],
-            "",
-        ),
-        (
-            "млрд",
-            Gender::Masculine,
-            ["миллиард", "миллиарда", "миллиардов"],
-            "",
-        ),
-    ];
-    variants.iter().find_map(|(written, gender, forms, tail)| {
-        starts_with_word_case_insensitive(suffix, written).then(|| {
-            let number = int_to_words_gender(value, *gender);
-            let unit = decline(value, forms[0], forms[1], forms[2]);
-            (written.len(), format!("{number} {unit}{tail}"))
+    UNIT_VARIANTS.iter().find_map(|unit| {
+        starts_with_word_case_insensitive(suffix, unit.written).then(|| {
+            let number = int_to_words_gender(value, unit.gender);
+            let declined_unit = decline(value, unit.forms[0], unit.forms[1], unit.forms[2]);
+            (
+                unit.written.len(),
+                format!("{number} {declined_unit}{}", unit.tail),
+            )
+        })
+    })
+}
+
+fn decimal_with_suffix(value: &str, suffix: &str) -> Option<(usize, String)> {
+    let precision = fractional_digits(value) as u32;
+    let number = decimal_to_words_precision(&normalize_decimal(value), precision).ok()?;
+    UNIT_VARIANTS.iter().find_map(|unit| {
+        starts_with_word_case_insensitive(suffix, unit.written).then(|| {
+            (
+                unit.written.len(),
+                format!("{number} {}{}", unit.forms[1], unit.tail),
+            )
         })
     })
 }
@@ -960,13 +1038,60 @@ match = "word"
     #[test]
     fn does_not_eat_technical_sentence() {
         let normalizer = Normalizer::builtin().unwrap_or_else(|error| panic!("{error}"));
-        let input = "Релиз v0.8.0 (b11b631) ускорил синтез в 2.3 раза, INT8 отклонён, качество прежнее.";
+        let input =
+            "Релиз v0.8.0 (b11b631) ускорил синтез в 2.3 раза, INT8 отклонён, качество прежнее.";
         let out = normalizer.normalize(input);
-        println!("SF-IN : {input}");
-        println!("SF-OUT: {out}");
-        for word in ["Релиз", "ускорил", "синтез", "раза", "отклонён", "качество", "прежнее"] {
-            assert!(out.contains(word), "lost word {word}: {out}");
-        }
+        assert_eq!(
+            out,
+            "Релиз вэ ноль точка восемь точка ноль (b11b631) ускорил синтез в две целых три десятых раза, INT8 отклонён, качество прежнее."
+        );
+    }
+
+    #[test]
+    fn normalizes_iso_date_regression() {
+        let normalizer = normalizer();
+        assert_eq!(
+            normalizer.normalize("Релиз 2026-08-12 состоялся."),
+            "Релиз двенадцатого августа две тысячи двадцать шестого года состоялся."
+        );
+        assert_eq!(
+            normalizer.normalize("2026-02-31 и 2020-2025"),
+            "2026-02-31 и две тысячи двадцать — две тысячи двадцать пять"
+        );
+    }
+
+    #[test]
+    fn normalizes_decimal_units_regression() {
+        let normalizer = normalizer();
+        assert_eq!(
+            normalizer.normalize("Население 2.5 млн человек."),
+            "Население две целых пять десятых миллиона человек."
+        );
+        assert_eq!(
+            normalizer.normalize("Масса 1.5 кг."),
+            "Масса одна целая пять десятых килограмма."
+        );
+        assert_eq!(
+            normalizer.normalize("Дистанция 10,5 км, скорость 60.5 км/ч, рост 2.5 тыс. человек."),
+            "Дистанция десять целых пять десятых километра, скорость шестьдесят целых пять десятых километра в час, рост две целых пять десятых тысячи человек."
+        );
+    }
+
+    #[test]
+    fn enforces_lexicon_left_boundary_for_url_path_regression() {
+        let normalizer = Normalizer::builtin().unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(
+            normalizer.normalize("Эндпоинт /v1/chat/completions активен."),
+            "Эндпоинт ви один, чат комплишнс активен."
+        );
+        assert_eq!(
+            normalizer.normalize("Запрос на https://example.com/v1/chat/completions успешен."),
+            "Запрос на https://example.com/v1/chat/completions успешен."
+        );
+        assert_eq!(
+            normalizer.normalize("example.com/v1/chat/completions"),
+            "example.com/v1/chat/completions"
+        );
     }
 
     #[test]
