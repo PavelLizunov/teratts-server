@@ -19,14 +19,50 @@ pub struct ModelText {
     pub duration_text: String,
 }
 
-/// Wrap untagged text in a `<lang>…</lang>` span. Already-tagged text is left
-/// alone (validation happens later and reports precise tag errors).
+/// Wrap every untagged printable gap in a `<lang>…</lang>` span while
+/// preserving existing `<ru>/<en>` spans. This prevents `chunk_tagged` from
+/// silently dropping conjunctions/punctuation outside explicit spans.
 pub fn ensure_language_tags(text: &str, lang: &str) -> String {
     if find_tag_tokens(text).is_empty() {
-        format!("<{lang}>{text}</{lang}>")
-    } else {
-        text.to_string()
+        return format!("<{lang}>{text}</{lang}>");
     }
+    let mut output = String::with_capacity(text.len() + 32);
+    let mut cursor = 0;
+    while cursor < text.len() {
+        let ru = text[cursor..].find("<ru>").map(|at| (at, "ru"));
+        let en = text[cursor..].find("<en>").map(|at| (at, "en"));
+        let Some((relative, existing_lang)) = (match (ru, en) {
+            (Some(left), Some(right)) => Some(if left.0 <= right.0 { left } else { right }),
+            (Some(found), None) | (None, Some(found)) => Some(found),
+            (None, None) => None,
+        }) else {
+            let tail = &text[cursor..];
+            if tail.chars().any(|c| !c.is_whitespace()) {
+                output.push_str(&format!("<{lang}>{tail}</{lang}>"));
+            } else {
+                output.push_str(tail);
+            }
+            break;
+        };
+        let start = cursor + relative;
+        let gap = &text[cursor..start];
+        if gap.chars().any(|c| !c.is_whitespace()) {
+            output.push_str(&format!("<{lang}>{gap}</{lang}>"));
+        } else {
+            output.push_str(gap);
+        }
+        let open_len = 4;
+        let close = format!("</{existing_lang}>");
+        let content_start = start + open_len;
+        let Some(relative_end) = text[content_start..].find(&close) else {
+            output.push_str(&text[start..]);
+            break;
+        };
+        let end = content_start + relative_end + close.len();
+        output.push_str(&text[start..end]);
+        cursor = end;
+    }
+    output
 }
 
 /// Normalize through number expansion while retaining composed Russian text for
@@ -471,6 +507,10 @@ mod tests {
     fn wraps_untagged_text_and_keeps_tagged() {
         assert_eq!(ensure_language_tags("привет", "ru"), "<ru>привет</ru>");
         assert_eq!(ensure_language_tags("<en>hi</en>", "ru"), "<en>hi</en>");
+        assert_eq!(
+            ensure_language_tags("<ru>Это</ru> and <en>English</en>.", "ru"),
+            "<ru>Это</ru><ru> and </ru><en>English</en><ru>.</ru>"
+        );
     }
 
     #[test]

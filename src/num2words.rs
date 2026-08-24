@@ -26,6 +26,11 @@ pub fn num2words(literal: &str, lang: &str) -> Option<String> {
         }
     }
     let int_value: u64 = int_part.parse().ok()?;
+    // RU scale table currently ends at billions; fail closed instead of
+    // indexing RU_HUNDREDS out of bounds for trillions/large identifiers.
+    if lang == "ru" && int_value >= 1_000_000_000_000 {
+        return None;
+    }
     let mut out = match lang {
         "ru" => spell_decimal_ru(int_value, frac_part)?,
         "en" => spell_decimal_en(int_value, frac_part)?,
@@ -295,17 +300,13 @@ fn spell_int_ru(n: u64) -> String {
 /// Denominator names for decimal fractions by digit count: (1, 5+).
 fn frac_denominator_ru(digits: usize, one: bool) -> Option<&'static str> {
     let table: [(&str, &str); 4] = [
-        ("одна десятая", "десятых"),
-        ("одна сотая", "сотых"),
-        ("одна тысячная", "тысячных"),
-        ("одна десятитысячная", "десятитысячных"),
+        ("десятая", "десятых"),
+        ("сотая", "сотых"),
+        ("тысячная", "тысячных"),
+        ("десятитысячная", "десятитысячных"),
     ];
     let (one_form, many_form) = table.get(digits - 1)?;
-    if one {
-        Some(one_form)
-    } else {
-        Some(many_form)
-    }
+    Some(if one { one_form } else { many_form })
 }
 
 fn spell_decimal_ru(int_value: u64, frac: Option<&str>) -> Option<String> {
@@ -327,10 +328,6 @@ fn spell_decimal_ru(int_value: u64, frac: Option<&str>) -> Option<String> {
     if digits <= 4 {
         let one = frac_value % 10 == 1 && frac_value % 100 != 11;
         let denominator = frac_denominator_ru(digits, one)?;
-        if one {
-            // "одна десятая" already carries the numeral.
-            return Some(format!("{int_words} и {denominator}"));
-        }
         return Some(format!(
             "{int_words} и {} {denominator}",
             spell_below_1000_ru(frac_value, true)
@@ -410,6 +407,14 @@ mod tests {
             "три целые и четырнадцать сотых"
         );
         assert_eq!(num2words("5.0", "ru").unwrap(), "пять");
+        assert_eq!(
+            num2words("0.21", "ru").unwrap(),
+            "ноль целых и двадцать одна сотая"
+        );
+        assert_eq!(
+            num2words("1.51", "ru").unwrap(),
+            "одна целая и пятьдесят одна сотая"
+        );
     }
 
     #[test]
@@ -419,6 +424,8 @@ mod tests {
         assert_eq!(num2words("1.", "ru"), None);
         assert_eq!(num2words("abc", "en"), None);
         assert_eq!(num2words("99999999999999999999999", "en"), None);
+        assert_eq!(num2words("1000000000000", "ru"), None);
+        assert_eq!(num2words("1724500000000", "ru"), None);
         assert_eq!(num2words("5", "de"), None);
     }
 }

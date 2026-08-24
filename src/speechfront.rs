@@ -254,7 +254,10 @@ fn parse_currency(text: &str, position: usize) -> Option<(usize, String)> {
 
 fn parse_version(text: &str, position: usize) -> Option<(usize, String)> {
     let rest = &text[position..];
-    if !matches!(rest.chars().next(), Some('v' | 'V')) || previous_is_identifier(text, position) {
+    if !matches!(rest.chars().next(), Some('v' | 'V'))
+        || previous_is_identifier(text, position)
+        || attached_to_identifier(text, position)
+    {
         return None;
     }
     let (used, parts) = dotted_parts(&rest[1..], 2)?;
@@ -394,6 +397,15 @@ fn parse_iso_date(text: &str, position: usize) -> Option<(usize, String)> {
         .ok()?;
     let day = rest[day_start..day_start + day_len].parse::<u32>().ok()?;
     let used = day_start + day_len;
+    if let Some(time_len) = iso_time_suffix_len(&rest[used..]) {
+        let total = used + time_len;
+        if next_is_identifier(text, position + total) {
+            return None;
+        }
+        // Preserve a complete ISO datetime as one token instead of allowing
+        // numeric range/negative-number parsers to tear it apart.
+        return Some((total, rest[..total].to_string()));
+    }
     if next_is_identifier(text, position + used) {
         return None;
     }
@@ -401,6 +413,29 @@ fn parse_iso_date(text: &str, position: usize) -> Option<(usize, String)> {
         return Some((used, rest[..used].to_string()));
     }
     Some((used, spoken_date(day, month_name(month)?, year)))
+}
+
+fn iso_time_suffix_len(text: &str) -> Option<usize> {
+    if !text.starts_with('T') {
+        return None;
+    }
+    let hour_len = ascii_digits(&text[1..]);
+    if hour_len != 2 || !text[3..].starts_with(':') {
+        return None;
+    }
+    let minute_len = ascii_digits(&text[4..]);
+    if minute_len != 2 {
+        return None;
+    }
+    let mut used = 6;
+    if text[used..].starts_with(':') {
+        let seconds_len = ascii_digits(&text[used + 1..]);
+        if seconds_len != 2 {
+            return None;
+        }
+        used += 3;
+    }
+    Some(used)
 }
 
 fn parse_time(text: &str, position: usize) -> Option<(usize, String)> {
@@ -483,7 +518,7 @@ fn parse_number(text: &str, position: usize) -> Option<(usize, String)> {
 
     let (number_len, decimal) = ascii_number(rest)?;
     let number_end = position + number_len;
-    if next_is_identifier(text, number_end) {
+    if next_is_identifier(text, number_end) || followed_by_identifier_tail(rest, number_len) {
         return None;
     }
     let value = &rest[..number_len];
@@ -839,6 +874,11 @@ fn attached_to_identifier(text: &str, position: usize) -> bool {
         .any(|character| character.is_alphabetic() || character == '_')
 }
 
+fn followed_by_identifier_tail(text: &str, position: usize) -> bool {
+    let mut chars = text[position..].chars();
+    matches!(chars.next(), Some('-' | '/' | '.')) && chars.next().is_some_and(is_identifier_char)
+}
+
 fn is_identifier_char(character: char) -> bool {
     character.is_alphanumeric() || character == '_'
 }
@@ -1057,6 +1097,19 @@ match = "word"
         assert_eq!(
             normalizer.normalize("2026-02-31 и 2020-2025"),
             "2026-02-31 и две тысячи двадцать — две тысячи двадцать пять"
+        );
+        assert_eq!(
+            normalizer.normalize("Метка 2026-08-12T14:30:00 сохранена."),
+            "Метка 2026-08-12T14:30:00 сохранена."
+        );
+    }
+
+    #[test]
+    fn preserves_hyphenated_technical_identifiers() {
+        let normalizer = normalizer();
+        assert_eq!(
+            normalizer.normalize("node-v22.23.2, 64-bit, 12-factor и 7-zip"),
+            "node-v22.23.2, 64-bit, 12-factor и 7-zip"
         );
     }
 
