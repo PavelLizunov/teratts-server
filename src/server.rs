@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -44,16 +44,39 @@ struct AppState {
     ruaccent_ready: bool,
 }
 
-/// Parallel chunk slots (Phase B). 1 = sequential (legacy); >1 = bounded
-/// parallel synthesis. Capped at 4 to avoid ORT thread oversubscription on the
-/// 4-vCPU LXC when intra_op=4.
-fn parallel_chunks() -> usize {
-    std::env::var("TERATTS_PARALLEL_CHUNKS")
+fn ort_threads() -> usize {
+    std::env::var("TERATTS_ORT_THREADS")
         .ok()
         .and_then(|value| value.parse().ok())
         .filter(|value: &usize| *value > 0)
-        .unwrap_or(1)
-        .min(4)
+        .unwrap_or(4)
+}
+
+fn determine_parallel_slots(
+    requested: usize,
+    ort_threads: usize,
+    available_parallelism: usize,
+) -> usize {
+    let requested = requested.clamp(1, 4);
+    let ort_threads = ort_threads.max(1);
+    let max_safe = (available_parallelism / ort_threads).max(1);
+    requested.min(max_safe)
+}
+
+/// Parallel chunk slots (Phase B). 1 = sequential (legacy); >1 = bounded
+/// parallel synthesis. Capped at 4 and safely clamped against the thread product
+/// (`slots * ORT_THREADS <= available_parallelism`) to prevent thread oversubscription.
+fn parallel_chunks() -> usize {
+    let requested = std::env::var("TERATTS_PARALLEL_CHUNKS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value: &usize| *value > 0)
+        .unwrap_or(1);
+    let threads = ort_threads();
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    determine_parallel_slots(requested, threads, cores)
 }
 
 struct Admission {
@@ -120,6 +143,19 @@ impl Drop for AdmissionTicket {
 struct ActiveRequest {
     _ticket: AdmissionTicket,
     _permit: OwnedSemaphorePermit,
+}
+
+/// Async-request-owned cancellation edge. Dropping the Axum request future
+/// (client disconnect) or returning after timeout sets the cooperative flag.
+/// The current native ORT `Session::run` remains non-interruptible; workers stop
+/// before the next chunk. `ActiveRequest` stays in the async handler so its
+/// admission permit is released immediately when that handler is dropped.
+struct CancelOnDrop(Arc<AtomicBool>);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -280,26 +316,40 @@ async fn tts(
     } = prepare_request(request, &state.voices, state.ruaccent_ready)?;
     let ticket = state.admission.try_reserve()?;
     let active = ticket.activate().await?;
+    // Keep admission ownership in the async request future, not in the
+    // non-cancellable blocking inference task.
+    let _active = active;
     let remaining = REQUEST_DEADLINE
         .checked_sub(started.elapsed())
         .ok_or_else(ApiError::deadline)?;
     let pool = Arc::clone(&state.pool);
+    let cancel = Arc::new(AtomicBool::new(false));
+    let _cancel_on_drop = CancelOnDrop(Arc::clone(&cancel));
+    let cancel_for_task = Arc::clone(&cancel);
     let task = tokio::task::spawn_blocking(move || {
-        let _active = active;
-        let prepared = pool[0]
-            .blocking_lock()
-            .preprocess(&text, language.as_str(), russian_stress)?;
+        if cancel_for_task.load(Ordering::Acquire) {
+            return Err(anyhow!("synthesis cancelled"));
+        }
+        let prepared =
+            pool[0]
+                .blocking_lock()
+                .preprocess(&text, language.as_str(), russian_stress)?;
         let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
+        if parts.is_empty() {
+            return wav::encode_mono_i16(&[]);
+        }
 
         // Per-chunk synthesis; seeds are `SEED + index` so output is identical
-        // regardless of execution order. Sequential when the pool has one slot.
+        // regardless of execution order. Sequential when the pool has one slot
+        // or there is only one chunk.
         let synthesize_into = |all: &mut Vec<Vec<f32>>,
                                samples: &mut usize,
                                index: usize,
                                part: &str,
                                engine: &mut TeraEngine|
          -> Result<()> {
-            let output = engine.synthesize_preprocessed(part, &voice, scale, SEED + index as u64)?;
+            let output =
+                engine.synthesize_preprocessed(part, &voice, scale, SEED + index as u64)?;
             for chunk in output.chunks {
                 *samples = checked_audio_samples(*samples, chunk.len())?;
                 all.try_reserve(1)
@@ -311,38 +361,90 @@ async fn tts(
 
         let mut all = Vec::new();
         let mut samples = 0usize;
-        if pool.len() == 1 {
+        if pool.len() == 1 || parts.len() == 1 {
             let mut engine = pool[0].blocking_lock();
             for (index, part) in parts.iter().enumerate() {
+                if cancel_for_task.load(Ordering::Acquire) {
+                    return Err(anyhow!("synthesis cancelled"));
+                }
                 synthesize_into(&mut all, &mut samples, index, part, &mut engine)?;
             }
         } else {
-            // Bounded parallelism: part `i` runs on slot `i % pool.len()`, so at
-            // most `pool.len()` engines run concurrently. Join in index order to
-            // preserve audio ordering.
-            let handles: Vec<_> = parts
-                .iter()
-                .enumerate()
-                .map(|(index, part)| {
-                    let pool = Arc::clone(&pool);
-                    let voice = voice.clone();
-                    let part = part.clone();
-                    std::thread::spawn(move || {
-                        let mut engine = pool[index % pool.len()].blocking_lock();
-                        let output = engine.synthesize_preprocessed(
-                            &part,
+            // Bounded parallelism: spawn at most `pool.len()` worker threads.
+            // Workers dynamically pull chunks from `next_chunk` and synthesize
+            // on their dedicated engine slot `pool[worker_idx]`.
+            let worker_count = pool.len().min(parts.len());
+            let parts = Arc::new(parts);
+            let next_chunk = Arc::new(AtomicUsize::new(0));
+            let mut handles = Vec::with_capacity(worker_count);
+
+            for worker_idx in 0..worker_count {
+                let pool = Arc::clone(&pool);
+                let cancel = Arc::clone(&cancel_for_task);
+                let parts = Arc::clone(&parts);
+                let next_chunk = Arc::clone(&next_chunk);
+                let voice = voice.clone();
+                handles.push(std::thread::spawn(move || {
+                    let mut engine = pool[worker_idx].blocking_lock();
+                    let mut outputs = Vec::new();
+                    loop {
+                        if cancel.load(Ordering::Acquire) {
+                            return Err(anyhow!("synthesis cancelled"));
+                        }
+                        let idx = next_chunk.fetch_add(1, Ordering::Relaxed);
+                        if idx >= parts.len() {
+                            break;
+                        }
+                        if cancel.load(Ordering::Acquire) {
+                            return Err(anyhow!("synthesis cancelled"));
+                        }
+                        let res = engine.synthesize_preprocessed(
+                            &parts[idx],
                             &voice,
                             scale,
-                            SEED + index as u64,
-                        )?;
-                        Ok::<_, anyhow::Error>(output)
-                    })
-                })
-                .collect();
+                            SEED + idx as u64,
+                        );
+                        match res {
+                            Ok(output) => outputs.push((idx, output)),
+                            Err(err) => {
+                                cancel.store(true, Ordering::Release);
+                                return Err(err);
+                            }
+                        }
+                    }
+                    Ok(outputs)
+                }));
+            }
+
+            // Always join all created workers so no JoinHandles are detached or leaked.
+            let mut worker_results = Vec::with_capacity(handles.len());
+            let mut panic_err = None;
             for handle in handles {
-                let output = handle
-                    .join()
-                    .map_err(|_| anyhow!("synthesis thread panicked"))??;
+                match handle.join() {
+                    Ok(res) => worker_results.push(res),
+                    Err(_) => {
+                        cancel_for_task.store(true, Ordering::Release);
+                        if panic_err.is_none() {
+                            panic_err = Some(anyhow!("synthesis worker thread panicked"));
+                        }
+                    }
+                }
+            }
+
+            if let Some(err) = panic_err {
+                return Err(err);
+            }
+
+            let mut collected: Vec<Option<_>> = (0..parts.len()).map(|_| None).collect();
+            for res in worker_results {
+                let outputs = res?;
+                for (idx, output) in outputs {
+                    collected[idx] = Some(output);
+                }
+            }
+
+            for (idx, opt) in collected.into_iter().enumerate() {
+                let output = opt.ok_or_else(|| anyhow!("missing chunk {idx} output"))?;
                 for chunk in output.chunks {
                     samples = checked_audio_samples(samples, chunk.len())?;
                     all.try_reserve(1)
@@ -353,8 +455,11 @@ async fn tts(
         }
         wav::encode_mono_i16(&all)
     });
-    let audio = tokio::time::timeout(remaining, task)
-        .await
+    let task_result = tokio::time::timeout(remaining, task).await;
+    if task_result.is_err() {
+        cancel.store(true, Ordering::Release);
+    }
+    let audio = task_result
         .map_err(|_| ApiError::deadline())?
         .map_err(|_| ApiError::internal("synthesis task failed"))?
         .map_err(|error| {
@@ -383,7 +488,9 @@ struct PreparedRequest {
 /// Phase D (speech-front): opt-in Russian text front-end (lexicon + versions /
 /// numbers / dates / percents / units) so technical tokens speak naturally.
 fn speech_front_enabled() -> bool {
-    std::env::var("TERATTS_SPEECH_FRONT").map(|value| value == "1").unwrap_or(false)
+    std::env::var("TERATTS_SPEECH_FRONT")
+        .map(|value| value == "1")
+        .unwrap_or(false)
 }
 
 fn speech_front() -> Option<&'static speechfront::Normalizer> {
@@ -616,7 +723,7 @@ impl IntoResponse for ApiError {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
     use super::*;
 
@@ -703,5 +810,85 @@ mod tests {
         assert!(authorize(&headers, Some("secret")).is_ok());
         assert!(authorize(&headers, Some("other")).is_err());
         assert!(!is_loopback_host("0.0.0.0"));
+    }
+
+    #[test]
+    fn thread_product_guard_clamps_slots_safely() {
+        // CT221: cores=4, threads=2 -> max slots 2
+        assert_eq!(determine_parallel_slots(4, 2, 4), 2);
+        assert_eq!(determine_parallel_slots(2, 2, 4), 2);
+        assert_eq!(determine_parallel_slots(1, 2, 4), 1);
+
+        // cores=4, threads=4 -> max slots 1
+        assert_eq!(determine_parallel_slots(4, 4, 4), 1);
+        assert_eq!(determine_parallel_slots(2, 4, 4), 1);
+        assert_eq!(determine_parallel_slots(1, 4, 4), 1);
+
+        // cores=8, threads=2 -> max slots 4
+        assert_eq!(determine_parallel_slots(4, 2, 8), 4);
+        assert_eq!(determine_parallel_slots(3, 2, 8), 3);
+
+        // cores=1, threads=4 -> minimum 1 slot
+        assert_eq!(determine_parallel_slots(2, 4, 1), 1);
+
+        // clamping bounds
+        assert_eq!(determine_parallel_slots(0, 0, 0), 1);
+        assert_eq!(determine_parallel_slots(10, 1, 16), 4);
+    }
+
+    #[test]
+    fn worker_execution_respects_cancellation_and_joins_all() {
+        // Simulated worker dispatch matching the server's chunk worker loop
+        let cancel = Arc::new(AtomicBool::new(false));
+        let num_chunks = 10;
+        let worker_count = 3;
+        let next_chunk = Arc::new(AtomicUsize::new(0));
+        let processed_count = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let cancel = Arc::clone(&cancel);
+            let next_chunk = Arc::clone(&next_chunk);
+            let processed_count = Arc::clone(&processed_count);
+            handles.push(std::thread::spawn(move || {
+                let mut outputs = Vec::new();
+                loop {
+                    if cancel.load(Ordering::Acquire) {
+                        return Err(anyhow!("synthesis cancelled"));
+                    }
+                    let idx = next_chunk.fetch_add(1, Ordering::Relaxed);
+                    if idx >= num_chunks {
+                        break;
+                    }
+                    if cancel.load(Ordering::Acquire) {
+                        return Err(anyhow!("synthesis cancelled"));
+                    }
+                    // Cancel after processing 2 chunks across workers
+                    let count = processed_count.fetch_add(1, Ordering::SeqCst);
+                    if count >= 2 {
+                        cancel.store(true, Ordering::Release);
+                    }
+                    outputs.push(idx);
+                }
+                Ok(outputs)
+            }));
+        }
+
+        // All handles must always join
+        let mut worker_results = Vec::new();
+        for handle in handles {
+            let res = match handle.join() {
+                Ok(res) => res,
+                Err(_) => panic!("worker thread panicked unexpectedly"),
+            };
+            worker_results.push(res);
+        }
+
+        assert!(cancel.load(Ordering::Acquire));
+        // Total processed should be small (stopped early by cancellation)
+        let total_processed = processed_count.load(Ordering::SeqCst);
+        assert!(total_processed < num_chunks);
+        // At least one worker observed cancellation error or cleanly stopped
+        assert!(worker_results.iter().any(|r| r.is_err()) || total_processed <= worker_count + 2);
     }
 }

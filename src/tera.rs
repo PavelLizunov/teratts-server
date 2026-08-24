@@ -459,7 +459,9 @@ fn ort_threads() -> usize {
 /// exists, prefer the statically-quantized graph (text_encoder / duration only —
 /// the safe INT8 candidates). FP32 remains the default and fallback.
 fn int8_variant(path: &Path) -> PathBuf {
-    let enabled = std::env::var("TERATTS_INT8").map(|value| value == "1").unwrap_or(false);
+    let enabled = std::env::var("TERATTS_INT8")
+        .map(|value| value == "1")
+        .unwrap_or(false);
     if !enabled {
         return path.to_path_buf();
     }
