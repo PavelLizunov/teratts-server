@@ -61,23 +61,19 @@ pub fn language_span_contents(text: &str) -> Vec<String> {
 }
 
 /// Split already-normalized/accented text for TTS without cutting language
-/// tags, words, or a Russian span containing an explicit/manual stress marker.
+/// tags or words (including words containing explicit/manual stress markers).
 /// Each returned chunk is independently valid tagged text.
 pub fn chunk_tagged(
     text: &str,
     max_chars: usize,
-    manual_language_spans: &[usize],
+    _manual_language_spans: &[usize],
 ) -> Result<Vec<String>> {
     validate_language_tags(text)?;
     let chars: Vec<char> = text.chars().collect();
     let mut output = Vec::new();
-    for (index, (lang, start, end)) in language_spans(text).into_iter().enumerate() {
+    for (lang, start, end) in language_spans(text) {
         let content: String = chars[start..end].iter().collect();
         let lang: String = lang.iter().collect();
-        if manual_language_spans.contains(&index) {
-            output.push(format!("<{lang}>{content}</{lang}>"));
-            continue;
-        }
         for part in split_content(&content, max_chars.saturating_sub(9).max(1)) {
             output.push(format!("<{lang}>{part}</{lang}>"));
         }
@@ -559,10 +555,71 @@ mod tests {
     }
 
     #[test]
-    fn tagged_chunking_keeps_tags_and_manual_spans_intact() {
-        let manual = format!("<ru>з+амок {}</ru>", "длинный ".repeat(30));
-        assert_eq!(chunk_tagged(&manual, 40, &[0]).unwrap(), vec![manual]);
+    fn tagged_chunking_short_manual_span_remains_single_chunk() {
+        let short = "<ru>з+амок на холме</ru>";
+        let chunks = chunk_tagged(short, 40, &[0]).unwrap();
+        assert_eq!(chunks, vec![short]);
+    }
 
+    #[test]
+    fn tagged_chunking_1500_char_span_with_manual_marker_is_bounded() {
+        let mut words = vec!["длинное".to_string(); 200];
+        words[100] = "з+амок".to_string();
+        let inner_text = words.join(" ");
+        let full_text = format!("<ru>{inner_text}</ru>");
+        assert!(full_text.chars().count() >= 1500);
+
+        let max_chars = 100;
+        let chunks = chunk_tagged(&full_text, max_chars, &[0]).unwrap();
+
+        // Must be split into multiple bounded chunks, not emitted as one huge chunk
+        assert!(chunks.len() > 10);
+
+        // Chunks must each be <= max_chars
+        for chunk in &chunks {
+            assert!(
+                chunk.chars().count() <= max_chars,
+                "chunk exceeded max_chars ({} > {}): {}",
+                chunk.chars().count(),
+                max_chars,
+                chunk
+            );
+            // Balanced <ru> tags on every chunk
+            assert!(
+                validate_language_tags(chunk).is_ok(),
+                "invalid language tag in chunk: {chunk}"
+            );
+            assert!(chunk.starts_with("<ru>") && chunk.ends_with("</ru>"));
+        }
+
+        // Marker count preservation: exactly 1 '+' marker across all chunks
+        let total_plus: usize = chunks.iter().map(|c| c.matches('+').count()).sum();
+        assert_eq!(total_plus, 1);
+
+        // Manual marker remains attached to its word "з+амок"
+        let stressed_chunk = chunks.iter().find(|c| c.contains('+')).unwrap();
+        assert!(stressed_chunk.contains("з+амок"));
+    }
+
+    #[test]
+    fn tagged_chunking_preserves_marker_count_and_tags_multi_span() {
+        let text = "<ru>п+ервое предлож+ение и ещ+е одно</ru> <en>second sentence in English</en> <ru>тр+етий з+амок</ru>";
+        let orig_plus_count = text.matches('+').count();
+        let max_chars = 30;
+        let chunks = chunk_tagged(text, max_chars, &[0, 2]).unwrap();
+
+        assert!(chunks.len() > 3);
+        let total_plus_count: usize = chunks.iter().map(|c| c.matches('+').count()).sum();
+        assert_eq!(total_plus_count, orig_plus_count);
+
+        for chunk in &chunks {
+            assert!(validate_language_tags(chunk).is_ok());
+            assert!(chunk.chars().count() <= max_chars);
+        }
+    }
+
+    #[test]
+    fn tagged_chunking_ordinary_span_splits_correctly() {
         let chunks = chunk_tagged(
             "<ru>первое короткое предложение второе длинное предложение</ru> <en>hello world</en>",
             35,
