@@ -62,7 +62,7 @@ function parseRetryAfter(response, errorBody) {
   const retryAfterHeader = response.headers.get("retry-after");
   if (retryAfterHeader) {
     const seconds = Number.parseFloat(retryAfterHeader);
-    if (!Number.isNaN(seconds) && seconds >= 0) {
+    if (Number.isFinite(seconds) && seconds >= 0) {
       retryAfterMs = Math.round(seconds * 1000);
     } else {
       const dateMs = Date.parse(retryAfterHeader);
@@ -73,9 +73,9 @@ function parseRetryAfter(response, errorBody) {
   }
 
   if (typeof errorBody === "object" && errorBody !== null) {
-    if (typeof errorBody.retry_after_ms === "number" && errorBody.retry_after_ms >= 0) {
+    if (Number.isFinite(errorBody.retry_after_ms) && errorBody.retry_after_ms >= 0) {
       retryAfterMs = errorBody.retry_after_ms;
-    } else if (typeof errorBody.retry_after === "number" && errorBody.retry_after >= 0) {
+    } else if (Number.isFinite(errorBody.retry_after) && errorBody.retry_after >= 0) {
       retryAfterMs = Math.round(errorBody.retry_after * 1000);
     }
   }
@@ -109,7 +109,7 @@ async function readAudioResponse(response) {
         chunks.push(value);
       }
     } catch (err) {
-      if (err.message && err.message.includes("16 MiB limit")) {
+      if (err?.name === "AbortError" || (err?.message && err.message.includes("16 MiB limit"))) {
         throw err;
       }
       throw new Error("TeraTTS failed to read audio response");
@@ -160,6 +160,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     try {
       response = await fetch(endpoint, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token.value}` } : {}),

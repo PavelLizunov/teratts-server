@@ -3,15 +3,17 @@ const STRUCTURAL = /^\s{0,3}#{1,6}\s|^\s*>|^\s*[-*+]\s|^\s*\d+[.)]\s/;
 function cleanLine(line) {
   return line
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
     .replace(/^\s{0,3}#{1,6}\s+/g, "")
     .replace(/^\s*>\s?/g, "")
     .replace(/^\s*[-*+]\s+/g, "")
-    .replace(/^\s*\d+[.)]\s+/g, "")
+    .replace(/^\s*\d{1,3}[.)]\s+/g, "")
     .replace(/[*~]/g, "")
     .replace(/_/g, " ")
-    .replace(/<(?!\/?(?:ru|en)>)[^>]+>/gi, " ")
+    // Strip only syntactically valid HTML-like tags; keep comparisons such as
+    // `3 < 5 and 5 > 2` and preserve exact Tera <ru>/<en> language tags.
+    .replace(/<(?!\/?(?:ru|en)>)(?:\/?[a-z][a-z0-9:-]*)(?:\s+[^<>]*?)?\/?\s*>/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -19,7 +21,7 @@ function cleanLine(line) {
 function cleanMarkdown(text) {
   return text
     .replace(/\r/g, "")
-    .replace(/```[\s\S]*?```/g, " блок кода. ")
+    .replace(/```[\s\S]*?```/g, " . ")
     .split("\n")
     .map((line) => {
       const trimmed = line.trim();

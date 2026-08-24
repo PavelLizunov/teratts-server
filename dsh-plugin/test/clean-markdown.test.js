@@ -94,7 +94,7 @@ test("handles code blocks by replacing fenced blocks and cleaning inline code", 
 
   assert.equal(
     cleanMarkdown(fenced),
-    "Here is an example: блок кода. End of example.",
+    "Here is an example: . End of example.",
   );
 
   assert.equal(
@@ -169,4 +169,26 @@ test("client plugin factory registers and exports only standard Cordis lifecycle
   assert.equal(typeof exports.apply, "function");
   assert.deepEqual(exports.inject, ["remote", "slots"]);
   assert.equal(Object.keys(exports).sort().join(","), "apply,inject");
+});
+
+test("preserves comparison expressions that are not HTML tags", () => {
+  assert.equal(cleanMarkdown("3 < 5 and 5 > 2"), "3 < 5 and 5 > 2");
+  assert.equal(cleanMarkdown("x < y && z > 0"), "x < y && z > 0");
+});
+
+test("preserves leading years while still stripping short ordered-list markers", () => {
+  assert.equal(cleanMarkdown("1984. Роман Джорджа Оруэлла."), "1984. Роман Джорджа Оруэлла.");
+  assert.equal(cleanMarkdown("2024. Это был хороший год."), "2024. Это был хороший год.");
+  assert.equal(cleanMarkdown("12. Элемент списка"), "Элемент списка.");
+});
+
+test("handles markdown links with one level of parenthesized destinations", () => {
+  assert.equal(
+    cleanMarkdown("[Rust](https://en.wikipedia.org/wiki/Rust_(programming_language))"),
+    "Rust",
+  );
+});
+
+test("fenced code becomes a language-neutral pause", () => {
+  assert.equal(cleanMarkdown("Before\n```js\nconst x = 1\n```\nAfter"), "Before . After");
 });

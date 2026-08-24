@@ -79,6 +79,8 @@ test("host owns network configuration, timeout, voice, and token", () => {
   assert.match(host, /AbortSignal\.timeout/);
   assert.match(host, /authorization/);
   assert.match(host, /fetch\(endpoint/);
+  assert.match(host, /redirect: "error"/);
+  assert.match(host, /err\?\.name === "AbortError"/);
   assert.doesNotMatch(host, /ctx\.handle/);
 });
 
@@ -230,6 +232,8 @@ test("host parses Retry-After header and retry_after_ms JSON body", () => {
     4000,
   );
   assert.equal(parseRetryAfter(makeHeaders({}), null), undefined);
+  assert.equal(parseRetryAfter(makeHeaders({ "retry-after": "Infinity" }), null), undefined);
+  assert.equal(parseRetryAfter(makeHeaders({}), { retry_after_ms: Infinity }), undefined);
 });
 
 test("host rejects Content-Length above 16 MiB", async () => {
@@ -281,6 +285,20 @@ test("host enforces streaming byte limit when Content-Length is absent", async (
     /TeraTTS response size exceeded 16 MiB limit/,
   );
   assert.equal(canceled, true, "stream reader should be canceled on limit overflow");
+});
+
+test("host preserves AbortError while reading response stream", async () => {
+  const aborted = new Error("cancelled");
+  aborted.name = "AbortError";
+  const fakeResponse = {
+    headers: { get: () => null },
+    body: {
+      getReader() {
+        return { read: async () => { throw aborted; }, cancel: async () => {} };
+      },
+    },
+  };
+  await assert.rejects(() => readAudioResponse(fakeResponse), (error) => error.name === "AbortError");
 });
 
 test("host reads audio within 16 MiB and rejects empty audio", async () => {
