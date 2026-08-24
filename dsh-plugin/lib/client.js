@@ -1,3 +1,59 @@
+const STRUCTURAL = /^\s{0,3}#{1,6}\s|^\s*>|^\s*[-*+]\s|^\s*\d+[.)]\s/;
+
+function cleanLine(line) {
+  return line
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/g, "")
+    .replace(/^\s*>\s?/g, "")
+    .replace(/^\s*[-*+]\s+/g, "")
+    .replace(/^\s*\d+[.)]\s+/g, "")
+    .replace(/[*~]/g, "")
+    .replace(/_/g, " ")
+    .replace(/<(?!\/?(?:ru|en)>)[^>]+>/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanMarkdown(text) {
+  return text
+    .replace(/\r/g, "")
+    .replace(/```[\s\S]*?```/g, " блок кода. ")
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      // Markdown tables: read rows as "key, value."; drop separator rows.
+      if (trimmed.startsWith("|")) {
+        if (/^[\s|:\-–—]+$/.test(trimmed)) return "";
+        const cells = trimmed
+          .split("|")
+          .map((c) => cleanLine(c))
+          .filter(Boolean);
+        return cells.length ? cells.join(", ") + "." : "";
+      }
+      const structural = STRUCTURAL.test(line);
+      const cleaned = cleanLine(line);
+      if (!cleaned) return "";
+      // Headings/list items/quotes are separate thoughts: give the TTS a
+      // sentence boundary so it pauses instead of running them together.
+      if (structural && !/[.!?…:](?:<\/(?:ru|en)>)?$/.test(cleaned)) return cleaned + ".";
+      return cleaned;
+    })
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s*→\s*/g, ", ")
+    .replace(/\s*×\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Test-only export: never expose helpers in the production browser global.
+if (typeof process !== "undefined" && process.versions?.node) {
+  globalThis.__teratts_cleanMarkdown = cleanMarkdown;
+}
+
+if (typeof window !== "undefined" && window.__ModuleLoader__?.load) {
 window.__ModuleLoader__.load({
   id: "dsh-client-ui-teratts",
   factory: (require) => {
@@ -68,53 +124,6 @@ window.__ModuleLoader__.load({
       style.dataset.pluginCss = styleId;
       style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(style);
-    }
-
-    const STRUCTURAL = /^\s{0,3}#{1,6}\s|^\s*>|^\s*[-*+]\s|^\s*\d+[.)]\s/;
-
-    function cleanLine(line) {
-      return line
-        .replace(/`([^`]+)`/g, "$1")
-        .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-        .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-        .replace(/^\s{0,3}#{1,6}\s+/g, "")
-        .replace(/^\s*>\s?/g, "")
-        .replace(/^\s*[-*+]\s+/g, "")
-        .replace(/^\s*\d+[.)]\s+/g, "")
-        .replace(/[*_~]/g, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    function cleanMarkdown(text) {
-      return text
-        .replace(/\r/g, "")
-        .replace(/```[\s\S]*?```/g, " блок кода. ")
-        .split("\n")
-        .map((line) => {
-          const trimmed = line.trim();
-          // Markdown tables: read rows as "key, value."; drop separator rows.
-          if (trimmed.startsWith("|")) {
-            if (/^[\s|:\-–—]+$/.test(trimmed)) return "";
-            const cells = trimmed.split("|").map((c) => c.trim()).filter(Boolean);
-            return cells.length ? cells.join(", ") + "." : "";
-          }
-          const structural = STRUCTURAL.test(line);
-          const cleaned = cleanLine(line);
-          if (!cleaned) return "";
-          // Headings/list items/quotes are separate thoughts: give the TTS a
-          // sentence boundary so it pauses instead of running them together.
-          if (structural && !/[.!?…:]$/.test(cleaned)) return cleaned + ".";
-          return cleaned;
-        })
-        .filter(Boolean)
-        .join(" ")
-        .replace(/→/g, " даёт ")
-        .replace(/×/g, " умножить ")
-        .replace(/(\d+(?:[.,]\d+)?)\s*с(?![а-яёa-z0-9])/gi, "$1 секунд")
-        .replace(/\s+/g, " ")
-        .trim();
     }
 
     function messageText(snapshot, messageId) {
@@ -386,3 +395,4 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
+}
