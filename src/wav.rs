@@ -14,6 +14,9 @@ pub fn encode_mono_i16(chunks: &[Vec<f32>]) -> Result<Vec<u8>> {
             .checked_add(chunk.len())
             .ok_or_else(|| anyhow!("wav sample count overflow"))
     })?;
+    if samples == 0 {
+        return Err(anyhow!("wav has no audio samples"));
+    }
     let data_len = samples
         .checked_mul(2)
         .and_then(|n| u32::try_from(n).ok())
@@ -79,6 +82,13 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+
+    #[test]
+    fn rejects_empty_pcm_samples() {
+        assert!(encode_mono_i16(&[]).is_err());
+        assert!(encode_mono_i16(&[vec![]]).is_err());
+        assert!(encode_mono_i16(&[vec![], vec![]]).is_err());
+    }
 
     #[test]
     fn writes_pcm_wav_header_and_clamps_samples() {

@@ -50,9 +50,29 @@ function cleanMarkdown(text) {
     .trim();
 }
 
+const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
+
+function nextPlaybackRate(currentRate) {
+  const index = PLAYBACK_RATES.indexOf(currentRate);
+  if (index === -1) return PLAYBACK_RATES[0];
+  return PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+}
+
+function clampSeekTime(currentTime, offset, duration) {
+  if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
+    return typeof currentTime === "number" && Number.isFinite(currentTime) ? currentTime : 0;
+  }
+  const cur = typeof currentTime === "number" && Number.isFinite(currentTime) ? currentTime : 0;
+  const target = cur + offset;
+  return Math.max(0, Math.min(duration, target));
+}
+
 // Test-only export: never expose helpers in the production browser global.
 if (typeof process !== "undefined" && process.versions?.node) {
   globalThis.__teratts_cleanMarkdown = cleanMarkdown;
+  globalThis.__teratts_PLAYBACK_RATES = PLAYBACK_RATES;
+  globalThis.__teratts_nextPlaybackRate = nextPlaybackRate;
+  globalThis.__teratts_clampSeekTime = clampSeekTime;
 }
 
 if (typeof window !== "undefined" && window.__ModuleLoader__?.load) {
@@ -124,7 +144,7 @@ window.__ModuleLoader__.load({
       const style = document.createElement("style");
       style.dataset.plugin = "dsh-client-ui-teratts";
       style.dataset.pluginCss = styleId;
-      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
+      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.teratts-group{display:inline-flex;align-items:center;gap:2px}.teratts-control{min-width:28px;height:28px;padding:0 4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:14px;justify-content:center;align-items:center;display:inline-flex;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;font-family:inherit}.teratts-control:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(style);
     }
 
@@ -171,6 +191,7 @@ window.__ModuleLoader__.load({
       audio: null,
       url: null,
       listeners: new Set(),
+      rate: 1,
     };
 
     function snapshot() {
@@ -180,12 +201,34 @@ window.__ModuleLoader__.load({
         error: playback.error,
         errorOwner: playback.errorOwner,
         errorSeq: playback.errorSeq,
+        rate: playback.rate,
       };
     }
 
     function publish() {
       const next = snapshot();
       for (const listener of playback.listeners) listener(next);
+    }
+
+    function setPlaybackRate(rate) {
+      playback.rate = rate;
+      if (playback.audio) {
+        playback.audio.playbackRate = rate;
+      }
+      publish();
+    }
+
+    function cyclePlaybackRate() {
+      setPlaybackRate(nextPlaybackRate(playback.rate));
+    }
+
+    function seekPlayback(offset) {
+      if (playback.audio) {
+        const duration = playback.audio.duration;
+        if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+          playback.audio.currentTime = clampSeekTime(playback.audio.currentTime, offset, duration);
+        }
+      }
     }
 
     function releaseMedia() {
@@ -262,6 +305,7 @@ window.__ModuleLoader__.load({
           return;
         }
         const element = new Audio(url);
+        element.playbackRate = playback.rate;
         playback.abort = null;
         playback.audio = element;
         playback.url = url;
@@ -274,7 +318,11 @@ window.__ModuleLoader__.load({
         playback.state = "playing";
         publish();
       } catch (error) {
-        if (epoch !== playback.epoch || error?.name === "AbortError") return;
+        if (epoch !== playback.epoch) return;
+        if (error?.name === "AbortError") {
+          failPlayback(epoch, "Request timed out");
+          return;
+        }
         failPlayback(epoch, error instanceof Error ? error.message : "Speech playback failed");
       }
     }
@@ -303,19 +351,75 @@ window.__ModuleLoader__.load({
         [],
       );
 
-      const toggle = React.useCallback(() => {
-        if (active) stopPlayback();
-        else if (text) startPlayback(owner.current, text, voice);
-      }, [active, voice, text]);
+      const toggle = React.useCallback(
+        (e) => {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          if (active) stopPlayback();
+          else if (text) startPlayback(owner.current, text, voice);
+        },
+        [active, voice, text],
+      );
+
+      const handleSeek = React.useCallback(
+        (offset) => (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          seekPlayback(offset);
+        },
+        [],
+      );
+
+      const handleRate = React.useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cyclePlaybackRate();
+      }, []);
+
+      const error =
+        current.errorOwner === owner.current && current.errorSeq ? current.error : null;
+
+      if (active && state === "playing") {
+        const rateText = `${current.rate || 1}×`;
+        const control = (label, content, onClick, className = "teratts-control", ref) =>
+          React.createElement(
+            Tooltip,
+            { label, side: "bottom" },
+            React.createElement(
+              "button",
+              {
+                ref,
+                type: "button",
+                className,
+                "aria-label": label,
+                "data-active": className === "teratts-action" || undefined,
+                onClick,
+              },
+              content,
+            ),
+          );
+        return React.createElement(
+          "div",
+          { className: "teratts-group" },
+          control("Rewind 10 seconds", "-10", handleSeek(-10)),
+          control(`Playback speed ${rateText}`, rateText, handleRate),
+          control("Fast forward 15 seconds", "+15", handleSeek(15)),
+          control(
+            "Stop speech",
+            React.createElement(IconStopFill16, {}),
+            toggle,
+            "teratts-action",
+            buttonRef,
+          ),
+        );
+      }
 
       const label =
         state === "loading"
           ? "Generating speech"
-          : state === "playing"
-            ? "Stop speech"
-            : "Read response aloud";
-      const error =
-        current.errorOwner === owner.current && current.errorSeq ? current.error : null;
+          : "Read response aloud";
 
       return React.createElement(
         React.Fragment,
@@ -337,28 +441,22 @@ window.__ModuleLoader__.load({
             },
             state === "loading"
               ? React.createElement(IconLoadingOutline16, { className: "teratts-loading" })
-              : state === "playing"
-                ? React.createElement(IconStopFill16, {})
-                : React.createElement(SpeakerIcon),
+              : React.createElement(SpeakerIcon),
           ),
         ),
         error &&
-          React.createElement(
-            React.Fragment,
-            null,
-            React.createElement(Toast, {
-              key: current.errorSeq,
-              text: error,
-              anchor: buttonRef.current,
-              onDone: () => {
-                if (playback.errorSeq === current.errorSeq) {
-                  playback.error = null;
-                  playback.errorOwner = null;
-                  publish();
-                }
-              },
-            }),
-          ),
+          React.createElement(Toast, {
+            key: current.errorSeq,
+            text: error,
+            anchor: buttonRef.current,
+            onDone: () => {
+              if (playback.errorSeq === current.errorSeq) {
+                playback.error = null;
+                playback.errorOwner = null;
+                publish();
+              }
+            },
+          }),
       );
     }
 

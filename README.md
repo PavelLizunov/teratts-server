@@ -31,5 +31,8 @@ inference because one engine owns the four mutable ONNX Runtime sessions.
 `dsh-plugin/` contributes a button to `conversation.chat.assistant-actions`.
 Install it into the DSH Web profile, add the `ui-teratts` row from
 `dsh-plugin/cordis.patch.yml`, rebuild the Web artifacts, and refresh the
-existing DSH URL. The browser must be able to reach the configured TTS URL
-(the homelab plugin defaults to the Tailnet-only HTTPS endpoint `https://windows-brat.tail9fd337.ts.net`; override it with `localStorage.setItem("teratts.url", "https://host")`).
+existing DSH URL. Host-owned settings configure the endpoint (default
+`http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
+`https://teratts.tail9fd337.ts.net`). The browser holds no endpoint or
+credential; synthesis routes through the Host plugin. Active playback exposes
+−10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle.

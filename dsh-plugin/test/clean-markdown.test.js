@@ -20,9 +20,14 @@ if (typeof window === "undefined") {
 
 await import("../lib/client.js");
 const cleanMarkdown = globalThis.__teratts_cleanMarkdown;
+const PLAYBACK_RATES = globalThis.__teratts_PLAYBACK_RATES;
+const nextPlaybackRate = globalThis.__teratts_nextPlaybackRate;
+const clampSeekTime = globalThis.__teratts_clampSeekTime;
 
-test("cleanMarkdown is exposed for tests", () => {
+test("client helpers are exposed for tests", () => {
   assert.equal(typeof cleanMarkdown, "function");
+  assert.equal(typeof nextPlaybackRate, "function");
+  assert.equal(typeof clampSeekTime, "function");
 });
 
 test("preserves exact <ru> and <en> language tags while stripping generic HTML", () => {
@@ -191,4 +196,45 @@ test("handles markdown links with one level of parenthesized destinations", () =
 
 test("fenced code becomes a language-neutral pause", () => {
   assert.equal(cleanMarkdown("Before\n```js\nconst x = 1\n```\nAfter"), "Before . After");
+});
+
+test("PLAYBACK_RATES contains exact rates [1, 1.25, 1.5, 2]", () => {
+  assert.deepEqual(PLAYBACK_RATES, [1, 1.25, 1.5, 2]);
+});
+
+test("nextPlaybackRate cycles through PLAYBACK_RATES in order and loops around", () => {
+  assert.equal(nextPlaybackRate(1), 1.25);
+  assert.equal(nextPlaybackRate(1.25), 1.5);
+  assert.equal(nextPlaybackRate(1.5), 2);
+  assert.equal(nextPlaybackRate(2), 1);
+  assert.equal(nextPlaybackRate(0), 1);
+  assert.equal(nextPlaybackRate(undefined), 1);
+  assert.equal(nextPlaybackRate("invalid"), 1);
+});
+
+test("clampSeekTime clamps seek target within [0, duration]", () => {
+  assert.equal(clampSeekTime(10, -10, 30), 0);
+  assert.equal(clampSeekTime(5, -10, 30), 0);
+  assert.equal(clampSeekTime(20, 15, 30), 30);
+  assert.equal(clampSeekTime(25, 15, 30), 30);
+  assert.equal(clampSeekTime(10, 15, 30), 25);
+  assert.equal(clampSeekTime(10, -5, 30), 5);
+});
+
+test("clampSeekTime is a no-op for non-finite or non-positive duration", () => {
+  assert.equal(clampSeekTime(10, -10, NaN), 10);
+  assert.equal(clampSeekTime(10, 15, 0), 10);
+  assert.equal(clampSeekTime(10, 15, -5), 10);
+  assert.equal(clampSeekTime(10, 15, Infinity), 10);
+  assert.equal(clampSeekTime(10, 15, null), 10);
+  assert.equal(clampSeekTime(10, 15, undefined), 10);
+});
+
+test("client source handles active-timeout cleanup and event propagation prevention", () => {
+  assert.equal(typeof registeredEntry.factory, "function");
+  const fnStr = registeredEntry.factory.toString();
+  assert.match(fnStr, /clampSeekTime/);
+  assert.match(fnStr, /nextPlaybackRate/);
+  assert.match(fnStr, /e\.stopPropagation\(\)/);
+  assert.match(fnStr, /Request timed out/);
 });
