@@ -24,6 +24,8 @@ const cleanMarkdown = globalThis.__teratts_cleanMarkdown;
 const PLAYBACK_RATES = globalThis.__teratts_PLAYBACK_RATES;
 const nextPlaybackRate = globalThis.__teratts_nextPlaybackRate;
 const clampSeekTime = globalThis.__teratts_clampSeekTime;
+const splitSpeechText = globalThis.__teratts_splitSpeechText;
+const mergeMonoPcmWavs = globalThis.__teratts_mergeMonoPcmWavs;
 const technicalMarkdown = await readFile(
   new URL("./fixtures/technical-markdown.md", import.meta.url),
   "utf8",
@@ -33,6 +35,8 @@ test("client helpers are exposed for tests", () => {
   assert.equal(typeof cleanMarkdown, "function");
   assert.equal(typeof nextPlaybackRate, "function");
   assert.equal(typeof clampSeekTime, "function");
+  assert.equal(typeof splitSpeechText, "function");
+  assert.equal(typeof mergeMonoPcmWavs, "function");
 });
 
 test("preserves exact <ru> and <en> language tags while stripping generic HTML", () => {
@@ -235,6 +239,58 @@ test("technical spec keeps fenced YAML and removes checklist markers", () => {
   }
   assert.doesNotMatch(cleaned, /```|\[ \]|блок кода/);
   assert.match(cleaned, /pnpm rebuild node-pty создаёт Linux pty\.node\./);
+});
+
+test("technical spec splits at speech boundaries without losing text", () => {
+  const cleaned = cleanMarkdown(technicalMarkdown);
+  const chunks = splitSpeechText(cleaned);
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.length),
+    [773, 783, 589],
+  );
+  assert.ok(chunks.every((chunk) => chunk.length <= 800));
+  assert.equal(chunks.join(" "), cleaned);
+  const tagged = `<ru>${"слово ".repeat(200).trim()}</ru>`;
+  assert.deepEqual(splitSpeechText(tagged), [tagged]);
+  assert.throws(() => splitSpeechText(cleaned, 0), /invalid speech chunk size/);
+});
+
+function pcmWav(payload, sampleRate = 44_100) {
+  const bytes = new Uint8Array(44 + payload.length);
+  const view = new DataView(bytes.buffer);
+  const tag = (offset, value) => {
+    for (let index = 0; index < value.length; index += 1) {
+      bytes[offset + index] = value.charCodeAt(index);
+    }
+  };
+  tag(0, "RIFF");
+  view.setUint32(4, bytes.length - 8, true);
+  tag(8, "WAVE");
+  tag(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  tag(36, "data");
+  view.setUint32(40, payload.length, true);
+  bytes.set(payload, 44);
+  return bytes;
+}
+
+test("merges mono PCM WAV chunks into one bounded WAV", () => {
+  const first = pcmWav(Uint8Array.of(1, 2, 3, 4));
+  const second = pcmWav(Uint8Array.of(5, 6));
+  const merged = mergeMonoPcmWavs([first, second]);
+  const header = new DataView(merged.buffer);
+  assert.equal(merged.length, 50);
+  assert.equal(header.getUint32(4, true), 42);
+  assert.equal(header.getUint32(40, true), 6);
+  assert.deepEqual([...merged.subarray(44)], [1, 2, 3, 4, 5, 6]);
+  assert.throws(() => mergeMonoPcmWavs([first, pcmWav(Uint8Array.of(7, 8), 48_000)]));
+  assert.throws(() => mergeMonoPcmWavs([first, second], 49), /too large/);
 });
 
 test("PLAYBACK_RATES contains exact rates [1, 1.25, 1.5, 2]", () => {

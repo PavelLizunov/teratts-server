@@ -37,3 +37,5 @@ existing DSH URL. Host-owned settings configure the endpoint (default
 credential; synthesis routes through the Host plugin. Active playback exposes
 −10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. Technical fenced blocks
 and checklist items are converted to speakable text instead of being dropped.
+Long speech is synthesized in bounded chunks and merged into one WAV so native
+seek and playback-rate controls continue to cover the complete response.

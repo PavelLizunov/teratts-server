@@ -62,6 +62,82 @@ function cleanMarkdown(text) {
     .trim();
 }
 
+const SPEECH_CHUNK_CHARS = 800;
+const MAX_MERGED_WAV_BYTES = 16 * 1024 * 1024;
+
+function splitSpeechText(text, maxChars = SPEECH_CHUNK_CHARS) {
+  if (!Number.isInteger(maxChars) || maxChars < 1) throw new RangeError("invalid speech chunk size");
+  const chunks = [];
+  let rest = text.trim();
+  if (/<\/?(?:ru|en)>/.test(rest)) return rest ? [rest] : [];
+  while (rest.length > maxChars) {
+    const window = rest.slice(0, maxChars + 1);
+    let cut = Math.max(
+      window.lastIndexOf(". "),
+      window.lastIndexOf("! "),
+      window.lastIndexOf("? "),
+      window.lastIndexOf("… "),
+      window.lastIndexOf(": "),
+    );
+    if (cut >= Math.floor(maxChars / 2)) cut += 1;
+    else cut = window.lastIndexOf(" ", maxChars);
+    if (cut < 1) cut = maxChars;
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
+function mergeMonoPcmWavs(wavs, maxBytes = MAX_MERGED_WAV_BYTES) {
+  if (!Array.isArray(wavs) || wavs.length === 0) throw new TypeError("missing WAV chunks");
+  if (!Number.isInteger(maxBytes) || maxBytes < 44) throw new RangeError("invalid WAV limit");
+  let totalBytes = 44;
+  let first = null;
+  const payloads = wavs.map((bytes) => {
+    if (!(bytes instanceof Uint8Array) || bytes.length < 44) throw new TypeError("invalid WAV chunk");
+    const tag = (offset) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const valid =
+      tag(0) === "RIFF" &&
+      tag(8) === "WAVE" &&
+      tag(12) === "fmt " &&
+      tag(36) === "data" &&
+      view.getUint32(4, true) === bytes.length - 8 &&
+      view.getUint32(16, true) === 16 &&
+      view.getUint16(20, true) === 1 &&
+      view.getUint16(22, true) === 1 &&
+      view.getUint32(28, true) === view.getUint32(24, true) * 2 &&
+      view.getUint16(32, true) === 2 &&
+      view.getUint16(34, true) === 16 &&
+      view.getUint32(40, true) === bytes.length - 44 &&
+      view.getUint32(40, true) % 2 === 0;
+    if (!valid) throw new TypeError("unsupported WAV chunk");
+    if (first) {
+      for (let index = 20; index < 36; index += 1) {
+        if (bytes[index] !== first[index]) throw new TypeError("WAV formats do not match");
+      }
+    } else {
+      first = bytes;
+    }
+    const payload = bytes.subarray(44);
+    if (payload.length > maxBytes - totalBytes) throw new RangeError("Speech audio is too large");
+    totalBytes += payload.length;
+    return payload;
+  });
+  const merged = new Uint8Array(totalBytes);
+  merged.set(first.subarray(0, 44));
+  const header = new DataView(merged.buffer);
+  header.setUint32(4, totalBytes - 8, true);
+  header.setUint32(40, totalBytes - 44, true);
+  let offset = 44;
+  for (const payload of payloads) {
+    merged.set(payload, offset);
+    offset += payload.length;
+  }
+  return merged;
+}
+
 const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
 
 function nextPlaybackRate(currentRate) {
@@ -85,6 +161,8 @@ if (typeof process !== "undefined" && process.versions?.node) {
   globalThis.__teratts_PLAYBACK_RATES = PLAYBACK_RATES;
   globalThis.__teratts_nextPlaybackRate = nextPlaybackRate;
   globalThis.__teratts_clampSeekTime = clampSeekTime;
+  globalThis.__teratts_splitSpeechText = splitSpeechText;
+  globalThis.__teratts_mergeMonoPcmWavs = mergeMonoPcmWavs;
 }
 
 if (typeof window !== "undefined" && window.__ModuleLoader__?.load) {
@@ -280,11 +358,19 @@ window.__ModuleLoader__.load({
       publish();
     }
 
-    function decodeAudio({ audioBase64, mimeType }) {
-      const binary = atob(audioBase64);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-      return new Blob([bytes], { type: mimeType || "audio/wav" });
+    function decodeAudio(chunks) {
+      const wavs = chunks.map(({ audioBase64, mimeType }) => {
+        if (mimeType?.split(";", 1)[0].trim().toLowerCase() !== "audio/wav") {
+          throw new TypeError("unsupported TeraTTS audio format");
+        }
+        const binary = atob(audioBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+      });
+      return new Blob([mergeMonoPcmWavs(wavs)], { type: "audio/wav" });
     }
 
     function unwrapAudio(result) {
@@ -308,10 +394,13 @@ window.__ModuleLoader__.load({
       publish();
       try {
         if (!voice) throw new Error("TeraTTS voice service is unavailable");
-        const result = await voice.synthesize(text, abort.signal);
-        if (epoch !== playback.epoch) return;
-        const audio = unwrapAudio(result);
-        const url = URL.createObjectURL(decodeAudio(audio));
+        const audioChunks = [];
+        for (const chunk of splitSpeechText(text)) {
+          const result = await voice.synthesize(chunk, abort.signal);
+          if (epoch !== playback.epoch) return;
+          audioChunks.push(unwrapAudio(result));
+        }
+        const url = URL.createObjectURL(decodeAudio(audioChunks));
         if (epoch !== playback.epoch) {
           URL.revokeObjectURL(url);
           return;
