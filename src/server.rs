@@ -19,7 +19,7 @@ use crate::speechfront;
 use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
 use crate::wav;
 
-const MAX_TEXT_CHARS: usize = 2_000;
+pub(crate) const MAX_TEXT_CHARS: usize = 2_400;
 const MAX_ADMITTED_REQUESTS: usize = 3;
 const QUEUE_TTL: Duration = Duration::from_secs(60);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(120);
@@ -829,6 +829,7 @@ mod tests {
         let english = prepare_request(english_request, &voices, true).unwrap();
         assert!(matches!(english.language, Language::En));
         assert!(!english.russian_stress);
+        assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS)), &voices, true).is_ok());
         assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS + 1)), &voices, true).is_err());
         let mut invalid = request("hello");
         invalid.language = Some(Language::En);

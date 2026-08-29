@@ -178,8 +178,11 @@ fn speak(
     output: &Path,
 ) -> Result<()> {
     let text_chars = text.trim().chars().count();
-    if text_chars == 0 || text_chars > 2_000 {
-        return Err(anyhow!("text must contain 1..=2000 characters"));
+    if text_chars == 0 || text_chars > server::MAX_TEXT_CHARS {
+        return Err(anyhow!(
+            "text must contain 1..={} characters",
+            server::MAX_TEXT_CHARS
+        ));
     }
     if !duration_scale.is_finite() || !(0.25..=4.0).contains(&duration_scale) {
         return Err(anyhow!("duration-scale must be between 0.25 and 4.0"));

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 // Provide minimal environment for evaluating client bundle in Node
@@ -23,6 +24,10 @@ const cleanMarkdown = globalThis.__teratts_cleanMarkdown;
 const PLAYBACK_RATES = globalThis.__teratts_PLAYBACK_RATES;
 const nextPlaybackRate = globalThis.__teratts_nextPlaybackRate;
 const clampSeekTime = globalThis.__teratts_clampSeekTime;
+const technicalMarkdown = await readFile(
+  new URL("./fixtures/technical-markdown.md", import.meta.url),
+  "utf8",
+);
 
 test("client helpers are exposed for tests", () => {
   assert.equal(typeof cleanMarkdown, "function");
@@ -86,7 +91,7 @@ test("processes table cells through cleanLine and ignores separator rows", () =>
   );
 });
 
-test("handles code blocks by replacing fenced blocks and cleaning inline code", () => {
+test("reads fenced blocks and cleans inline code", () => {
   const fenced = [
     "Here is an example:",
     "```typescript",
@@ -99,7 +104,7 @@ test("handles code blocks by replacing fenced blocks and cleaning inline code", 
 
   assert.equal(
     cleanMarkdown(fenced),
-    "Here is an example: . End of example.",
+    "Here is an example: function calculate sum a val: number, b val: number. return a val + b val. End of example.",
   );
 
   assert.equal(
@@ -194,8 +199,42 @@ test("handles markdown links with one level of parenthesized destinations", () =
   );
 });
 
-test("fenced code becomes a language-neutral pause", () => {
-  assert.equal(cleanMarkdown("Before\n```js\nconst x = 1\n```\nAfter"), "Before . After");
+test("fenced code keeps speakable content without fence syntax", () => {
+  assert.equal(
+    cleanMarkdown("Before\n```js\nconst x = 1\n```\nAfter"),
+    "Before const x = 1. After",
+  );
+});
+
+test("technical spec keeps fenced YAML and removes checklist markers", () => {
+  const cleaned = cleanMarkdown(technicalMarkdown);
+  const contract = cleaned.slice(cleaned.indexOf("Interface / Data Contract"));
+  const terms = [
+    "pnpm-workspace:",
+    "allowBuilds:",
+    "node-pty: true",
+    "better-sidebar:",
+    "shell: /usr/bin/ssh",
+    "shellArgs:",
+    "PreferredAuthentications=password",
+    "PubkeyAuthentication=no",
+    "StrictHostKeyChecking=yes",
+    "user@127.0.0.1",
+    "sidebar-admin-sshd:",
+    "authentication: PAM-password",
+    "allowUsers: user",
+    "permitRootLogin: false",
+    "forwarding: false",
+    "idleRootSession: PTY-owned",
+  ];
+  let previous = -1;
+  for (const term of terms) {
+    const index = contract.indexOf(term);
+    assert.ok(index > previous, `${term} must be preserved in order`);
+    previous = index;
+  }
+  assert.doesNotMatch(cleaned, /```|\[ \]|блок кода/);
+  assert.match(cleaned, /pnpm rebuild node-pty создаёт Linux pty\.node\./);
 });
 
 test("PLAYBACK_RATES contains exact rates [1, 1.25, 1.5, 2]", () => {

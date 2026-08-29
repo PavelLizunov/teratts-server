@@ -7,6 +7,7 @@ function cleanLine(line) {
     .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
     .replace(/^\s{0,3}#{1,6}\s+/g, "")
     .replace(/^\s*>\s?/g, "")
+    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/g, "")
     .replace(/^\s*[-*+]\s+/g, "")
     .replace(/^\s*\d{1,3}[.)]\s+/g, "")
     .replace(/[*~]/g, "")
@@ -18,10 +19,21 @@ function cleanLine(line) {
     .trim();
 }
 
+function cleanCodeBlock(body) {
+  return body
+    .split("\n")
+    .map((line) =>
+      cleanLine(line).replace(/[{}\[\]();"]/g, " ").replace(/\s+/g, " ").trim(),
+    )
+    .filter(Boolean)
+    .map((line) => (/[.!?…:]$/.test(line) ? line : `${line}.`))
+    .join(" ");
+}
+
 function cleanMarkdown(text) {
   return text
     .replace(/\r/g, "")
-    .replace(/```[\s\S]*?```/g, " . ")
+    .replace(/```[^\n]*\n([\s\S]*?)```/g, (_fence, body) => `\n${cleanCodeBlock(body)}\n`)
     .split("\n")
     .map((line) => {
       const trimmed = line.trim();

@@ -35,4 +35,5 @@ existing DSH URL. Host-owned settings configure the endpoint (default
 `http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
 `https://teratts.tail9fd337.ts.net`). The browser holds no endpoint or
 credential; synthesis routes through the Host plugin. Active playback exposes
-−10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle.
+−10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. Technical fenced blocks
+and checklist items are converted to speakable text instead of being dropped.
