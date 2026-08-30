@@ -26,6 +26,8 @@ const nextPlaybackRate = globalThis.__teratts_nextPlaybackRate;
 const clampSeekTime = globalThis.__teratts_clampSeekTime;
 const splitSpeechText = globalThis.__teratts_splitSpeechText;
 const mergeMonoPcmWavs = globalThis.__teratts_mergeMonoPcmWavs;
+const inspectMonoPcmWav = globalThis.__teratts_inspectMonoPcmWav;
+const locateBufferedTime = globalThis.__teratts_locateBufferedTime;
 const technicalMarkdown = await readFile(
   new URL("./fixtures/technical-markdown.md", import.meta.url),
   "utf8",
@@ -37,6 +39,8 @@ test("client helpers are exposed for tests", () => {
   assert.equal(typeof clampSeekTime, "function");
   assert.equal(typeof splitSpeechText, "function");
   assert.equal(typeof mergeMonoPcmWavs, "function");
+  assert.equal(typeof inspectMonoPcmWav, "function");
+  assert.equal(typeof locateBufferedTime, "function");
 });
 
 test("preserves exact <ru> and <en> language tags while stripping generic HTML", () => {
@@ -241,18 +245,34 @@ test("technical spec keeps fenced YAML and removes checklist markers", () => {
   assert.match(cleaned, /pnpm rebuild node-pty создаёт Linux pty\.node\./);
 });
 
-test("technical spec splits at speech boundaries without losing text", () => {
+test("technical spec uses a small first chunk without losing text", () => {
   const cleaned = cleanMarkdown(technicalMarkdown);
   const chunks = splitSpeechText(cleaned);
-  assert.deepEqual(
-    chunks.map((chunk) => chunk.length),
-    [773, 783, 589],
-  );
-  assert.ok(chunks.every((chunk) => chunk.length <= 800));
+  assert.ok(chunks[0].length <= 240);
+  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 800));
   assert.equal(chunks.join(" "), cleaned);
-  const tagged = `<ru>${"слово ".repeat(200).trim()}</ru>`;
-  assert.deepEqual(splitSpeechText(tagged), [tagged]);
+
+  const legacy = splitSpeechText(cleaned, 800);
+  assert.deepEqual(legacy.map((chunk) => chunk.length), [773, 783, 589]);
+  assert.equal(legacy.join(" "), cleaned);
   assert.throws(() => splitSpeechText(cleaned, 0), /invalid speech chunk size/);
+});
+
+test("long language spans split into independently balanced requests", () => {
+  const tagged = `<ru>${"слово ".repeat(200).trim()}</ru> and <en>${"word ".repeat(200).trim()}</en>`;
+  const chunks = splitSpeechText(tagged);
+  assert.ok(chunks.length > 2);
+  assert.ok(chunks[0].length <= 240);
+  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 800));
+  for (const chunk of chunks) {
+    const opens = [...chunk.matchAll(/<(ru|en)>/g)].map((match) => match[1]);
+    const closes = [...chunk.matchAll(/<\/(ru|en)>/g)].map((match) => match[1]);
+    assert.deepEqual(closes, opens);
+  }
+  const spoken = (value) => value.replace(/<\/?(?:ru|en)>/g, "").replace(/\s+/g, " ").trim();
+  assert.equal(spoken(chunks.join(" ")), spoken(tagged));
+  assert.throws(() => splitSpeechText("<ru>незакрытый"), /unbalanced/);
+  assert.throws(() => splitSpeechText("<ru><en>x</en></ru>"), /nested/);
 });
 
 function pcmWav(payload, sampleRate = 44_100) {
@@ -293,6 +313,26 @@ test("merges mono PCM WAV chunks into one bounded WAV", () => {
   assert.throws(() => mergeMonoPcmWavs([first, second], 49), /too large/);
 });
 
+test("inspects WAV duration and locates a global buffered offset", () => {
+  const wav = pcmWav(new Uint8Array(200), 10);
+  const info = inspectMonoPcmWav(wav);
+  assert.equal(info.dataBytes, 200);
+  assert.equal(info.duration, 10);
+  assert.deepEqual(locateBufferedTime([10, 20], 17), {
+    index: 1,
+    offset: 7,
+    target: 17,
+    total: 30,
+  });
+  assert.deepEqual(locateBufferedTime([10, 20], 99), {
+    index: 1,
+    offset: 20,
+    target: 30,
+    total: 30,
+  });
+  assert.equal(locateBufferedTime([], 5), null);
+});
+
 test("PLAYBACK_RATES contains exact rates [1, 1.25, 1.5, 2]", () => {
   assert.deepEqual(PLAYBACK_RATES, [1, 1.25, 1.5, 2]);
 });
@@ -328,8 +368,377 @@ test("clampSeekTime is a no-op for non-finite or non-positive duration", () => {
 test("client source handles active-timeout cleanup and event propagation prevention", () => {
   assert.equal(typeof registeredEntry.factory, "function");
   const fnStr = registeredEntry.factory.toString();
-  assert.match(fnStr, /clampSeekTime/);
+  assert.match(fnStr, /locateBufferedTime/);
   assert.match(fnStr, /nextPlaybackRate/);
   assert.match(fnStr, /e\.stopPropagation\(\)/);
   assert.match(fnStr, /Request timed out/);
+});
+
+function createDeferred() {
+  let resolve, reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function setupPlaybackHarness() {
+  const createdUrls = [];
+  const revokedUrls = [];
+  const audioInstances = [];
+  const playDeferreds = [];
+  const synthCalls = [];
+  const originalCreate = globalThis.URL.createObjectURL;
+  const originalRevoke = globalThis.URL.revokeObjectURL;
+  const originalAudio = globalThis.Audio;
+
+  globalThis.URL.createObjectURL = () => {
+    const url = `blob:test-${createdUrls.length + 1}`;
+    createdUrls.push(url);
+    return url;
+  };
+  globalThis.URL.revokeObjectURL = (url) => revokedUrls.push(url);
+
+  globalThis.Audio = class MockAudio {
+    constructor(url) {
+      this.src = url;
+      this.playbackRate = 1;
+      this.currentTime = 0;
+      this.paused = true;
+      this.ended = false;
+      this.playCalls = 0;
+      this.onended = null;
+      this.onerror = null;
+      audioInstances.push(this);
+    }
+    play() {
+      this.playCalls += 1;
+      this.paused = false;
+      this.ended = false;
+      if (this.deferNextPlay) {
+        this.deferNextPlay = false;
+        const deferred = createDeferred();
+        playDeferreds.push(deferred);
+        return deferred.promise;
+      }
+      return Promise.resolve();
+    }
+    pause() {
+      this.paused = true;
+    }
+    removeAttribute(name) {
+      if (name === "src") this.src = "";
+    }
+    load() {}
+    finish() {
+      this.paused = true;
+      this.ended = true;
+      this.onended?.();
+    }
+  };
+
+  const voice = {
+    synthesize(text, signal) {
+      const deferred = createDeferred();
+      synthCalls.push({ deferred, signal, text });
+      return deferred.promise;
+    },
+  };
+  const mockRequire = (id) => {
+    if (id === "react") {
+      return {
+        createElement: () => ({}),
+        Fragment: "Fragment",
+        useCallback: (fn) => fn,
+        useEffect: () => {},
+        useRef: (value) => ({ current: value }),
+        useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
+      };
+    }
+    return {};
+  };
+  registeredEntry.factory(mockRequire);
+  const api = globalThis.__teratts_playbackTestApi;
+
+  return {
+    api,
+    audioInstances,
+    createdUrls,
+    playDeferreds,
+    revokedUrls,
+    synthCalls,
+    voice,
+    cleanup() {
+      api.stopPlayback();
+      if (originalCreate) globalThis.URL.createObjectURL = originalCreate;
+      else delete globalThis.URL.createObjectURL;
+      if (originalRevoke) globalThis.URL.revokeObjectURL = originalRevoke;
+      else delete globalThis.URL.revokeObjectURL;
+      if (originalAudio) globalThis.Audio = originalAudio;
+      else delete globalThis.Audio;
+    },
+  };
+}
+
+const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
+const playbackWav = (sampleRate = 10) => ({
+  audioBase64: Buffer.from(pcmWav(new Uint8Array(200), sampleRate)).toString("base64"),
+  mimeType: "audio/wav",
+});
+
+test("first segment plays while later synthesis remains sequential", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    assert.equal(harness.synthCalls.length, 1);
+    assert.ok(harness.synthCalls[0].text.length <= 240);
+
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    assert.equal(harness.audioInstances.length, 1);
+    assert.equal(harness.audioInstances[0].playCalls, 1);
+    assert.equal(harness.synthCalls.length, 2);
+    assert.equal(harness.synthCalls[1].signal, harness.synthCalls[0].signal);
+
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.audioInstances.length, 2);
+    assert.equal(harness.audioInstances[1].playCalls, 0);
+
+    harness.audioInstances[0].finish();
+    await flushPromises();
+    assert.equal(harness.audioInstances[1].playCalls, 1);
+    assert.equal(harness.api.getPlayback().index, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("global seek crosses buffered segments and rate propagates", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+
+    harness.audioInstances[0].currentTime = 2;
+    harness.api.seekPlayback(15);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().index, 1);
+    assert.equal(harness.audioInstances[1].currentTime, 7);
+
+    harness.api.setPlaybackRate(1.5);
+    assert.deepEqual(harness.audioInstances.map((audio) => audio.playbackRate), [1.5, 1.5]);
+
+    harness.api.seekPlayback(-10);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().index, 0);
+    assert.equal(harness.audioInstances[0].currentTime, 7);
+
+    harness.api.seekPlayback(99);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().state, "idle");
+    assert.equal(harness.api.getPlayback().segments.length, 0);
+    assert.deepEqual(harness.revokedUrls, ["blob:test-1", "blob:test-2"]);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("stale play rejection cannot stop a newer same-epoch seek", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+
+    harness.audioInstances[1].deferNextPlay = true;
+    harness.api.seekPlayback(15);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().index, 1);
+    assert.equal(harness.playDeferreds.length, 1);
+
+    harness.api.seekPlayback(-15);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().index, 0);
+    harness.playDeferreds[0].reject(new Error("interrupted"));
+    await flushPromises();
+
+    assert.equal(harness.api.getPlayback().state, "playing");
+    assert.equal(harness.api.getPlayback().segments.length, 2);
+    assert.equal(harness.api.getPlayback().error, null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("stale successful play cannot undo wait-at-buffer-end", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(250), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await flushPromises();
+    assert.equal(harness.synthCalls.length, 3);
+
+    harness.audioInstances[1].deferNextPlay = true;
+    harness.api.seekPlayback(15);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().index, 1);
+    harness.api.seekPlayback(99);
+    assert.equal(harness.api.getPlayback().audio, null);
+    assert.equal(harness.api.getPlayback().state, "loading");
+
+    harness.playDeferreds[0].resolve();
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().audio, null);
+    assert.equal(harness.api.getPlayback().state, "loading");
+
+    harness.synthCalls[2].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.api.getPlayback().index, 2);
+    assert.equal(harness.audioInstances[2].playCalls, 1);
+    assert.equal(harness.api.getPlayback().state, "playing");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("queue resumes after the first segment outruns background synthesis", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.audioInstances[0].finish();
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().state, "loading");
+    assert.equal(harness.api.getPlayback().audio, null);
+
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.audioInstances[1].playCalls, 1);
+    assert.equal(harness.api.getPlayback().state, "playing");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("seek past the buffered end waits for background audio without replay", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.api.seekPlayback(99);
+    assert.equal(harness.api.getPlayback().state, "loading");
+    assert.equal(harness.api.getPlayback().audio, null);
+    assert.equal(harness.audioInstances[0].playCalls, 1);
+
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.audioInstances[0].playCalls, 1);
+    assert.equal(harness.audioInstances[1].playCalls, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("background arrival cannot override a rewind started during a gap", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    harness.audioInstances[0].finish();
+    await flushPromises();
+
+    harness.audioInstances[0].deferNextPlay = true;
+    harness.api.seekPlayback(-5);
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().audio, harness.audioInstances[0]);
+    assert.equal(harness.playDeferreds.length, 1);
+
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.api.getPlayback().index, 0);
+    assert.equal(harness.audioInstances[1].playCalls, 0);
+
+    harness.playDeferreds[0].resolve();
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().state, "playing");
+    assert.equal(harness.api.getPlayback().index, 0);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("stop aborts background synthesis and releases every prepared segment", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const signal = harness.synthCalls[0].signal;
+    harness.synthCalls[0].deferred.resolve(playbackWav());
+    await flushPromises();
+    assert.equal(harness.synthCalls.length, 2);
+
+    harness.api.stopPlayback();
+    assert.equal(signal.aborted, true);
+    assert.deepEqual(harness.revokedUrls, ["blob:test-1"]);
+    assert.equal(harness.audioInstances[0].src, "");
+
+    harness.synthCalls[1].deferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.createdUrls.length, 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("stale synthesis result cannot restart playback", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const firstDeferred = harness.synthCalls[0].deferred;
+    harness.api.stopPlayback();
+    firstDeferred.resolve(playbackWav());
+    await producer;
+    assert.equal(harness.createdUrls.length, 0);
+    assert.equal(harness.audioInstances.length, 0);
+    assert.equal(harness.api.getPlayback().state, "idle");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("cumulative limit, malformed WAV, and format mismatch fail safely", () => {
+  const first = pcmWav(Uint8Array.of(1, 2, 3, 4), 44_100);
+  const second = pcmWav(Uint8Array.of(5, 6, 7, 8), 48_000);
+  assert.throws(() => mergeMonoPcmWavs([first, second]), /WAV formats do not match/);
+  assert.throws(() => mergeMonoPcmWavs([new Uint8Array([1, 2, 3, 4])]), /invalid WAV chunk/);
+  assert.throws(() => mergeMonoPcmWavs([first, first], 45), /Speech audio is too large/);
+});
+
+test("background WAV format failure stops current playback with one error", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav(10));
+    await flushPromises();
+    harness.synthCalls[1].deferred.resolve(playbackWav(12));
+    await producer;
+
+    const playback = harness.api.getPlayback();
+    assert.equal(playback.state, "idle");
+    assert.match(playback.error, /WAV formats do not match/);
+    assert.deepEqual(harness.revokedUrls, ["blob:test-1"]);
+  } finally {
+    harness.cleanup();
+  }
 });

@@ -62,71 +62,158 @@ function cleanMarkdown(text) {
     .trim();
 }
 
+const FIRST_SPEECH_CHUNK_CHARS = 240;
 const SPEECH_CHUNK_CHARS = 800;
 const MAX_MERGED_WAV_BYTES = 16 * 1024 * 1024;
 
-function splitSpeechText(text, maxChars = SPEECH_CHUNK_CHARS) {
-  if (!Number.isInteger(maxChars) || maxChars < 1) throw new RangeError("invalid speech chunk size");
-  const chunks = [];
-  let rest = text.trim();
-  if (/<\/?(?:ru|en)>/.test(rest)) return rest ? [rest] : [];
-  while (rest.length > maxChars) {
-    const window = rest.slice(0, maxChars + 1);
-    let cut = Math.max(
-      window.lastIndexOf(". "),
-      window.lastIndexOf("! "),
-      window.lastIndexOf("? "),
-      window.lastIndexOf("… "),
-      window.lastIndexOf(": "),
-    );
-    if (cut >= Math.floor(maxChars / 2)) cut += 1;
-    else cut = window.lastIndexOf(" ", maxChars);
-    if (cut < 1) cut = maxChars;
-    chunks.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
+function speechChunkLimits(options, laterMaxChars) {
+  let firstChars = FIRST_SPEECH_CHUNK_CHARS;
+  let nextChars = SPEECH_CHUNK_CHARS;
+  if (typeof options === "number") {
+    firstChars = options;
+    nextChars = laterMaxChars ?? options;
+  } else if (options !== undefined) {
+    if (options === null || typeof options !== "object") {
+      throw new RangeError("invalid speech chunk size");
+    }
+    firstChars = options.firstChars ?? firstChars;
+    nextChars = options.nextChars ?? nextChars;
   }
-  if (rest) chunks.push(rest);
+  if (!Number.isInteger(firstChars) || firstChars < 1) {
+    throw new RangeError("invalid speech chunk size");
+  }
+  if (!Number.isInteger(nextChars) || nextChars < 1) {
+    throw new RangeError("invalid speech chunk size");
+  }
+  return { firstChars, nextChars };
+}
+
+function speechLanguageSpans(text) {
+  const spans = [];
+  const tags = /<\/?(ru|en)>/gi;
+  let active = null;
+  let cursor = 0;
+  let contentStart = 0;
+  let match;
+  while ((match = tags.exec(text)) !== null) {
+    const closing = match[0][1] === "/";
+    const language = match[1].toLowerCase();
+    if (!closing) {
+      if (active) throw new TypeError("nested TeraTTS language tags are not supported");
+      if (match.index > cursor) spans.push({ language: null, text: text.slice(cursor, match.index) });
+      active = language;
+      contentStart = tags.lastIndex;
+    } else {
+      if (active !== language) throw new TypeError("unbalanced TeraTTS language tags");
+      spans.push({ language, text: text.slice(contentStart, match.index) });
+      active = null;
+      cursor = tags.lastIndex;
+    }
+  }
+  if (active) throw new TypeError("unbalanced TeraTTS language tags");
+  if (cursor < text.length) spans.push({ language: null, text: text.slice(cursor) });
+  return spans.length ? spans : [{ language: null, text }];
+}
+
+function nextSpeechCut(text, maxChars) {
+  if (text.length <= maxChars) return text.length;
+  const window = text.slice(0, maxChars + 1);
+  let cut = Math.max(
+    window.lastIndexOf(". "),
+    window.lastIndexOf("! "),
+    window.lastIndexOf("? "),
+    window.lastIndexOf("… "),
+    window.lastIndexOf(": "),
+  );
+  if (cut >= Math.floor(maxChars / 2)) cut += 1;
+  else cut = window.lastIndexOf(" ", maxChars);
+  if (cut < 1) cut = maxChars;
+  const before = text.charCodeAt(cut - 1);
+  const after = text.charCodeAt(cut);
+  if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) cut -= 1;
+  return Math.max(1, cut);
+}
+
+function splitSpeechText(text, options, laterMaxChars) {
+  const { firstChars, nextChars } = speechChunkLimits(options, laterMaxChars);
+  const chunks = [];
+  for (const span of speechLanguageSpans(text.trim())) {
+    let rest = span.text.trim();
+    while (rest) {
+      const limit = chunks.length === 0 ? firstChars : nextChars;
+      const wrapperChars = span.language ? 9 : 0;
+      const contentLimit = limit - wrapperChars;
+      if (contentLimit < 1) throw new RangeError("speech chunk size is too small for language tags");
+      const cut = nextSpeechCut(rest, contentLimit);
+      const content = rest.slice(0, cut).trim();
+      if (content) {
+        chunks.push(
+          span.language ? `<${span.language}>${content}</${span.language}>` : content,
+        );
+      }
+      rest = rest.slice(cut).trim();
+    }
+  }
   return chunks;
+}
+
+function inspectMonoPcmWav(bytes, expectedFormat) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 44) {
+    throw new TypeError("invalid WAV chunk");
+  }
+  const tag = (offset) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sampleRate = view.getUint32(24, true);
+  const dataBytes = view.getUint32(40, true);
+  const valid =
+    tag(0) === "RIFF" &&
+    tag(8) === "WAVE" &&
+    tag(12) === "fmt " &&
+    tag(36) === "data" &&
+    view.getUint32(4, true) === bytes.length - 8 &&
+    view.getUint32(16, true) === 16 &&
+    view.getUint16(20, true) === 1 &&
+    view.getUint16(22, true) === 1 &&
+    sampleRate > 0 &&
+    view.getUint32(28, true) === sampleRate * 2 &&
+    view.getUint16(32, true) === 2 &&
+    view.getUint16(34, true) === 16 &&
+    dataBytes === bytes.length - 44 &&
+    dataBytes % 2 === 0;
+  if (!valid) throw new TypeError("unsupported WAV chunk");
+  if (expectedFormat) {
+    for (let index = 20; index < 36; index += 1) {
+      if (bytes[index] !== expectedFormat[index - 20]) {
+        throw new TypeError("WAV formats do not match");
+      }
+    }
+  }
+  return {
+    dataBytes,
+    duration: dataBytes / (sampleRate * 2),
+    format: bytes.slice(20, 36),
+    payload: bytes.subarray(44),
+  };
+}
+
+function checkedWavBytes(totalBytes, dataBytes, maxBytes = MAX_MERGED_WAV_BYTES) {
+  if (dataBytes > maxBytes - totalBytes) throw new RangeError("Speech audio is too large");
+  return totalBytes + dataBytes;
 }
 
 function mergeMonoPcmWavs(wavs, maxBytes = MAX_MERGED_WAV_BYTES) {
   if (!Array.isArray(wavs) || wavs.length === 0) throw new TypeError("missing WAV chunks");
   if (!Number.isInteger(maxBytes) || maxBytes < 44) throw new RangeError("invalid WAV limit");
   let totalBytes = 44;
-  let first = null;
+  let format = null;
   const payloads = wavs.map((bytes) => {
-    if (!(bytes instanceof Uint8Array) || bytes.length < 44) throw new TypeError("invalid WAV chunk");
-    const tag = (offset) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const valid =
-      tag(0) === "RIFF" &&
-      tag(8) === "WAVE" &&
-      tag(12) === "fmt " &&
-      tag(36) === "data" &&
-      view.getUint32(4, true) === bytes.length - 8 &&
-      view.getUint32(16, true) === 16 &&
-      view.getUint16(20, true) === 1 &&
-      view.getUint16(22, true) === 1 &&
-      view.getUint32(28, true) === view.getUint32(24, true) * 2 &&
-      view.getUint16(32, true) === 2 &&
-      view.getUint16(34, true) === 16 &&
-      view.getUint32(40, true) === bytes.length - 44 &&
-      view.getUint32(40, true) % 2 === 0;
-    if (!valid) throw new TypeError("unsupported WAV chunk");
-    if (first) {
-      for (let index = 20; index < 36; index += 1) {
-        if (bytes[index] !== first[index]) throw new TypeError("WAV formats do not match");
-      }
-    } else {
-      first = bytes;
-    }
-    const payload = bytes.subarray(44);
-    if (payload.length > maxBytes - totalBytes) throw new RangeError("Speech audio is too large");
-    totalBytes += payload.length;
-    return payload;
+    const info = inspectMonoPcmWav(bytes, format);
+    format ??= info.format;
+    totalBytes = checkedWavBytes(totalBytes, info.dataBytes, maxBytes);
+    return info.payload;
   });
   const merged = new Uint8Array(totalBytes);
-  merged.set(first.subarray(0, 44));
+  merged.set(wavs[0].subarray(0, 44));
   const header = new DataView(merged.buffer);
   header.setUint32(4, totalBytes - 8, true);
   header.setUint32(40, totalBytes - 44, true);
@@ -136,6 +223,24 @@ function mergeMonoPcmWavs(wavs, maxBytes = MAX_MERGED_WAV_BYTES) {
     offset += payload.length;
   }
   return merged;
+}
+
+function locateBufferedTime(durations, time) {
+  if (!Array.isArray(durations) || durations.length === 0) return null;
+  const total = durations.reduce(
+    (sum, duration) => sum + (Number.isFinite(duration) && duration > 0 ? duration : 0),
+    0,
+  );
+  const target = Math.max(0, Math.min(Number.isFinite(time) ? time : 0, total));
+  let elapsed = 0;
+  for (let index = 0; index < durations.length; index += 1) {
+    const duration = Number.isFinite(durations[index]) && durations[index] > 0 ? durations[index] : 0;
+    if (target < elapsed + duration || index === durations.length - 1) {
+      return { index, offset: Math.min(duration, target - elapsed), target, total };
+    }
+    elapsed += duration;
+  }
+  return null;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
@@ -163,6 +268,8 @@ if (typeof process !== "undefined" && process.versions?.node) {
   globalThis.__teratts_clampSeekTime = clampSeekTime;
   globalThis.__teratts_splitSpeechText = splitSpeechText;
   globalThis.__teratts_mergeMonoPcmWavs = mergeMonoPcmWavs;
+  globalThis.__teratts_inspectMonoPcmWav = inspectMonoPcmWav;
+  globalThis.__teratts_locateBufferedTime = locateBufferedTime;
 }
 
 if (typeof window !== "undefined" && window.__ModuleLoader__?.load) {
@@ -279,7 +386,11 @@ window.__ModuleLoader__.load({
       errorSeq: 0,
       abort: null,
       audio: null,
-      url: null,
+      segments: [],
+      index: -1,
+      bufferedBytes: 44,
+      format: null,
+      producerDone: false,
       listeners: new Set(),
       rate: 1,
     };
@@ -302,9 +413,7 @@ window.__ModuleLoader__.load({
 
     function setPlaybackRate(rate) {
       playback.rate = rate;
-      if (playback.audio) {
-        playback.audio.playbackRate = rate;
-      }
+      for (const segment of playback.segments) segment.audio.playbackRate = rate;
       publish();
     }
 
@@ -312,30 +421,37 @@ window.__ModuleLoader__.load({
       setPlaybackRate(nextPlaybackRate(playback.rate));
     }
 
-    function seekPlayback(offset) {
-      if (playback.audio) {
-        const duration = playback.audio.duration;
-        if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
-          playback.audio.currentTime = clampSeekTime(playback.audio.currentTime, offset, duration);
-        }
+    function globalCurrentTime() {
+      if (playback.index < 0) return 0;
+      let elapsed = 0;
+      for (let index = 0; index < playback.index; index += 1) {
+        elapsed += playback.segments[index].duration;
       }
+      const current = playback.audio
+        ? playback.audio.currentTime
+        : playback.segments[playback.index]?.duration || 0;
+      return elapsed + current;
+    }
+
+    function disposeSegment(segment) {
+      segment.audio.onended = null;
+      segment.audio.onerror = null;
+      segment.audio.pause();
+      segment.audio.removeAttribute("src");
+      segment.audio.load();
+      URL.revokeObjectURL(segment.url);
     }
 
     function releaseMedia() {
       playback.abort?.abort();
       playback.abort = null;
-      if (playback.audio) {
-        playback.audio.onended = null;
-        playback.audio.onerror = null;
-        playback.audio.pause();
-        playback.audio.removeAttribute("src");
-        playback.audio.load();
-        playback.audio = null;
-      }
-      if (playback.url) {
-        URL.revokeObjectURL(playback.url);
-        playback.url = null;
-      }
+      for (const segment of playback.segments) disposeSegment(segment);
+      playback.audio = null;
+      playback.segments = [];
+      playback.index = -1;
+      playback.bufferedBytes = 44;
+      playback.format = null;
+      playback.producerDone = false;
     }
 
     function stopPlayback() {
@@ -349,6 +465,7 @@ window.__ModuleLoader__.load({
     function failPlayback(epoch, message) {
       if (epoch !== playback.epoch) return;
       const errorOwner = playback.owner;
+      playback.epoch += 1;
       releaseMedia();
       playback.owner = null;
       playback.state = "idle";
@@ -358,21 +475,6 @@ window.__ModuleLoader__.load({
       publish();
     }
 
-    function decodeAudio(chunks) {
-      const wavs = chunks.map(({ audioBase64, mimeType }) => {
-        if (mimeType?.split(";", 1)[0].trim().toLowerCase() !== "audio/wav") {
-          throw new TypeError("unsupported TeraTTS audio format");
-        }
-        const binary = atob(audioBase64);
-        const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index += 1) {
-          bytes[index] = binary.charCodeAt(index);
-        }
-        return bytes;
-      });
-      return new Blob([mergeMonoPcmWavs(wavs)], { type: "audio/wav" });
-    }
-
     function unwrapAudio(result) {
       if (result && typeof result.audioBase64 === "string") return result;
       if (result && result.ok === true && result.value) return result.value;
@@ -380,6 +482,121 @@ window.__ModuleLoader__.load({
         throw new Error(result.error?.message || "Speech generation failed");
       }
       throw new TypeError("invalid TeraTTS audio response");
+    }
+
+    function decodeWavBytes(result) {
+      const audio = unwrapAudio(result);
+      if (audio.mimeType?.split(";", 1)[0].trim().toLowerCase() !== "audio/wav") {
+        throw new TypeError("unsupported TeraTTS audio format");
+      }
+      const binary = atob(audio.audioBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return bytes;
+    }
+
+    function createSegment(result) {
+      const bytes = decodeWavBytes(result);
+      const info = inspectMonoPcmWav(bytes, playback.format);
+      const bufferedBytes = checkedWavBytes(playback.bufferedBytes, info.dataBytes);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+      let audio;
+      try {
+        audio = new Audio(url);
+      } catch (error) {
+        URL.revokeObjectURL(url);
+        throw error;
+      }
+      audio.preload = "auto";
+      audio.playbackRate = playback.rate;
+      playback.format ??= info.format;
+      playback.bufferedBytes = bufferedBytes;
+      return { audio, duration: info.duration, url };
+    }
+
+    async function playSegment(epoch, index, offset = 0) {
+      if (epoch !== playback.epoch) return;
+      const segment = playback.segments[index];
+      if (!segment) return;
+      if (playback.audio && playback.audio !== segment.audio) {
+        playback.audio.onended = null;
+        playback.audio.onerror = null;
+        playback.audio.pause();
+      }
+      playback.index = index;
+      playback.audio = segment.audio;
+      segment.audio.playbackRate = playback.rate;
+      segment.audio.currentTime = clampSeekTime(0, offset, segment.duration);
+      segment.audio.onended = () => {
+        if (epoch !== playback.epoch || playback.index !== index) return;
+        void advancePlayback(epoch, index);
+      };
+      segment.audio.onerror = () => failPlayback(epoch, "Audio playback failed");
+      try {
+        await segment.audio.play();
+      } catch (error) {
+        if (epoch !== playback.epoch || playback.index !== index || playback.audio !== segment.audio) {
+          return;
+        }
+        throw error;
+      }
+      if (epoch !== playback.epoch || playback.index !== index || playback.audio !== segment.audio) {
+        return;
+      }
+      playback.state = "playing";
+      publish();
+    }
+
+    async function advancePlayback(epoch, index) {
+      if (epoch !== playback.epoch || playback.index !== index) return;
+      const next = index + 1;
+      if (next < playback.segments.length) {
+        try {
+          await playSegment(epoch, next);
+        } catch (error) {
+          failPlayback(epoch, error instanceof Error ? error.message : "Audio playback failed");
+        }
+        return;
+      }
+      playback.audio = null;
+      if (playback.producerDone) {
+        stopPlayback();
+      } else {
+        playback.state = "loading";
+        publish();
+      }
+    }
+
+    function seekPlayback(offset) {
+      const durations = playback.segments.map((segment) => segment.duration);
+      const location = locateBufferedTime(durations, globalCurrentTime() + offset);
+      if (!location) return;
+      if (location.target === location.total && location.offset === durations[location.index]) {
+        if (playback.producerDone) {
+          stopPlayback();
+          return;
+        }
+        if (playback.audio) {
+          playback.audio.onended = null;
+          playback.audio.onerror = null;
+          playback.audio.pause();
+        }
+        playback.index = location.index;
+        playback.audio = null;
+        playback.state = "loading";
+        publish();
+        return;
+      }
+      if (location.index === playback.index && playback.audio) {
+        playback.audio.currentTime = location.offset;
+        return;
+      }
+      const epoch = playback.epoch;
+      void playSegment(epoch, location.index, location.offset).catch((error) => {
+        failPlayback(epoch, error instanceof Error ? error.message : "Audio playback failed");
+      });
     }
 
     async function startPlayback(owner, text, voice) {
@@ -392,32 +609,30 @@ window.__ModuleLoader__.load({
       playback.errorOwner = null;
       playback.abort = abort;
       publish();
+
       try {
         if (!voice) throw new Error("TeraTTS voice service is unavailable");
-        const audioChunks = [];
-        for (const chunk of splitSpeechText(text)) {
-          const result = await voice.synthesize(chunk, abort.signal);
-          if (epoch !== playback.epoch) return;
-          audioChunks.push(unwrapAudio(result));
-        }
-        const url = URL.createObjectURL(decodeAudio(audioChunks));
-        if (epoch !== playback.epoch) {
-          URL.revokeObjectURL(url);
+        const textChunks = splitSpeechText(text);
+        if (textChunks.length === 0) {
+          stopPlayback();
           return;
         }
-        const element = new Audio(url);
-        element.playbackRate = playback.rate;
+        for (let index = 0; index < textChunks.length; index += 1) {
+          const result = await voice.synthesize(textChunks[index], abort.signal);
+          if (epoch !== playback.epoch) return;
+          const segment = createSegment(result);
+          playback.segments.push(segment);
+          if (
+            index === 0 ||
+            (playback.state === "loading" && playback.audio === null && playback.index + 1 === index)
+          ) {
+            await playSegment(epoch, index);
+            if (epoch !== playback.epoch) return;
+          }
+        }
+        playback.producerDone = true;
         playback.abort = null;
-        playback.audio = element;
-        playback.url = url;
-        element.onended = () => {
-          if (epoch === playback.epoch) stopPlayback();
-        };
-        element.onerror = () => failPlayback(epoch, "Audio playback failed");
-        await element.play();
-        if (epoch !== playback.epoch) return;
-        playback.state = "playing";
-        publish();
+        if (!playback.audio && playback.index === playback.segments.length - 1) stopPlayback();
       } catch (error) {
         if (epoch !== playback.epoch) return;
         if (error?.name === "AbortError") {
@@ -426,6 +641,16 @@ window.__ModuleLoader__.load({
         }
         failPlayback(epoch, error instanceof Error ? error.message : "Speech playback failed");
       }
+    }
+
+    if (typeof process !== "undefined" && process.versions?.node) {
+      globalThis.__teratts_playbackTestApi = {
+        getPlayback: () => playback,
+        seekPlayback,
+        setPlaybackRate,
+        startPlayback,
+        stopPlayback,
+      };
     }
 
     function usePlayback() {

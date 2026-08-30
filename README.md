@@ -33,9 +33,10 @@ Install it into the DSH Web profile, add the `ui-teratts` row from
 `dsh-plugin/cordis.patch.yml`, rebuild the Web artifacts, and refresh the
 existing DSH URL. Host-owned settings configure the endpoint (default
 `http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
-`https://teratts.tail9fd337.ts.net`). The browser holds no endpoint or
-credential; synthesis routes through the Host plugin. Active playback exposes
+`https://teratts.tail9fd337.ts.net`). The browser keeps no credentials;
+synthesis routes through the Host plugin. Active playback exposes
 −10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. Technical fenced blocks
 and checklist items are converted to speakable text instead of being dropped.
-Long speech is synthesized in bounded chunks and merged into one WAV so native
-seek and playback-rate controls continue to cover the complete response.
+For long speech, the first bounded segment begins as soon as ready, remaining
+segments synthesize sequentially in the background, total audio remains
+16 MiB bounded, and controls apply across buffered speech.
