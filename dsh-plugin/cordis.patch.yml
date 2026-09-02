@@ -3,6 +3,7 @@
       name: dsh-client-ui-teratts
       config:
         endpoint: http://127.0.0.1:8088
-        timeoutMs: 30000
+        timeoutMs: 60000
+        maxRetries: 3
         voice: ru_f1
         tokenEnv: TERATTS_TOKEN

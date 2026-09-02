@@ -23,6 +23,7 @@
 //! a mismatched model can only produce a generic `synth` protocol failure,
 //! never a panic and never user text.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -67,6 +68,7 @@ pub struct TeraEngine {
     vocoder_out: String,
     indexer: UnicodeIndexer,
     ruaccent: RuAccent,
+    style_cache: HashMap<(String, String), NpyArray>,
 }
 
 /// Synthesized utterance: mono f32 chunks at the engine's fixed 44.1 kHz
@@ -143,6 +145,7 @@ impl TeraEngine {
             vocoder_out,
             indexer,
             ruaccent,
+            style_cache: HashMap::new(),
         })
     }
 
@@ -359,7 +362,7 @@ impl TeraEngine {
                 .vocoder
                 .run(ort::inputs!["latent" => &latent_chunk_t])
                 .map_err(|e| anyhow!("synth: vocoder failed: {e}"))?;
-            let (wav_shape, decoded) = named_output_f32(&vocoder_outputs, &self.vocoder_out)?;
+            let (wav_shape, decoded) = named_output_f32_borrowed(&vocoder_outputs, &self.vocoder_out)?;
             let discard = (start - input_start) * SAMPLES_PER_COMPRESSED_FRAME;
             let new_samples = (end - start) * SAMPLES_PER_COMPRESSED_FRAME;
             // Validate shape + length BEFORE slicing the overlap-save window.
@@ -387,7 +390,11 @@ impl TeraEngine {
         Ok(SynthOutput { chunks })
     }
 
-    fn load_style(&self, voice: &str, file: &str, shape: &[usize]) -> Result<NpyArray> {
+    fn load_style(&mut self, voice: &str, file: &str, shape: &[usize]) -> Result<NpyArray> {
+        let key = (voice.to_string(), file.to_string());
+        if let Some(cached) = self.style_cache.get(&key) {
+            return Ok(cached.clone());
+        }
         let path = self.release.join("styles").join(voice).join(file);
         if !path.is_file() {
             return Err(anyhow!("unknown-voice"));
@@ -396,6 +403,7 @@ impl TeraEngine {
         if array.shape != shape {
             return Err(anyhow!("synth: style asset has unexpected shape"));
         }
+        self.style_cache.insert(key, array.clone());
         Ok(array)
     }
 }
@@ -544,6 +552,26 @@ fn named_output_f32(
         dims.push(dim);
     }
     Ok((dims, data.to_vec()))
+}
+
+/// Extract graph output as a borrowed slice `&[f32]` without heap cloning.
+fn named_output_f32_borrowed<'a>(
+    outputs: &'a ort::session::SessionOutputs<'_>,
+    name: &str,
+) -> Result<(Vec<usize>, &'a [f32])> {
+    let Some(value) = outputs.get(name) else {
+        return Err(anyhow!("synth: graph returned no output named {name}"));
+    };
+    let (shape, data) = value
+        .try_extract_tensor::<f32>()
+        .map_err(|e| anyhow!("synth: unexpected output tensor: {e}"))?;
+    let mut dims = Vec::with_capacity(shape.len());
+    for &dim in shape.iter() {
+        let dim = usize::try_from(dim)
+            .map_err(|_| anyhow!("synth: output shape has a negative dimension"))?;
+        dims.push(dim);
+    }
+    Ok((dims, data))
 }
 
 /// Element count implied by a shape: rejects empty shapes, zero dims, and

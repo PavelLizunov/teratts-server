@@ -34,12 +34,18 @@ const factory = new Function(
   "console",
   "const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;\n" +
     fnSource +
-    "\nexports.validateAndResolveEndpoint = validateAndResolveEndpoint;\nexports.parseRetryAfter = parseRetryAfter;\nexports.readAudioResponse = readAudioResponse;\nexports.MAX_RESPONSE_BYTES = MAX_RESPONSE_BYTES;\nexports.isLoopbackHost = isLoopbackHost;",
+    "\nexports.validateAndResolveEndpoint = validateAndResolveEndpoint;\nexports.parseRetryAfter = parseRetryAfter;\nexports.readAudioResponse = readAudioResponse;\nexports.MAX_RESPONSE_BYTES = MAX_RESPONSE_BYTES;\nexports.isLoopbackHost = isLoopbackHost;\nexports.isRetryableStatus = isRetryableStatus;\nexports.computeBackoffDelay = computeBackoffDelay;",
 );
 factory(helpers, Buffer, URL, Number, Date, Math, Error, console);
 
-const { validateAndResolveEndpoint, parseRetryAfter, readAudioResponse, MAX_RESPONSE_BYTES } =
-  helpers;
+const {
+  validateAndResolveEndpoint,
+  parseRetryAfter,
+  readAudioResponse,
+  MAX_RESPONSE_BYTES,
+  isRetryableStatus,
+  computeBackoffDelay,
+} = helpers;
 
 test("client contains no direct TTS endpoint or credential handling", () => {
   assert.doesNotMatch(client, /tail9fd337|windows-brat|127\.0\.0\.1|TERATTS_TOKEN/);
@@ -144,6 +150,14 @@ test("host endpoint validation allows http loopback and preserves subpaths", () 
     validateAndResolveEndpoint("http://127.0.0.1:8088/custom/sub/"),
     "http://127.0.0.1:8088/custom/sub/tts",
   );
+  assert.equal(
+    validateAndResolveEndpoint("http://127.0.0.1:8088/tts"),
+    "http://127.0.0.1:8088/tts",
+  );
+  assert.equal(
+    validateAndResolveEndpoint("http://127.0.0.1:8088/custom/tts"),
+    "http://127.0.0.1:8088/custom/tts",
+  );
 });
 
 test("host endpoint validation allows only exact TeraTTS tailnet host and preserves subpaths", () => {
@@ -154,6 +168,10 @@ test("host endpoint validation allows only exact TeraTTS tailnet host and preser
   assert.equal(
     validateAndResolveEndpoint("https://teratts.tail9fd337.ts.net/prefix"),
     "https://teratts.tail9fd337.ts.net/prefix/tts",
+  );
+  assert.equal(
+    validateAndResolveEndpoint("https://teratts.tail9fd337.ts.net/tts"),
+    "https://teratts.tail9fd337.ts.net/tts",
   );
 });
 
@@ -359,4 +377,26 @@ test("host sanitizes client errors and avoids leaking endpoint or cause details"
   // Host logger records details for diagnostics
   assert.match(host, /console\.error\(`\[teratts\] fetch to \$\{endpoint\} failed:`, error\)/);
   assert.match(host, /console\.error\(`\[teratts\] request failed with HTTP \$\{response\.status\}:`/);
+});
+
+test("host retry helpers classify status codes and compute jittered backoff", () => {
+  assert.equal(isRetryableStatus(429), true);
+  assert.equal(isRetryableStatus(503), true);
+  assert.equal(isRetryableStatus(502), true);
+  assert.equal(isRetryableStatus(504), true);
+  assert.equal(isRetryableStatus(400), false);
+  assert.equal(isRetryableStatus(401), false);
+  assert.equal(isRetryableStatus(404), false);
+  assert.equal(isRetryableStatus(500), false);
+
+  // When server provides retryAfterMs, delay is retryAfterMs + jitter [0, 250)
+  const delayWithServer = computeBackoffDelay(0, 1000);
+  assert.ok(delayWithServer >= 1000 && delayWithServer < 1250);
+
+  // Without retryAfterMs, delay is bounded exponential backoff
+  const delayExp = computeBackoffDelay(1, undefined, 500, 5000);
+  assert.ok(delayExp >= 0 && delayExp <= 1000);
+
+  assert.match(host, /maxRetries: s\.number\(\)/);
+  assert.match(host, /timeoutMs: s\.number\(\)\.step\(1\)\.min\(1\)\.default\(60_000\)/);
 });

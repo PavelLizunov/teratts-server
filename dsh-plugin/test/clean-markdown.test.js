@@ -742,3 +742,32 @@ test("background WAV format failure stops current playback with one error", asyn
     harness.cleanup();
   }
 });
+
+test("background synthesis failure allows active buffered segment to finish playing", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    harness.synthCalls[0].deferred.resolve(playbackWav(10));
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().state, "playing");
+    assert.equal(harness.synthCalls.length, 2);
+
+    // Chunk 1 fails with network error
+    harness.synthCalls[1].deferred.reject(new Error("Network drop"));
+    await producer;
+
+    // Segment 0 is still playing; audio is not aborted mid-sentence
+    assert.equal(harness.api.getPlayback().state, "playing");
+    assert.equal(harness.api.getPlayback().segments.length, 1);
+    assert.equal(harness.api.getPlayback().producerDone, true);
+    assert.equal(harness.api.getPlayback().pendingError, "Network drop");
+
+    // When segment 0 finishes, playback stops and surfaces the pending error
+    harness.audioInstances[0].finish();
+    await flushPromises();
+    assert.equal(harness.api.getPlayback().state, "idle");
+    assert.equal(harness.api.getPlayback().error, "Network drop");
+  } finally {
+    harness.cleanup();
+  }
+});

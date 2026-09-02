@@ -34,7 +34,8 @@ if [ ! -e "$CONFIG_ROOT/teratts.env" ]; then
     {
         printf 'TERATTS_BEARER_TOKEN=%s\n' "$token"
         printf 'TERATTS_RUACCENT_MODE=full\n'
-        printf 'TERATTS_ORT_THREADS=4\n'
+        printf 'TERATTS_ORT_THREADS=2\n'
+        printf 'TERATTS_PARALLEL_CHUNKS=2\n'
     } > "$CONFIG_ROOT/teratts.env"
     chown root:"$SERVICE_GROUP" "$CONFIG_ROOT/teratts.env"
     chmod 0640 "$CONFIG_ROOT/teratts.env"

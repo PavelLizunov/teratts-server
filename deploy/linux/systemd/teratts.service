@@ -42,11 +42,11 @@ TasksAccounting=true
 # TasksMax covers Tokio blocking pool, per-session ORT intra-op pools, and chunk workers.
 TasksMax=512
 LimitNOFILE=65536
-# Baseline RSS with 2 slots is ~4.17 GiB. MemoryHigh=5G triggers cgroup direct reclaim,
-# and MemoryMax=5500M enforces hard cgroup ceiling before kernel OOM killer fires.
-MemoryHigh=5G
-MemoryMax=5500M
-MemorySwapMax=1G
+# Baseline RSS with 2 slots is ~4.17 GiB. MemoryHigh=6500M and MemoryMax=7500M provide
+# safe headroom for transient audio allocations without triggering kernel direct reclaim or OOM.
+MemoryHigh=6500M
+MemoryMax=7500M
+MemorySwapMax=2G
 # Watchdog note: teratts-server currently uses Type=simple. WatchdogSec is intentionally
 # deferred until sd_notify("WATCHDOG=1") heartbeat support is compiled into the binary.
 

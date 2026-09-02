@@ -497,10 +497,20 @@ impl TokenClassifier {
     }
 }
 
+static PUNCT_SPACE_RE: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"\s+([,.?!:;…])").expect("valid regex"));
+
 impl PairClassifier {
     fn load(path: &Path) -> Result<Self> {
         let session = load_session(path)?;
-        let tokenizer = load_tokenizer(path)?;
+        let mut tokenizer = load_tokenizer(path)?;
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: 512,
+                strategy: TruncationStrategy::LongestFirst,
+                ..Default::default()
+            }))
+            .map_err(|e| anyhow!("configure pair truncation: {e}"))?;
         let metadata = tokenizer_metadata(path, &tokenizer)?;
         Ok(Self {
             output: sole_output(&session)?,
@@ -514,19 +524,11 @@ impl PairClassifier {
         if variants.is_empty() {
             return Err(anyhow!("omograph has no variants"));
         }
-        let prepared = Regex::new(r"\s+([,.?!:;…])")?.replace_all(sentence, "$1");
-        let mut tokenizer = self.tokenizer.clone();
-        tokenizer
-            .with_truncation(Some(TruncationParams {
-                max_length: 512,
-                strategy: TruncationStrategy::LongestFirst,
-                ..Default::default()
-            }))
-            .map_err(|e| anyhow!("configure pair truncation: {e}"))?;
+        let prepared = PUNCT_SPACE_RE.replace_all(sentence, "$1");
         let encodings = variants
             .iter()
             .map(|variant| {
-                tokenizer
+                self.tokenizer
                     .encode(
                         EncodeInput::Dual(prepared.as_ref().into(), variant.as_str().into()),
                         true,

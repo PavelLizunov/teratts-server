@@ -20,7 +20,7 @@ use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
 use crate::wav;
 
 pub(crate) const MAX_TEXT_CHARS: usize = 2_400;
-const MAX_ADMITTED_REQUESTS: usize = 3;
+const DEFAULT_MAX_ADMITTED_REQUESTS: usize = 16;
 const QUEUE_TTL: Duration = Duration::from_secs(60);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(120);
 const BODY_LIMIT_BYTES: usize = 16 * 1024;
@@ -28,6 +28,14 @@ const APP_GIT_SHA: &str = match option_env!("TERATTS_APP_GIT_SHA") {
     Some(value) => value,
     None => "unknown",
 };
+
+fn max_admitted_requests() -> usize {
+    std::env::var("TERATTS_MAX_QUEUE_DEPTH")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|value: &usize| *value >= 2)
+        .unwrap_or(DEFAULT_MAX_ADMITTED_REQUESTS)
+}
 
 struct AppState {
     /// Phase B (perf spec): one engine per parallel chunk slot. Per-chunk seeds
@@ -97,9 +105,10 @@ impl Admission {
     }
 
     fn try_reserve(self: &Arc<Self>) -> Result<AdmissionTicket, ApiError> {
+        let max_admitted = max_admitted_requests();
         self.admitted
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                (current < MAX_ADMITTED_REQUESTS).then_some(current + 1)
+                (current < max_admitted).then_some(current + 1)
             })
             .map_err(|_| ApiError::busy())?;
         Ok(AdmissionTicket {
@@ -110,10 +119,11 @@ impl Admission {
     fn view(&self) -> QueueView {
         let admitted = self.admitted.load(Ordering::Acquire);
         let active = usize::from(self.active.available_permits() == 0);
+        let max_admitted = max_admitted_requests();
         QueueView {
             active,
             waiting: admitted.saturating_sub(active),
-            capacity: MAX_ADMITTED_REQUESTS - 1,
+            capacity: max_admitted - 1,
         }
     }
 }
@@ -316,9 +326,6 @@ async fn tts(
     } = prepare_request(request, &state.voices, state.ruaccent_ready)?;
     let ticket = state.admission.try_reserve()?;
     let active = ticket.activate().await?;
-    // Keep admission ownership in the async request future, not in the
-    // non-cancellable blocking inference task.
-    let _active = active;
     let remaining = REQUEST_DEADLINE
         .checked_sub(started.elapsed())
         .ok_or_else(ApiError::deadline)?;
@@ -327,6 +334,9 @@ async fn tts(
     let _cancel_on_drop = CancelOnDrop(Arc::clone(&cancel));
     let cancel_for_task = Arc::clone(&cancel);
     let task = tokio::task::spawn_blocking(move || {
+        // Retain admission permit ownership inside the blocking task so
+        // admission is released only when inference actually finishes or joins.
+        let _active = active;
         if cancel_for_task.load(Ordering::Acquire) {
             return Err(anyhow!("synthesis cancelled"));
         }
@@ -860,15 +870,16 @@ mod tests {
     }
 
     #[test]
-    fn admits_only_one_active_and_two_waiting() {
+    fn admits_only_one_active_and_bounded_waiting() {
+        let max_admitted = max_admitted_requests();
         let admission = Admission::new();
-        let first = admission.try_reserve();
-        let second = admission.try_reserve();
-        let third = admission.try_reserve();
-        assert!(first.is_ok() && second.is_ok() && third.is_ok());
-        assert_eq!(admission.view().waiting, 3);
+        let mut tickets = Vec::new();
+        for _ in 0..max_admitted {
+            tickets.push(admission.try_reserve().expect("ticket should be admitted"));
+        }
+        assert_eq!(admission.view().waiting, max_admitted);
         assert!(admission.try_reserve().is_err());
-        drop((first, second, third));
+        drop(tickets);
         assert_eq!(admission.view().waiting, 0);
     }
 

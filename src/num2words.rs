@@ -26,9 +26,9 @@ pub fn num2words(literal: &str, lang: &str) -> Option<String> {
         }
     }
     let int_value: u64 = int_part.parse().ok()?;
-    // RU scale table currently ends at billions; fail closed instead of
-    // indexing RU_HUNDREDS out of bounds for trillions/large identifiers.
-    if lang == "ru" && int_value >= 1_000_000_000_000 {
+    // Scale tables currently end at billions; fail closed instead of
+    // indexing out of bounds for trillions/large identifiers.
+    if int_value >= 1_000_000_000_000 {
         return None;
     }
     let mut out = match lang {
@@ -319,13 +319,13 @@ fn spell_decimal_ru(int_value: u64, frac: Option<&str>) -> Option<String> {
         return Some(spell_int_ru(int_value));
     }
     let digits = frac.len();
-    let frac_value: u64 = frac.parse().ok()?;
     let int_words = format!(
         "{} {}",
         spell_below_1000_ru(int_value, true),
         whole_form_ru(int_value)
     );
     if digits <= 4 {
+        let frac_value: u64 = frac.parse().ok()?;
         let one = frac_value % 10 == 1 && frac_value % 100 != 11;
         let denominator = frac_denominator_ru(digits, one)?;
         return Some(format!(
@@ -426,6 +426,10 @@ mod tests {
         assert_eq!(num2words("99999999999999999999999", "en"), None);
         assert_eq!(num2words("1000000000000", "ru"), None);
         assert_eq!(num2words("1724500000000", "ru"), None);
+        assert_eq!(num2words("1000000000000", "en"), None);
+        assert_eq!(num2words("2000000000000", "en"), None);
         assert_eq!(num2words("5", "de"), None);
+        // Decimal with > 19 fraction digits spells digit-by-digit without overflow
+        assert!(num2words("0.1234567890123456789012345", "ru").is_some());
     }
 }

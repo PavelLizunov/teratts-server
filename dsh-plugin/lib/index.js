@@ -10,7 +10,8 @@ export const MAX_RESPONSE_BYTES = 16 * 1024 * 1024; // 16 MiB
 
 export const Config = s.object({
   endpoint: s.string().default("http://127.0.0.1:8088"),
-  timeoutMs: s.number().step(1).min(1).default(30_000),
+  timeoutMs: s.number().step(1).min(1).default(60_000),
+  maxRetries: s.number().step(1).min(0).max(10).default(3),
   voice: s.string().default("ru_f1"),
   language: s.string().default("ru"),
   stress: s.boolean().default(false),
@@ -52,7 +53,7 @@ export function validateAndResolveEndpoint(endpointConfig) {
     throw new Error("TeraTTS endpoint is not allowed");
   }
 
-  const basePath = parsed.pathname.replace(/\/+$/, "");
+  const basePath = parsed.pathname.replace(/\/+$/, "").replace(/\/tts$/, "");
   parsed.pathname = `${basePath}/tts`;
   return parsed.toString();
 }
@@ -83,6 +84,51 @@ function parseRetryAfter(response, errorBody) {
   return retryAfterMs;
 }
 
+function isRetryableStatus(status) {
+  return status === 429 || status === 503 || status === 502 || status === 504;
+}
+
+function isRetryableNetworkError(error) {
+  if (error?.name === "AbortError" || error?.name === "TimeoutError") return false;
+  const code = error?.code || error?.cause?.code;
+  if (
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "ECONNREFUSED" ||
+    code === "EPIPE" ||
+    code === "EAI_AGAIN" ||
+    code === "ENOTFOUND" ||
+    code === "UND_ERR_SOCKET" ||
+    code === "UND_ERR_CONNECT_TIMEOUT"
+  ) {
+    return true;
+  }
+  return error instanceof TypeError && /fetch failed/i.test(error.message);
+}
+
+function computeBackoffDelay(attempt, retryAfterMs, baseDelayMs = 500, maxDelayMs = 5000) {
+  if (typeof retryAfterMs === "number" && retryAfterMs > 0) {
+    return retryAfterMs + Math.floor(Math.random() * 250);
+  }
+  const maxBackoff = Math.min(maxDelayMs, baseDelayMs * (2 ** attempt));
+  return Math.floor(Math.random() * maxBackoff);
+}
+
+function sleepWithSignal(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(signal.reason);
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 async function readAudioResponse(response) {
   const contentLengthHeader = response.headers.get("content-length");
   if (contentLengthHeader !== null) {
@@ -109,7 +155,11 @@ async function readAudioResponse(response) {
         chunks.push(value);
       }
     } catch (err) {
-      if (err?.name === "AbortError" || (err?.message && err.message.includes("16 MiB limit"))) {
+      if (
+        err?.name === "AbortError" ||
+        err?.name === "TimeoutError" ||
+        (err?.message && err.message.includes("16 MiB limit"))
+      ) {
         throw err;
       }
       throw new Error("TeraTTS failed to read audio response");
@@ -147,81 +197,122 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     const config = this.current();
     const language = config.language === "en" ? "en" : "ru";
     const endpoint = validateAndResolveEndpoint(config.endpoint);
+    const maxRetries = config.maxRetries ?? 3;
 
     const timeout = AbortSignal.timeout(config.timeoutMs);
     const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
     const credentials = this.ctx.get("credentials");
-    const token = credentials
-      ? await credentials.resolve(credentialRef(config.tokenEnv))
-      : undefined;
-
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        redirect: "error",
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { authorization: `Bearer ${token.value}` } : {}),
-        },
-        body: JSON.stringify({
-          text,
-          voice: config.voice,
-          language,
-          russian_stress: config.stress === true,
-          speech_front: config.speechFront !== false,
-          duration_scale: 1,
-        }),
-        signal: requestSignal,
-      });
-    } catch (error) {
-      console.error(`[teratts] fetch to ${endpoint} failed:`, error);
-      if (error?.name === "AbortError") throw error;
-      throw new Error("TeraTTS request failed");
-    }
-
-    if (!response.ok) {
-      let errorBody = null;
+    let tokenValue;
+    if (credentials) {
       try {
-        const rawText = await response.text();
-        if (rawText) {
-          try {
-            errorBody = JSON.parse(rawText);
-          } catch {
-            errorBody = rawText;
-          }
-        }
-      } catch {
-        // Non-fatal if body cannot be read
+        const token = await credentials.resolve(credentialRef(config.tokenEnv));
+        tokenValue = token?.value;
+      } catch (err) {
+        console.warn(`[teratts] failed to resolve credential ${config.tokenEnv}:`, err);
       }
-
-      const retryAfterMs = parseRetryAfter(response, errorBody);
-      console.error(`[teratts] request failed with HTTP ${response.status}:`, {
-        endpoint,
-        status: response.status,
-        retryAfterMs,
-        body: errorBody,
-      });
-
-      const retrySuffix =
-        retryAfterMs !== undefined
-          ? ` (retry after ${Math.ceil(retryAfterMs / 1000)}s)`
-          : "";
-      const error = new Error(`TeraTTS request failed with HTTP ${response.status}${retrySuffix}`);
-      if (retryAfterMs !== undefined) {
-        error.retryAfterMs = retryAfterMs;
-        error.retry_after_ms = retryAfterMs;
-      }
-      error.status = response.status;
-      throw error;
+    }
+    if (!tokenValue && typeof process !== "undefined" && process.env) {
+      tokenValue =
+        process.env[config.tokenEnv] ||
+        (config.tokenEnv === DEFAULT_TOKEN_REF ? process.env.TERATTS_TOKEN : undefined);
     }
 
-    const audio = await readAudioResponse(response);
-    return {
-      audioBase64: audio.toString("base64"),
-      mimeType: response.headers.get("content-type")?.split(";", 1)[0] || "audio/wav",
+    const requestPayload = JSON.stringify({
+      text,
+      voice: config.voice,
+      language,
+      russian_stress: config.stress === true,
+      speech_front: config.speechFront !== false,
+      duration_scale: 1,
+    });
+
+    const headers = {
+      "content-type": "application/json",
+      ...(tokenValue ? { authorization: `Bearer ${tokenValue}` } : {}),
     };
+
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      if (requestSignal.aborted) {
+        throw requestSignal.reason;
+      }
+
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          redirect: "error",
+          headers,
+          body: requestPayload,
+          signal: requestSignal,
+        });
+      } catch (error) {
+        console.error(`[teratts] fetch to ${endpoint} failed:`, error);
+        if (signal?.aborted) throw signal.reason;
+        if (timeout.aborted || error?.name === "TimeoutError") throw error;
+        if (error?.name === "AbortError") throw error;
+
+        if (attempt < maxRetries && isRetryableNetworkError(error)) {
+          const delayMs = computeBackoffDelay(attempt, undefined);
+          await sleepWithSignal(delayMs, requestSignal);
+          continue;
+        }
+
+        throw new Error("TeraTTS request failed");
+      }
+
+      if (!response.ok) {
+        let errorBody = null;
+        try {
+          const rawText = await response.text();
+          if (rawText) {
+            try {
+              errorBody = JSON.parse(rawText);
+            } catch {
+              errorBody = rawText;
+            }
+          }
+        } catch {
+          // Non-fatal if body cannot be read
+        }
+
+        const retryAfterMs = parseRetryAfter(response, errorBody);
+        console.error(`[teratts] request failed with HTTP ${response.status}:`, {
+          endpoint,
+          status: response.status,
+          retryAfterMs,
+          body: errorBody,
+        });
+
+        if (attempt < maxRetries && isRetryableStatus(response.status)) {
+          const delayMs = computeBackoffDelay(attempt, retryAfterMs);
+          await sleepWithSignal(delayMs, requestSignal);
+          continue;
+        }
+
+        const retrySuffix =
+          retryAfterMs !== undefined
+            ? ` (retry after ${Math.ceil(retryAfterMs / 1000)}s)`
+            : "";
+        const error = new Error(`TeraTTS request failed with HTTP ${response.status}${retrySuffix}`);
+        if (retryAfterMs !== undefined) {
+          error.retryAfterMs = retryAfterMs;
+          error.retry_after_ms = retryAfterMs;
+        }
+        error.status = response.status;
+        throw error;
+      }
+
+      const audio = await readAudioResponse(response);
+      return {
+        audioBase64: audio.toString("base64"),
+        mimeType: response.headers.get("content-type")?.split(";", 1)[0] || "audio/wav",
+      };
+    }
+
+    throw lastError || new Error("TeraTTS request failed");
   }
 }
 
@@ -240,7 +331,8 @@ export const inject = [];
 export function apply(ctx, config = {}) {
   const base = {
     endpoint: config.endpoint ?? "http://127.0.0.1:8088",
-    timeoutMs: config.timeoutMs ?? 30_000,
+    timeoutMs: config.timeoutMs ?? 60_000,
+    maxRetries: config.maxRetries ?? 3,
     voice: config.voice ?? "ru_f1",
     language: config.language ?? "ru",
     stress: config.stress ?? false,

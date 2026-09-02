@@ -63,20 +63,24 @@ function cleanMarkdown(text) {
 }
 
 const FIRST_SPEECH_CHUNK_CHARS = 240;
+const SECOND_SPEECH_CHUNK_CHARS = 480;
 const SPEECH_CHUNK_CHARS = 800;
 const MAX_MERGED_WAV_BYTES = 16 * 1024 * 1024;
 
 function speechChunkLimits(options, laterMaxChars) {
   let firstChars = FIRST_SPEECH_CHUNK_CHARS;
+  let secondChars = SECOND_SPEECH_CHUNK_CHARS;
   let nextChars = SPEECH_CHUNK_CHARS;
   if (typeof options === "number") {
     firstChars = options;
+    secondChars = options;
     nextChars = laterMaxChars ?? options;
   } else if (options !== undefined) {
     if (options === null || typeof options !== "object") {
       throw new RangeError("invalid speech chunk size");
     }
     firstChars = options.firstChars ?? firstChars;
+    secondChars = options.secondChars ?? (options.firstChars ? Math.max(firstChars, options.nextChars ?? nextChars) : secondChars);
     nextChars = options.nextChars ?? nextChars;
   }
   if (!Number.isInteger(firstChars) || firstChars < 1) {
@@ -85,7 +89,7 @@ function speechChunkLimits(options, laterMaxChars) {
   if (!Number.isInteger(nextChars) || nextChars < 1) {
     throw new RangeError("invalid speech chunk size");
   }
-  return { firstChars, nextChars };
+  return { firstChars, secondChars, nextChars };
 }
 
 function speechLanguageSpans(text) {
@@ -135,12 +139,16 @@ function nextSpeechCut(text, maxChars) {
 }
 
 function splitSpeechText(text, options, laterMaxChars) {
-  const { firstChars, nextChars } = speechChunkLimits(options, laterMaxChars);
+  const { firstChars, secondChars, nextChars } = speechChunkLimits(options, laterMaxChars);
   const chunks = [];
   for (const span of speechLanguageSpans(text.trim())) {
     let rest = span.text.trim();
     while (rest) {
-      const limit = chunks.length === 0 ? firstChars : nextChars;
+      let limit = nextChars;
+      if (chunks.length === 0) limit = firstChars;
+      else if (chunks.length === 1 && firstChars < secondChars && secondChars <= nextChars) {
+        limit = secondChars;
+      }
       const wrapperChars = span.language ? 9 : 0;
       const contentLimit = limit - wrapperChars;
       if (contentLimit < 1) throw new RangeError("speech chunk size is too small for language tags");
@@ -452,6 +460,7 @@ window.__ModuleLoader__.load({
       playback.bufferedBytes = 44;
       playback.format = null;
       playback.producerDone = false;
+      playback.pendingError = null;
     }
 
     function stopPlayback() {
@@ -488,6 +497,9 @@ window.__ModuleLoader__.load({
       const audio = unwrapAudio(result);
       if (audio.mimeType?.split(";", 1)[0].trim().toLowerCase() !== "audio/wav") {
         throw new TypeError("unsupported TeraTTS audio format");
+      }
+      if (typeof Uint8Array.fromBase64 === "function") {
+        return Uint8Array.fromBase64(audio.audioBase64);
       }
       const binary = atob(audio.audioBase64);
       const bytes = new Uint8Array(binary.length);
@@ -562,7 +574,13 @@ window.__ModuleLoader__.load({
       }
       playback.audio = null;
       if (playback.producerDone) {
+        const pendingErr = playback.pendingError;
         stopPlayback();
+        if (pendingErr) {
+          playback.error = pendingErr;
+          playback.errorSeq += 1;
+          publish();
+        }
       } else {
         playback.state = "loading";
         publish();
@@ -618,7 +636,24 @@ window.__ModuleLoader__.load({
           return;
         }
         for (let index = 0; index < textChunks.length; index += 1) {
-          const result = await voice.synthesize(textChunks[index], abort.signal);
+          let result;
+          try {
+            result = await voice.synthesize(textChunks[index], abort.signal);
+          } catch (chunkError) {
+            if (epoch !== playback.epoch) return;
+            // If audio is actively playing buffered segments, let them finish playing smoothly
+            // before stopping and reporting the error, instead of brutally cutting off speech.
+            if (playback.audio !== null && playback.segments.length > 0) {
+              playback.producerDone = true;
+              playback.pendingError =
+                chunkError?.name === "AbortError"
+                  ? "Request timed out"
+                  : (chunkError instanceof Error ? chunkError.message : "Speech playback failed");
+              publish();
+              return;
+            }
+            throw chunkError;
+          }
           if (epoch !== playback.epoch) return;
           const segment = createSegment(result);
           playback.segments.push(segment);
