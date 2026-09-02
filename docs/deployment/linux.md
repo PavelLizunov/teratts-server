@@ -79,7 +79,7 @@ sudo reboot
 sudo /usr/local/libexec/teratts/acceptance.sh
 ```
 
-## Tailscale Serve
+## Tailscale Serve & Networking Architecture
 
 After local acceptance, inspect existing Serve state before changing it:
 
@@ -103,6 +103,68 @@ To remove only this node's Serve configuration after operator confirmation:
 ```sh
 sudo tailscale serve reset
 ```
+
+### Network Stability & Connection Dropout Analysis
+
+1. **TLS Termination & Proxying**:
+   - `tailscale serve` **terminates TLS** directly within the local `tailscaled` daemon on interface `tailscale0` (port 443) using automatic Let's Encrypt certificates.
+   - Decrypted traffic is reverse-proxied over unencrypted HTTP/1.1 to `http://127.0.0.1:8088`.
+   - Incoming client requests negotiate **HTTP/2** with `tailscaled`.
+
+2. **HTTP/2 Multiplexing & Head-of-Line Stalls**:
+   - Because HTTP/2 multiplexes multiple streams over a single persistent TCP connection, long-running TTS generation (where synthesis computes for several seconds before sending audio bytes) creates periods of TCP silence.
+   - If the underlying WireGuard path drops, wanders between DERP relays, or gets stalled by stateful NAT timeouts, all multiplexed HTTP/2 streams to `https://teratts.tail9fd337.ts.net` hang together.
+   - Clients must configure application-layer request timeouts (e.g. 120s) and TCP keepalive to detect dead connections early.
+
+3. **MTU Mismatch & Path MTU (PMTU) Black Holes**:
+   - The host/veth LAN MTU is typically 1500 bytes, whereas the Tailscale WireGuard overlay MTU is **1280 bytes**.
+   - If intermediate network devices drop ICMP "Fragmentation Needed" messages (PMTU black hole), large HTTP responses (such as multi-megabyte synthesized WAV audio payloads) will stall and drop packets, while small `/health` requests succeed.
+   - Ensure TCP MSS clamping is configured on upstream firewalls if WAN PMTUD is unreliable.
+
+4. **TCP Keepalive & NAT Expiration**:
+   - Default Linux `tcp_keepalive_time` is 7200 seconds (2 hours), whereas home/NAT firewalls often drop idle translation states after 30–60 seconds.
+   - If direct peer-to-peer UDP WireGuard fails and traffic routes via a DERP relay, idle connections without keepalive will silently disconnect.
+   - Tune sysctl keepalives in the container or host if drops persist:
+     ```ini
+     net.ipv4.tcp_keepalive_time = 60
+     net.ipv4.tcp_keepalive_intvl = 10
+     net.ipv4.tcp_keepalive_probes = 6
+     ```
+
+5. **Tailscale 443 Control Workaround (`tailscale-control-443.service`)**:
+   - Installed to bypass Tailscale issue #4544, where Tailscale's HTTP port 80 control-upgrade probe hung on certain networks.
+   - The rule issues `REJECT --reject-with tcp-reset` for `192.200.0.0/24:80`.
+   - Note: This rule requires `CAP_NET_ADMIN` in the LXC container. It covers only the legacy 192.200.0.0/24 subnet; global DERP servers use broader IP ranges.
+
+## Resource Constraints & Cgroup Assessment
+
+In `deploy/linux/systemd/teratts.service`, cgroup v2 limits are strictly enforced:
+
+- **`CPUQuota=400%` (CFS Bandwidth)**:
+  - Allocates 400ms of CPU time per 100ms CFS quota window (4 CPU cores).
+  - When `PARALLEL_CHUNKS=2` and `ORT_THREADS=2` run, compute load matches the 4-core allocation.
+  - Exceeding 4 threads (e.g. 4 slots * 4 threads = 16 threads) will consume the 400ms quota in just 25ms, causing the kernel to **throttle and freeze the process for the remaining 75ms of every 100ms period**. This causes severe latency spikes and `/health` probe timeouts.
+- **`MemoryHigh=5G` & `MemoryMax=5500M`**:
+  - Baseline RSS at 2 slots is ~4.17 GiB (loaded ONNX models, RUAccent models, and indexer).
+  - `MemoryHigh=5G` leaves ~830 MiB headroom before the kernel triggers synchronous direct reclaim, which degrades latency.
+  - `MemoryMax=5500M` leaves only a 500 MiB buffer above `MemoryHigh`. Exceeding 5500M triggers an immediate kernel OOM kill (`SIGKILL`).
+  - **Do NOT configure `PARALLEL_CHUNKS > 2`** on an LXC with 6 GiB RAM.
+- **`TasksMax=512` & `LimitNOFILE=65536`**:
+  - `TasksMax=512` bounds the total threads across Tokio's worker pool, Tokio's blocking pool, ONNX Runtime per-session intra-op threads (~28 per slot), and chunk workers.
+  - `LimitNOFILE=65536` ensures socket and model file descriptor headroom.
+
+## Health Monitoring, Observability & Recovery
+
+1. **Failure Transparency in `verify-health.sh`**:
+   - `verify-health.sh` polls `/health` up to 30 attempts (1s delay).
+   - On non-200 responses (e.g. HTTP 503 during warmup or verification failure), the exact HTTP code and JSON body (including `verification`, `model_revision`, and `app_sha_verified`) are reported.
+   - On connection failures (e.g. curl exit 7 connection refused), the curl error and systemd service state (`systemctl is-active`) are surfaced immediately.
+
+2. **Systemd Watchdog & Recovery**:
+   - `teratts.service` currently runs as `Type=simple`.
+   - `WatchdogSec` is currently disabled because the application binary has not yet implemented `sd_notify("WATCHDOG=1")`.
+   - If ONNX Runtime deadlocks or hangs inside a native C++ thread pool, `Type=simple` with `Restart=on-failure` will not restart the service because the process does not exit.
+   - Roadmap: Integrate `sd_notify` in `src/server.rs` to report `READY=1` on startup and send periodic `WATCHDOG=1` pings from an independent liveness loop. Once compiled, configure `Type=notify` and `WatchdogSec=30s` in `teratts.service`.
 
 ## Rollback
 

@@ -1,12 +1,15 @@
 [Unit]
 Description=Force Tailscale control transport to TCP 443
+Documentation=https://github.com/tailscale/tailscale/issues/4544
 Before=tailscaled.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/sh -c 'iptables -C OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || iptables -I OUTPUT 1 -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset'
-ExecStop=/bin/sh -c 'iptables -D OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || true'
+# Rejects port 80 to legacy control plane IP block 192.200.0.0/24 with tcp-reset to force
+# immediate fallback to TCP 443. Requires CAP_NET_ADMIN in the unprivileged LXC.
+ExecStart=/bin/sh -c 'command -v iptables >/dev/null 2>&1 || { echo "tailscale-control-443: iptables not found, skipping" >&2; exit 0; }; iptables -C OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || iptables -I OUTPUT 1 -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset'
+ExecStop=/bin/sh -c 'command -v iptables >/dev/null 2>&1 || exit 0; iptables -D OUTPUT -d 192.200.0.0/24 -p tcp --dport 80 -j REJECT --reject-with tcp-reset 2>/dev/null || true'
 
 [Install]
 WantedBy=multi-user.target
