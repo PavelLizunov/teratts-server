@@ -189,9 +189,10 @@ test("client plugin factory registers and exports only standard Cordis lifecycle
   assert.equal(Object.keys(exports).sort().join(","), "apply,inject");
 });
 
-test("preserves comparison expressions that are not HTML tags", () => {
-  assert.equal(cleanMarkdown("3 < 5 and 5 > 2"), "3 < 5 and 5 > 2");
-  assert.equal(cleanMarkdown("x < y && z > 0"), "x < y && z > 0");
+test("converts comparison expressions into speakable text while preserving language tags", () => {
+  assert.equal(cleanMarkdown("3 < 5 and 5 > 2"), "3 меньше 5 and 5 больше 2");
+  assert.equal(cleanMarkdown("x <= y && z >= 0"), "x меньше или равно y && z больше или равно 0");
+  assert.equal(cleanMarkdown("<ru>3 < 5</ru>"), "<ru>3 меньше 5</ru>");
 });
 
 test("preserves leading years while still stripping short ordered-list markers", () => {

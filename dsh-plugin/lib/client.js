@@ -12,9 +12,14 @@ function cleanLine(line) {
     .replace(/^\s*\d{1,3}[.)]\s+/g, "")
     .replace(/[*~]/g, "")
     .replace(/_/g, " ")
-    // Strip only syntactically valid HTML-like tags; keep comparisons such as
-    // `3 < 5 and 5 > 2` and preserve exact Tera <ru>/<en> language tags.
+    // Strip only syntactically valid HTML-like tags while preserving exact Tera <ru>/<en> language tags.
     .replace(/<(?!\/?(?:ru|en)>)(?:\/?[a-z][a-z0-9:-]*)(?:\s+[^<>]*?)?\/?\s*>/gi, " ")
+    // Convert math and code comparison operators into speakable words
+    // so raw `<` does not trigger server language-tag validation failure.
+    .replace(/<=\s*/g, " меньше или равно ")
+    .replace(/<(?!\/?(?:ru|en)>)\s*/g, " меньше ")
+    .replace(/>=\s*/g, " больше или равно ")
+    .replace(/(?<!<\/?(?:ru|en))>\s*/g, " больше ")
     .replace(/\s+/g, " ")
     .trim();
 }
