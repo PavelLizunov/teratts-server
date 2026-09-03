@@ -772,3 +772,30 @@ test("background synthesis failure allows active buffered segment to finish play
     harness.cleanup();
   }
 });
+
+test("progressive playback allows cumulative audio across chunks to exceed 16 MiB", async () => {
+  const harness = setupPlaybackHarness();
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(350), harness.voice);
+    // Each simulated chunk is ~5 MB
+    const largeWav = (rate) => ({
+      audioBase64: Buffer.from(pcmWav(new Uint8Array(5 * 1024 * 1024), rate)).toString("base64"),
+      mimeType: "audio/wav",
+    });
+
+    for (let i = 0; i < 4; i++) {
+      assert.equal(harness.synthCalls.length, i + 1);
+      harness.synthCalls[i].deferred.resolve(largeWav(100));
+      await flushPromises();
+    }
+    await producer;
+
+    // 4 chunks * 5 MiB = 20 MiB (> 16 MiB), should not throw 'Speech audio is too large'
+    const playback = harness.api.getPlayback();
+    assert.equal(playback.segments.length, 4);
+    assert.ok(playback.bufferedBytes > 16 * 1024 * 1024);
+    assert.equal(playback.error, null);
+  } finally {
+    harness.cleanup();
+  }
+});

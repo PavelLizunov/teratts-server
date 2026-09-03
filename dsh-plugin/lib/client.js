@@ -71,6 +71,7 @@ const FIRST_SPEECH_CHUNK_CHARS = 240;
 const SECOND_SPEECH_CHUNK_CHARS = 480;
 const SPEECH_CHUNK_CHARS = 800;
 const MAX_MERGED_WAV_BYTES = 16 * 1024 * 1024;
+const MAX_STREAMED_AUDIO_BYTES = 256 * 1024 * 1024; // 256 MiB (~45 minutes of speech)
 
 function speechChunkLimits(options, laterMaxChars) {
   let firstChars = FIRST_SPEECH_CHUNK_CHARS;
@@ -517,7 +518,11 @@ window.__ModuleLoader__.load({
     function createSegment(result) {
       const bytes = decodeWavBytes(result);
       const info = inspectMonoPcmWav(bytes, playback.format);
-      const bufferedBytes = checkedWavBytes(playback.bufferedBytes, info.dataBytes);
+      const bufferedBytes = checkedWavBytes(
+        playback.bufferedBytes,
+        info.dataBytes,
+        MAX_STREAMED_AUDIO_BYTES,
+      );
       const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
       let audio;
       try {
