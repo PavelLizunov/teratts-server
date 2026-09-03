@@ -10,7 +10,7 @@ expected_revision=${2:-$PINNED_MODEL_REVISION}
 [ -z "$expected_sha" ] || validate_sha "$expected_sha"
 validate_revision "$expected_revision"
 
-attempts=${TERATTS_HEALTH_ATTEMPTS:-30}
+attempts=${TERATTS_HEALTH_ATTEMPTS:-60}
 delay=${TERATTS_HEALTH_DELAY:-1}
 timeout=${TERATTS_HEALTH_TIMEOUT:-10}
 last_error="health endpoint did not become ready"
@@ -44,10 +44,10 @@ except Exception as e:
 status = obj.get("status")
 if status in ("ready", {"ready": True}):
     sys.exit(0)
-sys.stderr.write(f"status={status!r}, verification={obj.get(\"verification\")!r}\n")
+v = obj.get('verification')
+sys.stderr.write(f"status={status!r}, verification={v!r}\n")
 sys.exit(1)
-' 2>&1 || true)
-            py_exit=$?
+' 2>&1) && py_exit=0 || py_exit=$?
             if [ "$py_exit" -eq 0 ]; then
                 revision=$(printf '%s' "$body" | json_field 'model_revision|revision' 2>/dev/null || true)
                 [ "$revision" = "$expected_revision" ] || fail "health model revision $revision != expected $expected_revision"
