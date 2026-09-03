@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NpyArray {
     pub shape: Vec<usize>,
     pub data: Vec<f32>,
