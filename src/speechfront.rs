@@ -15,11 +15,11 @@ use unicode_normalization::UnicodeNormalization;
 #[derive(Deserialize)]
 struct LexiconFile {
     schema_version: u32,
-    entry: Vec<LexiconEntry>,
+    entry: Vec<RawLexiconEntry>,
 }
 
 #[derive(Deserialize)]
-struct LexiconEntry {
+struct RawLexiconEntry {
     written: String,
     language: String,
     spoken: String,
@@ -31,18 +31,18 @@ struct LexiconEntry {
     engines: BTreeMap<String, String>,
 }
 
+struct LexiconEntry {
+    written: String,
+    written_lower: String,
+    written_char_count: usize,
+    spoken: String,
+}
+
 pub struct Normalizer {
     entries: Vec<LexiconEntry>,
 }
 
 impl Normalizer {
-    #[allow(dead_code)]
-    pub fn from_path(path: &Path) -> Result<Self, Box<dyn Error>> {
-        let source = fs::read_to_string(path)?;
-        Self::from_toml(&source)
-            .map_err(|message| io::Error::new(io::ErrorKind::InvalidData, message).into())
-    }
-
     /// Normalizer over the vendored approved lexicon (compile-time embedded).
     pub fn builtin() -> Result<Self, String> {
         Self::from_toml(include_str!("lexicon.toml"))
@@ -105,12 +105,24 @@ impl Normalizer {
                 .count()
                 .cmp(&left.written.chars().count())
         });
-        Ok(Self {
-            entries: lexicon.entry,
-        })
+        let entries = lexicon
+            .entry
+            .into_iter()
+            .map(|e| {
+                let written_char_count = e.written.chars().count();
+                let written_lower = e.written.to_lowercase();
+                LexiconEntry {
+                    written: e.written,
+                    written_lower,
+                    written_char_count,
+                    spoken: e.spoken,
+                }
+            })
+            .collect();
+        Ok(Self { entries })
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn entry_count(&self) -> usize {
         self.entries.len()
     }
@@ -147,30 +159,18 @@ impl Normalizer {
         clean_spacing(&output)
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn approved_ranges(&self, text: &str) -> Vec<Range<usize>> {
-        let mut ranges = Vec::new();
-        let mut position = 0;
-        while position < text.len() {
-            if let Some((end, _)) = self.longest_match(text, position) {
-                ranges.push(position..end);
-                position = end;
-            } else {
-                position += text[position..].chars().next().map_or(1, char::len_utf8);
-            }
-        }
-        ranges
-    }
-
     fn longest_match<'a>(
         &'a self,
         text: &str,
         position: usize,
     ) -> Option<(usize, &'a LexiconEntry)> {
         self.entries.iter().find_map(|entry| {
-            let end = end_after_chars(text, position, entry.written.chars().count())?;
+            let end = end_after_chars(text, position, entry.written_char_count)?;
             let candidate = &text[position..end];
-            (candidate.to_lowercase() == entry.written.to_lowercase()
+            (candidate
+                .chars()
+                .flat_map(char::to_lowercase)
+                .eq(entry.written_lower.chars())
                 && boundaries_match(text, position, end, &entry.written))
             .then_some((end, entry))
         })

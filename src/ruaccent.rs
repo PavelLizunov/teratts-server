@@ -362,7 +362,6 @@ impl CharAccentModel {
                 .copied()
                 .ok_or_else(|| anyhow!("{} lacks {token}", path.display()))
         };
-        let _ = id("[pad]")?;
         Ok(Self {
             unknown: id("[unk]")?,
             bos: id("[bos]")?,
@@ -377,9 +376,11 @@ impl CharAccentModel {
     fn put_accent(&mut self, word: &str) -> Result<String> {
         let mut ids = Vec::with_capacity(word.chars().count() + 2);
         ids.push(self.bos);
+        let mut buf = [0u8; 4];
         ids.extend(word.to_lowercase().chars().map(|c| {
+            let s = c.encode_utf8(&mut buf);
             self.vocab
-                .get(&c.to_string())
+                .get(s)
                 .copied()
                 .unwrap_or(self.unknown)
         }));
@@ -497,6 +498,7 @@ impl TokenClassifier {
     }
 }
 
+#[allow(clippy::expect_used)]
 static PUNCT_SPACE_RE: std::sync::LazyLock<Regex> =
     std::sync::LazyLock::new(|| Regex::new(r"\s+([,.?!:;…])").expect("valid regex"));
 
@@ -855,14 +857,27 @@ fn fix_capital(source: &str, target: &str) -> String {
         .collect()
 }
 
-fn delete_spaces_before_punctuation(mut text: String) -> String {
-    for punctuation in "!\"#$%&'()*,./:;<=>?@[\\]^_`{|}~-".chars() {
-        text = text.replace(&format!(" {punctuation}"), &punctuation.to_string());
-        if punctuation == '-' {
-            text = text.replace(&format!("{punctuation} "), &punctuation.to_string());
+fn delete_spaces_before_punctuation(text: String) -> String {
+    const PUNCT: &str = "!\"#$%&'()*,./:;<=>?@[\\]^_`{|}~-";
+    let is_punct = |c: char| PUNCT.contains(c);
+    let mut out = String::with_capacity(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let mut prev_was_literal_hyphen = false;
+
+    for (i, &c) in chars.iter().enumerate() {
+        if c == ' ' {
+            if i + 1 < chars.len() && is_punct(chars[i + 1]) {
+                continue;
+            }
+            if prev_was_literal_hyphen {
+                continue;
+            }
         }
+        let mapped = if c == '~' { '-' } else { c };
+        prev_was_literal_hyphen = c == '-';
+        out.push(mapped);
     }
-    text.replace('~', "-")
+    out
 }
 
 #[cfg(test)]

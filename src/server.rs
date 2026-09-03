@@ -158,8 +158,8 @@ struct ActiveRequest {
 /// Async-request-owned cancellation edge. Dropping the Axum request future
 /// (client disconnect) or returning after timeout sets the cooperative flag.
 /// The current native ORT `Session::run` remains non-interruptible; workers stop
-/// before the next chunk. `ActiveRequest` stays in the async handler so its
-/// admission permit is released immediately when that handler is dropped.
+/// before the next chunk. `ActiveRequest` is moved into `spawn_blocking` so its
+/// admission permit is held until worker threads finish or cleanly join.
 struct CancelOnDrop(Arc<AtomicBool>);
 
 impl Drop for CancelOnDrop {

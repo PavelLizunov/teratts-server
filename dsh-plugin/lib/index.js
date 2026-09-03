@@ -213,9 +213,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       }
     }
     if (!tokenValue && typeof process !== "undefined" && process.env) {
-      tokenValue =
-        process.env[config.tokenEnv] ||
-        (config.tokenEnv === DEFAULT_TOKEN_REF ? process.env.TERATTS_TOKEN : undefined);
+      tokenValue = process.env[config.tokenEnv];
     }
 
     const requestPayload = JSON.stringify({
@@ -255,6 +253,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
         if (error?.name === "AbortError") throw error;
 
         if (attempt < maxRetries && isRetryableNetworkError(error)) {
+          lastError = error;
           const delayMs = computeBackoffDelay(attempt, undefined);
           await sleepWithSignal(delayMs, requestSignal);
           continue;
@@ -286,23 +285,25 @@ export class TeraTtsVoiceService extends TypertRemoteService {
           body: errorBody,
         });
 
+        const retrySuffix =
+          retryAfterMs !== undefined
+            ? ` (retry after ${Math.ceil(retryAfterMs / 1000)}s)`
+            : "";
+        const httpError = new Error(`TeraTTS request failed with HTTP ${response.status}${retrySuffix}`);
+        if (retryAfterMs !== undefined) {
+          httpError.retryAfterMs = retryAfterMs;
+          httpError.retry_after_ms = retryAfterMs;
+        }
+        httpError.status = response.status;
+        lastError = httpError;
+
         if (attempt < maxRetries && isRetryableStatus(response.status)) {
           const delayMs = computeBackoffDelay(attempt, retryAfterMs);
           await sleepWithSignal(delayMs, requestSignal);
           continue;
         }
 
-        const retrySuffix =
-          retryAfterMs !== undefined
-            ? ` (retry after ${Math.ceil(retryAfterMs / 1000)}s)`
-            : "";
-        const error = new Error(`TeraTTS request failed with HTTP ${response.status}${retrySuffix}`);
-        if (retryAfterMs !== undefined) {
-          error.retryAfterMs = retryAfterMs;
-          error.retry_after_ms = retryAfterMs;
-        }
-        error.status = response.status;
-        throw error;
+        throw httpError;
       }
 
       const audio = await readAudioResponse(response);

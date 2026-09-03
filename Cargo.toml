@@ -9,7 +9,7 @@ publish = false
 anyhow = "1"
 axum = "0.8"
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-27"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -19,7 +19,7 @@ regex = "1"
 mimalloc = "0.1"
 chislo = "=0.3.1"
 toml = "0.9"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "fs", "io-util"] }
 unicode-normalization = "0.1"
 
 [dev-dependencies]

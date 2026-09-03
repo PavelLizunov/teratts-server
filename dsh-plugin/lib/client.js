@@ -70,7 +70,6 @@ function cleanMarkdown(text) {
 const FIRST_SPEECH_CHUNK_CHARS = 240;
 const SECOND_SPEECH_CHUNK_CHARS = 480;
 const SPEECH_CHUNK_CHARS = 800;
-const MAX_MERGED_WAV_BYTES = 16 * 1024 * 1024;
 const MAX_STREAMED_AUDIO_BYTES = 256 * 1024 * 1024; // 256 MiB (~45 minutes of speech)
 
 function speechChunkLimits(options, laterMaxChars) {
@@ -210,33 +209,9 @@ function inspectMonoPcmWav(bytes, expectedFormat) {
   };
 }
 
-function checkedWavBytes(totalBytes, dataBytes, maxBytes = MAX_MERGED_WAV_BYTES) {
+function checkedWavBytes(totalBytes, dataBytes, maxBytes = MAX_STREAMED_AUDIO_BYTES) {
   if (dataBytes > maxBytes - totalBytes) throw new RangeError("Speech audio is too large");
   return totalBytes + dataBytes;
-}
-
-function mergeMonoPcmWavs(wavs, maxBytes = MAX_MERGED_WAV_BYTES) {
-  if (!Array.isArray(wavs) || wavs.length === 0) throw new TypeError("missing WAV chunks");
-  if (!Number.isInteger(maxBytes) || maxBytes < 44) throw new RangeError("invalid WAV limit");
-  let totalBytes = 44;
-  let format = null;
-  const payloads = wavs.map((bytes) => {
-    const info = inspectMonoPcmWav(bytes, format);
-    format ??= info.format;
-    totalBytes = checkedWavBytes(totalBytes, info.dataBytes, maxBytes);
-    return info.payload;
-  });
-  const merged = new Uint8Array(totalBytes);
-  merged.set(wavs[0].subarray(0, 44));
-  const header = new DataView(merged.buffer);
-  header.setUint32(4, totalBytes - 8, true);
-  header.setUint32(40, totalBytes - 44, true);
-  let offset = 44;
-  for (const payload of payloads) {
-    merged.set(payload, offset);
-    offset += payload.length;
-  }
-  return merged;
 }
 
 function locateBufferedTime(durations, time) {
@@ -281,7 +256,6 @@ if (typeof process !== "undefined" && process.versions?.node) {
   globalThis.__teratts_nextPlaybackRate = nextPlaybackRate;
   globalThis.__teratts_clampSeekTime = clampSeekTime;
   globalThis.__teratts_splitSpeechText = splitSpeechText;
-  globalThis.__teratts_mergeMonoPcmWavs = mergeMonoPcmWavs;
   globalThis.__teratts_inspectMonoPcmWav = inspectMonoPcmWav;
   globalThis.__teratts_locateBufferedTime = locateBufferedTime;
 }
@@ -355,7 +329,7 @@ window.__ModuleLoader__.load({
       const style = document.createElement("style");
       style.dataset.plugin = "dsh-client-ui-teratts";
       style.dataset.pluginCss = styleId;
-      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.teratts-group{display:inline-flex;align-items:center;gap:2px}.teratts-control{min-width:28px;height:28px;padding:0 4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:14px;justify-content:center;align-items:center;display:inline-flex;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;font-family:inherit}.teratts-control:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
+      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-group{display:inline-flex;align-items:center;gap:2px}.teratts-control{min-width:28px;height:28px;padding:0 4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:14px;justify-content:center;align-items:center;display:inline-flex;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;font-family:inherit}.teratts-control:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(style);
     }
 

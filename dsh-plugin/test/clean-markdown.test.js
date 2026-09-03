@@ -25,7 +25,6 @@ const PLAYBACK_RATES = globalThis.__teratts_PLAYBACK_RATES;
 const nextPlaybackRate = globalThis.__teratts_nextPlaybackRate;
 const clampSeekTime = globalThis.__teratts_clampSeekTime;
 const splitSpeechText = globalThis.__teratts_splitSpeechText;
-const mergeMonoPcmWavs = globalThis.__teratts_mergeMonoPcmWavs;
 const inspectMonoPcmWav = globalThis.__teratts_inspectMonoPcmWav;
 const locateBufferedTime = globalThis.__teratts_locateBufferedTime;
 const technicalMarkdown = await readFile(
@@ -38,7 +37,6 @@ test("client helpers are exposed for tests", () => {
   assert.equal(typeof nextPlaybackRate, "function");
   assert.equal(typeof clampSeekTime, "function");
   assert.equal(typeof splitSpeechText, "function");
-  assert.equal(typeof mergeMonoPcmWavs, "function");
   assert.equal(typeof inspectMonoPcmWav, "function");
   assert.equal(typeof locateBufferedTime, "function");
 });
@@ -300,19 +298,6 @@ function pcmWav(payload, sampleRate = 44_100) {
   bytes.set(payload, 44);
   return bytes;
 }
-
-test("merges mono PCM WAV chunks into one bounded WAV", () => {
-  const first = pcmWav(Uint8Array.of(1, 2, 3, 4));
-  const second = pcmWav(Uint8Array.of(5, 6));
-  const merged = mergeMonoPcmWavs([first, second]);
-  const header = new DataView(merged.buffer);
-  assert.equal(merged.length, 50);
-  assert.equal(header.getUint32(4, true), 42);
-  assert.equal(header.getUint32(40, true), 6);
-  assert.deepEqual([...merged.subarray(44)], [1, 2, 3, 4, 5, 6]);
-  assert.throws(() => mergeMonoPcmWavs([first, pcmWav(Uint8Array.of(7, 8), 48_000)]));
-  assert.throws(() => mergeMonoPcmWavs([first, second], 49), /too large/);
-});
 
 test("inspects WAV duration and locates a global buffered offset", () => {
   const wav = pcmWav(new Uint8Array(200), 10);
@@ -718,12 +703,12 @@ test("stale synthesis result cannot restart playback", async () => {
   }
 });
 
-test("cumulative limit, malformed WAV, and format mismatch fail safely", () => {
+test("malformed WAV and format mismatch fail safely in inspection", () => {
   const first = pcmWav(Uint8Array.of(1, 2, 3, 4), 44_100);
   const second = pcmWav(Uint8Array.of(5, 6, 7, 8), 48_000);
-  assert.throws(() => mergeMonoPcmWavs([first, second]), /WAV formats do not match/);
-  assert.throws(() => mergeMonoPcmWavs([new Uint8Array([1, 2, 3, 4])]), /invalid WAV chunk/);
-  assert.throws(() => mergeMonoPcmWavs([first, first], 45), /Speech audio is too large/);
+  const format = inspectMonoPcmWav(first).format;
+  assert.throws(() => inspectMonoPcmWav(second, format), /WAV formats do not match/);
+  assert.throws(() => inspectMonoPcmWav(new Uint8Array([1, 2, 3, 4])), /invalid WAV chunk/);
 });
 
 test("background WAV format failure stops current playback with one error", async () => {
