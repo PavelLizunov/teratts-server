@@ -3,3 +3,4 @@
 *.part
 /models
 .DS_Store
+.dsh/performance-autoresearch/
