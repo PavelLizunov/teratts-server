@@ -133,6 +133,32 @@ impl TeraEngine {
             started.elapsed().as_millis()
         );
 
+        let mut style_cache = HashMap::new();
+        let styles_dir = release.join("styles");
+        if styles_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&styles_dir) {
+                for entry in entries.flatten() {
+                    let voice_path = entry.path();
+                    if voice_path.is_dir() {
+                        if let Some(voice_name) = voice_path.file_name().and_then(|n| n.to_str()) {
+                            let ttl_path = voice_path.join("style_ttl.npy");
+                            if let Ok(arr) = npy::load_f32(&ttl_path) {
+                                if arr.shape == [1, 50, 256] {
+                                    style_cache.insert((voice_name.to_string(), "style_ttl.npy".to_string()), arr);
+                                }
+                            }
+                            let dp_path = voice_path.join("style_dp.npy");
+                            if let Ok(arr) = npy::load_f32(&dp_path) {
+                                if arr.shape == [1, 8, 16] {
+                                    style_cache.insert((voice_name.to_string(), "style_dp.npy".to_string()), arr);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(TeraEngine {
             release,
             text_encoder,
@@ -145,7 +171,7 @@ impl TeraEngine {
             vocoder_out,
             indexer,
             ruaccent,
-            style_cache: HashMap::new(),
+            style_cache,
         })
     }
 
