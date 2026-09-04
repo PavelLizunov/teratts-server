@@ -304,7 +304,8 @@ impl RuAccent {
         }
 
         for index in 0..words.len() {
-            if let Some(variants) = self.omographs.get(&words[index].to_lowercase()) {
+            let lowered = words[index].to_lowercase();
+            if let Some(variants) = self.omographs.get(&lowered) {
                 // Exact Python context: copy the regex words, replace the
                 // target with a space-padded marker, then join every item with
                 // one space. Original punctuation gaps are deliberately absent.

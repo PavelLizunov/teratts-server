@@ -255,6 +255,8 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         pool.push(Mutex::new(TeraEngine::load(model_root)?));
     }
     println!("[teratts-server] parallel chunk slots: {slots}");
+    // Pre-warm the speech-front lexicon TOML normalizer at boot
+    let _ = speech_front();
     let state = Arc::new(AppState {
         pool: Arc::new(pool),
         voices,
