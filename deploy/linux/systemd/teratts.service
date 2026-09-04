@@ -33,19 +33,19 @@ SystemCallArchitectures=native
 # ONNX Runtime may use mmap, executable mappings, threads, and CPU feature probes.
 # Deliberately omit MemoryDenyWriteExecute and aggressive SystemCallFilter rules.
 CPUAccounting=true
-# CPUQuota=400% provides 4 full CPU cores (400ms per 100ms CFS quota period).
-# Keep PARALLEL_CHUNKS=2 and ORT_THREADS=2 so active thread math does not exhaust
+# CPUQuota=800% provides 8 full CPU cores (800ms per 100ms CFS quota period).
+# Keep PARALLEL_CHUNKS=2 and ORT_THREADS=4 so active thread math (2x4=8) does not exhaust
 # CFS bandwidth and induce periodic scheduler throttling on Tokio and health probes.
-CPUQuota=400%
+CPUQuota=800%
 MemoryAccounting=true
 TasksAccounting=true
 # TasksMax covers Tokio blocking pool, per-session ORT intra-op pools, and chunk workers.
 TasksMax=512
 LimitNOFILE=65536
-# Baseline RSS with 2 slots is ~4.17 GiB. MemoryHigh=6500M and MemoryMax=7500M provide
+# Baseline RSS with 2 slots is ~4.17 GiB. MemoryHigh=7200M and MemoryMax=7800M provide
 # safe headroom for transient audio allocations without triggering kernel direct reclaim or OOM.
-MemoryHigh=6500M
-MemoryMax=7500M
+MemoryHigh=7200M
+MemoryMax=7800M
 MemorySwapMax=2G
 # Watchdog note: teratts-server currently uses Type=simple. WatchdogSec is intentionally
 # deferred until sd_notify("WATCHDOG=1") heartbeat support is compiled into the binary.
