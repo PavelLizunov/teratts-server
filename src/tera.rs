@@ -369,19 +369,23 @@ impl TeraEngine {
         let mut chunks: Vec<Vec<f32>> = Vec::new();
         let mut emitted = 0usize;
         let mut start = 0usize;
+        let max_window_frames = STREAM_CHUNK_FRAMES + VOCODER_CONTEXT_FRAMES;
+        let mut latent_window = Vec::with_capacity(LATENT_CHANNELS * max_window_frames);
+
         while start < latent_length {
             let end = (start + STREAM_CHUNK_FRAMES).min(latent_length);
             let input_start = start.saturating_sub(VOCODER_CONTEXT_FRAMES);
-            let latent_window = slice_latent_frames(
+            copy_latent_frames(
                 &latent_out,
                 LATENT_CHANNELS,
                 latent_length,
                 input_start,
                 end,
+                &mut latent_window,
             )?;
             let latent_chunk_t = Tensor::from_array((
                 [1, LATENT_CHANNELS, end - input_start],
-                latent_window.into_boxed_slice(),
+                latent_window.clone(),
             ))
             .map_err(|e| anyhow!("synth: {e}"))?;
             let vocoder_outputs = self
@@ -434,16 +438,16 @@ impl TeraEngine {
     }
 }
 
-/// Copy a `[1, channels, frames]` tensor window while preserving its
-/// row-major channel-first layout. A flat contiguous range would treat the
-/// tensor as frame-major and feed the vocoder interleaved channel fragments.
-fn slice_latent_frames(
+/// Copy a `[1, channels, frames]` tensor window into an existing buffer while preserving its
+/// row-major channel-first layout without reallocating each window.
+fn copy_latent_frames(
     latent: &[f32],
     channels: usize,
     total_frames: usize,
     start: usize,
     end: usize,
-) -> Result<Vec<f32>> {
+    buffer: &mut Vec<f32>,
+) -> Result<()> {
     if channels == 0 || total_frames == 0 || start >= end || end > total_frames {
         return Err(anyhow!("synth: invalid latent frame window"));
     }
@@ -454,12 +458,27 @@ fn slice_latent_frames(
         return Err(anyhow!("synth: latent shape/data length mismatch"));
     }
     let window_frames = end - start;
-    let mut window = Vec::with_capacity(channels * window_frames);
+    let total_elements = channels * window_frames;
+    buffer.clear();
+    buffer.reserve(total_elements.saturating_sub(buffer.capacity()));
     for channel in 0..channels {
         let channel_start = channel * total_frames;
-        window.extend_from_slice(&latent[channel_start + start..channel_start + end]);
+        buffer.extend_from_slice(&latent[channel_start + start..channel_start + end]);
     }
-    Ok(window)
+    Ok(())
+}
+
+#[cfg(test)]
+fn slice_latent_frames(
+    latent: &[f32],
+    channels: usize,
+    total_frames: usize,
+    start: usize,
+    end: usize,
+) -> Result<Vec<f32>> {
+    let mut buffer = Vec::new();
+    copy_latent_frames(latent, channels, total_frames, start, end, &mut buffer)?;
+    Ok(buffer)
 }
 
 fn configured_ruaccent_mode() -> Result<RuAccentMode> {
