@@ -35,8 +35,56 @@ function cleanCodeBlock(body) {
     .join(" ");
 }
 
+function sanitizeLanguageTags(text) {
+  const tagRegex = /<\/?(ru|en)>/gi;
+  const matches = [...text.matchAll(tagRegex)];
+  if (matches.length === 0) return text;
+
+  const validPairs = new Set();
+  let openTag = null;
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const isClosing = m[0][1] === "/";
+    const lang = m[1].toLowerCase();
+
+    if (!isClosing) {
+      if (openTag === null) {
+        openTag = { index: i, lang };
+      }
+    } else {
+      if (openTag !== null && openTag.lang === lang) {
+        validPairs.add(openTag.index);
+        validPairs.add(i);
+        openTag = null;
+      }
+    }
+  }
+
+  let result = "";
+  let lastPos = 0;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    result += text.slice(lastPos, m.index);
+    if (validPairs.has(i)) {
+      result += m[0].toLowerCase();
+    } else {
+      const isClosing = m[0][1] === "/";
+      const lang = m[1].toLowerCase();
+      const prevChar = text[m.index - 1] || "";
+      const nextChar = text[m.index + m[0].length] || "";
+      const leadSpace = prevChar && !/\s/.test(prevChar) ? " " : "";
+      const trailSpace = nextChar && !/\s|[.,!?:;…]/.test(nextChar) ? " " : "";
+      result += `${leadSpace}${isClosing ? `/${lang}` : lang}${trailSpace}`;
+    }
+    lastPos = m.index + m[0].length;
+  }
+  result += text.slice(lastPos);
+  return result;
+}
+
 function cleanMarkdown(text) {
-  return text
+  const unified = text
     .replace(/\r/g, "")
     .replace(/```[^\n]*\n([\s\S]*?)```/g, (_fence, body) => `\n${cleanCodeBlock(body)}\n`)
     .split("\n")
@@ -65,6 +113,7 @@ function cleanMarkdown(text) {
     .replace(/\s*×\s*/g, ", ")
     .replace(/\s+/g, " ")
     .trim();
+  return sanitizeLanguageTags(unified).replace(/\s+/g, " ").trim();
 }
 
 const FIRST_SPEECH_CHUNK_CHARS = 240;

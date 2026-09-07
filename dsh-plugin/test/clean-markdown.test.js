@@ -784,3 +784,21 @@ test("progressive playback allows cumulative audio across chunks to exceed 16 Mi
     harness.cleanup();
   }
 });
+
+test("cleans stray, unclosed, or nested language tags so speech never crashes", () => {
+  assert.equal(
+    cleanMarkdown("Если в тексте сообщения встречаются теги <ru> или <en>..."),
+    "Если в тексте сообщения встречаются теги ru или en...",
+  );
+  assert.equal(
+    cleanMarkdown("Внимание: <ru>незакрытый тег"),
+    "Внимание: ru незакрытый тег",
+  );
+  assert.equal(
+    cleanMarkdown("<ru>Русский <en>английский</en> текст</ru>"),
+    "<ru>Русский en английский /en текст</ru>",
+  );
+  const chunks = splitSpeechText(cleanMarkdown("Если в тексте сообщения встречаются теги <ru> или <en>..."));
+  assert.ok(chunks.length > 0);
+  assert.doesNotThrow(() => splitSpeechText(cleanMarkdown("Если в тексте сообщения встречаются теги <ru> или <en>...")));
+});
