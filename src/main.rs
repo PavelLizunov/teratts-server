@@ -1,6 +1,7 @@
 mod chunk;
 mod downloader;
 mod indexer;
+mod lexicon_reload;
 mod manifest;
 mod npy;
 mod num2words;

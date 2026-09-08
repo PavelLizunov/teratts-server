@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use crate::chunk;
+use crate::lexicon_reload::LexiconReload;
 use crate::manifest::{self, Manifest};
 use crate::speechfront;
 use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
@@ -50,6 +51,8 @@ struct AppState {
     bearer_token: Option<String>,
     ruaccent_mode: String,
     ruaccent_ready: bool,
+    speech_front_default: bool,
+    lexicon: LexiconReload,
 }
 
 fn ort_threads() -> usize {
@@ -225,6 +228,10 @@ struct ErrorResponse {
 }
 
 pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
+    // Fail closed on an invalid explicit lexicon before touching model assets.
+    let lexicon = LexiconReload::new(std::env::var_os("TERATTS_LEXICON_PATH").map(PathBuf::from))
+        .map_err(|error| anyhow!("speech-front startup failed: {error}"))?;
+    let speech_front_default = speech_front_enabled();
     let manifest = Manifest::pinned()?;
     let release = manifest.release_dir(model_root);
     manifest::verify_release(&manifest, &release)
@@ -264,6 +271,8 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         bearer_token,
         ruaccent_mode,
         ruaccent_ready,
+        speech_front_default,
+        lexicon,
     });
     let app = Router::new()
         .route("/health", get(health))
@@ -317,13 +326,12 @@ async fn tts(
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
     let Json(request) = request.map_err(ApiError::from_json_rejection)?;
-    let PreparedRequest {
-        text,
-        voice,
-        language,
-        scale,
-        russian_stress,
-    } = prepare_request(request, &state.voices, state.ruaccent_ready)?;
+    let prepared_request = prepare_request(
+        request,
+        &state.voices,
+        state.ruaccent_ready,
+        state.speech_front_default,
+    )?;
     let ticket = state.admission.try_reserve()?;
     let active = ticket.activate().await?;
     let remaining = REQUEST_DEADLINE
@@ -337,6 +345,17 @@ async fn tts(
         // Retain admission permit ownership inside the blocking task so
         // admission is released only when inference actually finishes or joins.
         let _active = active;
+        if cancel_for_task.load(Ordering::Acquire) {
+            return Err(anyhow!("synthesis cancelled"));
+        }
+        let PreparedRequest {
+            text,
+            voice,
+            language,
+            scale,
+            russian_stress,
+            ..
+        } = apply_speech_front(prepared_request, &state.lexicon);
         if cancel_for_task.load(Ordering::Acquire) {
             return Err(anyhow!("synthesis cancelled"));
         }
@@ -520,6 +539,7 @@ struct PreparedRequest {
     language: Language,
     scale: f32,
     russian_stress: bool,
+    speech_front: bool,
 }
 
 /// Phase D (speech-front): opt-in Russian text front-end (lexicon + versions /
@@ -530,17 +550,19 @@ fn speech_front_enabled() -> bool {
         .unwrap_or(false)
 }
 
-fn speech_front() -> Option<&'static speechfront::Normalizer> {
-    use std::sync::OnceLock;
-    static NORM: OnceLock<Option<speechfront::Normalizer>> = OnceLock::new();
-    NORM.get_or_init(|| match speechfront::Normalizer::builtin() {
-        Ok(normalizer) => Some(normalizer),
-        Err(error) => {
-            eprintln!("[teratts-server] speech-front lexicon failed: {error}");
-            None
+/// Runs once per enabled request on the existing blocking synthesis worker.
+/// Off requests never read the external path. English text is not normalized.
+fn apply_speech_front(mut request: PreparedRequest, lexicon: &LexiconReload) -> PreparedRequest {
+    if request.speech_front {
+        let refreshed = lexicon.refresh();
+        if let Some(diagnostic) = refreshed.diagnostic {
+            eprintln!("[teratts-server] speech-front reload rejected; keeping last valid snapshot: {diagnostic}");
         }
-    })
-    .as_ref()
+        if matches!(request.language, Language::Ru) {
+            request.text = normalize_russian_spans(&request.text, &refreshed.normalizer);
+        }
+    }
+    request
 }
 
 /// Apply Russian normalization to untagged/Russian spans while preserving
@@ -595,8 +617,9 @@ fn prepare_request(
     request: TtsRequest,
     voices: &[String],
     ruaccent_capable: bool,
+    speech_front_default: bool,
 ) -> Result<PreparedRequest, ApiError> {
-    let mut text = chunk::sanitize(request.text.trim());
+    let text = chunk::sanitize(request.text.trim());
     let text_chars = text.chars().count();
     if text_chars == 0 || text_chars > MAX_TEXT_CHARS {
         return Err(ApiError::bad_request(format!(
@@ -634,18 +657,13 @@ fn prepare_request(
         Some(value) => value,
         None => matches!(language, Language::Ru) && ruaccent_capable,
     };
-    let want_speech_front = request.speech_front.unwrap_or(false) || speech_front_enabled();
-    if matches!(language, Language::Ru) && want_speech_front {
-        if let Some(normalizer) = speech_front() {
-            text = normalize_russian_spans(&text, normalizer);
-        }
-    }
     Ok(PreparedRequest {
         text,
         voice,
         language,
         scale,
         russian_stress,
+        speech_front: request.speech_front.unwrap_or(speech_front_default),
     })
 }
 
@@ -831,36 +849,44 @@ mod tests {
     #[test]
     fn enforces_text_language_rate_and_audio_limits() {
         let voices = vec!["ru_f1".to_string(), "eng_f3".to_string()];
-        let russian = prepare_request(request("hello"), &voices, true).unwrap();
+        let russian = prepare_request(request("hello"), &voices, true, false).unwrap();
         assert!(matches!(russian.language, Language::Ru));
         assert!(russian.russian_stress);
         let mut english_request = request("hello");
         english_request.voice = Some("eng_f3".into());
-        let english = prepare_request(english_request, &voices, true).unwrap();
+        let english = prepare_request(english_request, &voices, true, false).unwrap();
         assert!(matches!(english.language, Language::En));
         assert!(!english.russian_stress);
-        assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS)), &voices, true).is_ok());
-        assert!(prepare_request(request(&"x".repeat(MAX_TEXT_CHARS + 1)), &voices, true).is_err());
+        assert!(
+            prepare_request(request(&"x".repeat(MAX_TEXT_CHARS)), &voices, true, false).is_ok()
+        );
+        assert!(prepare_request(
+            request(&"x".repeat(MAX_TEXT_CHARS + 1)),
+            &voices,
+            true,
+            false
+        )
+        .is_err());
         let mut invalid = request("hello");
         invalid.language = Some(Language::En);
         invalid.russian_stress = Some(true);
-        assert!(prepare_request(invalid, &voices, true).is_err());
+        assert!(prepare_request(invalid, &voices, true, false).is_err());
         let mut unstressed = request("hello");
         unstressed.russian_stress = Some(false);
         assert!(
-            !prepare_request(unstressed, &voices, true)
+            !prepare_request(unstressed, &voices, true, false)
                 .unwrap()
                 .russian_stress
         );
-        let disabled_default = prepare_request(request("привет"), &voices, false).unwrap();
+        let disabled_default = prepare_request(request("привет"), &voices, false, false).unwrap();
         assert!(!disabled_default.russian_stress);
         let mut disabled_explicit = request("привет");
         disabled_explicit.russian_stress = Some(true);
-        assert!(prepare_request(disabled_explicit, &voices, false).is_err());
+        assert!(prepare_request(disabled_explicit, &voices, false, false).is_err());
         let mut disabled_false = request("привет");
         disabled_false.russian_stress = Some(false);
         assert!(
-            !prepare_request(disabled_false, &voices, false)
+            !prepare_request(disabled_false, &voices, false, false)
                 .unwrap()
                 .russian_stress
         );
@@ -936,6 +962,78 @@ mod tests {
         // clamping bounds
         assert_eq!(determine_parallel_slots(0, 0, 0), 1);
         assert_eq!(determine_parallel_slots(10, 1, 16), 4);
+    }
+
+    #[test]
+    fn speech_front_flag_uses_injected_default_with_explicit_override() {
+        let voices = vec!["ru_f1".to_string()];
+        let loader = LexiconReload::new(None).unwrap();
+        for default in [false, true] {
+            for flag in [None, Some(false), Some(true)] {
+                let mut input = request("Рост 15%");
+                input.speech_front = flag;
+                let prepared = prepare_request(input, &voices, true, default).unwrap();
+                let enabled = flag.unwrap_or(default);
+                assert_eq!(prepared.speech_front, enabled);
+                let output = apply_speech_front(prepared, &loader);
+                assert_eq!(
+                    output.text,
+                    if enabled {
+                        "Рост пятнадцать процентов"
+                    } else {
+                        "Рост 15%"
+                    }
+                );
+                assert!(output.russian_stress);
+            }
+        }
+    }
+
+    #[test]
+    fn approved_export_reaches_request_preparation_and_off_skips_reload() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lexicon.toml");
+        approve(&path, APPROVED);
+        let loader = LexiconReload::new(Some(path.clone())).unwrap();
+        let voices = vec!["ru_f1".to_string(), "eng_f3".to_string()];
+        let render = |input| {
+            apply_speech_front(
+                prepare_request(input, &voices, true, true).unwrap(),
+                &loader,
+            )
+            .text
+        };
+        assert_eq!(render(request("Widget")), "первый");
+        let revision = loader.revision();
+        approve(&path, &APPROVED.replace("первый", "второй"));
+        let mut off = request("Widget 15%");
+        off.speech_front = Some(false);
+        assert_eq!(render(off), "Widget 15%");
+        assert_eq!(loader.revision(), revision, "off must not refresh");
+        assert_eq!(render(request("Widget")), "второй");
+        assert_ne!(loader.revision(), revision);
+        assert_eq!(
+            render(request("<ru>Widget 15%</ru> <en>Widget 15%</en>")),
+            "<ru>второй пятнадцать процентов</ru> <en>Widget 15%</en>"
+        );
+        let mut english = request("Widget 15%");
+        english.voice = Some("eng_f3".into());
+        assert_eq!(render(english), "Widget 15%");
+        approve(&path, "secret-invalid-input = [");
+        let mut off = request("Widget");
+        off.speech_front = Some(false);
+        assert_eq!(render(off), "Widget");
+        // Off did not even consume the first failure diagnostic.
+        assert!(loader.refresh().diagnostic.is_some());
+        assert_eq!(render(request("Widget")), "второй");
+        std::fs::remove_file(&path).unwrap();
+        let mut off = request("Widget");
+        off.speech_front = Some(false);
+        assert_eq!(render(off), "Widget");
+        assert_eq!(render(request("Widget")), "второй");
+        approve(&path, APPROVED);
+        assert_eq!(render(request("Widget")), "первый");
     }
 
     #[test]
