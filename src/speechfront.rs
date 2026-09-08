@@ -123,6 +123,17 @@ impl Normalizer {
     }
 
     pub fn normalize(&self, text: &str) -> String {
+        self.normalize_with_gap(text, normalize_segment)
+    }
+
+    /// Protect arithmetic only in unmatched gaps, never in approved lexicon forms/readings.
+    pub fn normalize_russian_only(&self, text: &str) -> String {
+        self.normalize_with_gap(text, |gap| {
+            normalize_segment(&crate::russian_only::protect_numeric_plus(gap))
+        })
+    }
+
+    fn normalize_with_gap(&self, text: &str, normalize_gap: impl Fn(&str) -> String) -> String {
         let text: String = text.nfc().collect();
         let mut output = String::with_capacity(text.len());
         let mut gap_start = 0;
@@ -130,7 +141,7 @@ impl Normalizer {
 
         while position < text.len() {
             if let Some((end, entry)) = self.longest_match(&text, position) {
-                output.push_str(&normalize_segment(&text[gap_start..position]));
+                output.push_str(&normalize_gap(&text[gap_start..position]));
                 output.push_str(&entry.spoken);
                 position = end;
                 gap_start = end;
@@ -150,7 +161,7 @@ impl Normalizer {
                 position += text[position..].chars().next().map_or(1, char::len_utf8);
             }
         }
-        output.push_str(&normalize_segment(&text[gap_start..]));
+        output.push_str(&normalize_gap(&text[gap_start..]));
         clean_spacing(&output)
     }
 

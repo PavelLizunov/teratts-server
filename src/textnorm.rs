@@ -68,13 +68,51 @@ pub fn ensure_language_tags(text: &str, lang: &str) -> String {
 /// Normalize through number expansion while retaining composed Russian text for
 /// RUAccent. This is the exact upstream prefix before `add_russian_stress`.
 pub fn normalize(raw_text: &str, indexer: &UnicodeIndexer) -> Result<String> {
+    normalize_impl(raw_text, indexer, false)
+}
+
+/// Russian-only mode must reject text the model vocabulary would silently drop.
+pub fn normalize_strict(raw_text: &str, indexer: &UnicodeIndexer) -> Result<String> {
+    normalize_impl(raw_text, indexer, true)
+}
+
+#[derive(Debug)]
+pub struct UnsupportedText;
+
+impl std::fmt::Display for UnsupportedText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("text contains characters unsupported by the model")
+    }
+}
+impl std::error::Error for UnsupportedText {}
+
+fn normalize_impl(raw_text: &str, indexer: &UnicodeIndexer, strict: bool) -> Result<String> {
     let text: String = raw_text.nfc().collect();
     let text = add_punctuation_spaces(&text);
     let text = add_number_word_spaces(&text);
-    let text = skip_unsupported(&text, indexer, true);
+    let text = filter_vocabulary(&text, indexer, true, strict)?;
     validate_language_tags(&text)?;
     let text = expand_tagged_numbers(&text);
-    Ok(skip_unsupported(&text, indexer, false))
+    filter_vocabulary(&text, indexer, false, strict)
+}
+
+fn filter_vocabulary(
+    text: &str,
+    indexer: &UnicodeIndexer,
+    preserve_digits: bool,
+    strict: bool,
+) -> Result<String> {
+    if strict {
+        if text
+            .chars()
+            .any(|c| !indexer.supports(c) && !(preserve_digits && c.is_ascii_digit()))
+        {
+            return Err(UnsupportedText.into());
+        }
+        Ok(text.to_owned())
+    } else {
+        Ok(skip_unsupported(text, indexer, preserve_digits))
+    }
 }
 
 /// Convert stress-marked normalized text to the text-encoder and duration-
@@ -501,6 +539,46 @@ mod tests {
         }
         let json = serde_json::Value::Array(entries).to_string();
         UnicodeIndexer::from_json(&json).unwrap()
+    }
+
+    #[test]
+    fn strict_normalization_rejects_loss_before_and_after_number_expansion() {
+        let indexer = test_indexer();
+        let supported = "<ru>Привет,мир! Ёж</ru>";
+        assert_eq!(
+            normalize_strict(supported, &indexer).unwrap(),
+            normalize(supported, &indexer).unwrap()
+        );
+        let unsupported = "<ru>Привет😀</ru>";
+        assert!(normalize_strict(unsupported, &indexer)
+            .unwrap_err()
+            .is::<UnsupportedText>());
+        assert_eq!(normalize(unsupported, &indexer).unwrap(), "<ru>Привет</ru>");
+
+        // Like the model vocabulary, this table cannot encode raw decimal digits.
+        let entries: Vec<i64> = (0..65_536u32)
+            .map(|cp| {
+                char::from_u32(cp).map_or(-1, |c| {
+                    if c.is_ascii_digit() {
+                        -1
+                    } else {
+                        indexer.token(c)
+                    }
+                })
+            })
+            .collect();
+        let no_digits =
+            UnicodeIndexer::from_json(&serde_json::to_string(&entries).unwrap()).unwrap();
+        assert_eq!(
+            normalize_strict("<ru>12</ru>", &no_digits).unwrap(),
+            "<ru>двенадцать</ru>"
+        );
+        // A literal too large for number conversion survives expansion: fail, never drop it.
+        let huge = format!("<ru>{}</ru>", "9".repeat(100));
+        assert!(normalize_strict(&huge, &no_digits)
+            .unwrap_err()
+            .is::<UnsupportedText>());
+        assert_eq!(normalize(&huge, &no_digits).unwrap(), "<ru></ru>");
     }
 
     #[test]
