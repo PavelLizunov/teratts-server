@@ -16,6 +16,7 @@ use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use crate::chunk;
 use crate::lexicon_reload::LexiconReload;
 use crate::manifest::{self, Manifest};
+use crate::russian_only::{self, ConversionError, TextMode};
 use crate::speechfront;
 use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
 use crate::wav;
@@ -53,6 +54,7 @@ struct AppState {
     ruaccent_ready: bool,
     speech_front_default: bool,
     lexicon: LexiconReload,
+    text_config: russian_only::Config,
 }
 
 fn ort_threads() -> usize {
@@ -196,6 +198,7 @@ pub struct TtsRequest {
     pub russian_stress: Option<bool>,
     #[serde(default)]
     pub speech_front: Option<bool>,
+    pub text_mode: Option<TextMode>,
 }
 
 #[derive(Debug, Serialize)]
@@ -228,6 +231,8 @@ struct ErrorResponse {
 }
 
 pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
+    // Validate the installed converter and dictionary before any model access.
+    let text_config = russian_only::Config::from_env()?;
     // Fail closed on an invalid explicit lexicon before touching model assets.
     let lexicon = LexiconReload::new(std::env::var_os("TERATTS_LEXICON_PATH").map(PathBuf::from))
         .map_err(|error| anyhow!("speech-front startup failed: {error}"))?;
@@ -273,6 +278,7 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         ruaccent_ready,
         speech_front_default,
         lexicon,
+        text_config,
     });
     let app = Router::new()
         .route("/health", get(health))
@@ -326,12 +332,15 @@ async fn tts(
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
     let Json(request) = request.map_err(ApiError::from_json_rejection)?;
-    let prepared_request = prepare_request(
+    let prepared_request = prepare_request_with_mode(
         request,
         &state.voices,
         state.ruaccent_ready,
         state.speech_front_default,
+        state.text_config.default_mode,
+        state.text_config.converter.is_some(),
     )?;
+    let text_mode = prepared_request.text_mode;
     let ticket = state.admission.try_reserve()?;
     let active = ticket.activate().await?;
     let remaining = REQUEST_DEADLINE
@@ -355,14 +364,23 @@ async fn tts(
             scale,
             russian_stress,
             ..
-        } = apply_speech_front(prepared_request, &state.lexicon);
+        } = apply_text_mode(
+            prepared_request,
+            &state.lexicon,
+            state.text_config.converter.as_ref(),
+        )?;
         if cancel_for_task.load(Ordering::Acquire) {
             return Err(anyhow!("synthesis cancelled"));
         }
-        let prepared =
+        let prepared = if text_mode == TextMode::RussianOnly {
             pool[0]
                 .blocking_lock()
-                .preprocess(&text, language.as_str(), russian_stress)?;
+                .preprocess_strict(&text, language.as_str(), russian_stress)?
+        } else {
+            pool[0]
+                .blocking_lock()
+                .preprocess(&text, language.as_str(), russian_stress)?
+        };
         let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
         if parts.is_empty() {
             return wav::encode_mono_i16(&[]);
@@ -519,6 +537,12 @@ async fn tts(
         .map_err(|_| ApiError::deadline())?
         .map_err(|_| ApiError::internal("synthesis task failed"))?
         .map_err(|error| {
+            if let Some(error) = error.downcast_ref::<ConversionError>() {
+                return ApiError::conversion(*error);
+            }
+            if error.is::<crate::textnorm::UnsupportedText>() {
+                return ApiError::bad_request("text contains characters unsupported by the model");
+            }
             eprintln!("[teratts-server] synthesis failed: {error:#}");
             ApiError::internal("synthesis failed")
         })?;
@@ -527,6 +551,10 @@ async fn tts(
         [
             (header::CONTENT_TYPE, HeaderValue::from_static("audio/wav")),
             (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+            (
+                header::HeaderName::from_static("x-teratts-text-mode"),
+                HeaderValue::from_static(text_mode.as_str()),
+            ),
         ],
         audio,
     )
@@ -540,6 +568,7 @@ struct PreparedRequest {
     scale: f32,
     russian_stress: bool,
     speech_front: bool,
+    text_mode: TextMode,
 }
 
 /// Phase D (speech-front): opt-in Russian text front-end (lexicon + versions /
@@ -548,6 +577,24 @@ fn speech_front_enabled() -> bool {
     std::env::var("TERATTS_SPEECH_FRONT")
         .map(|value| value == "1")
         .unwrap_or(false)
+}
+
+/// Runs after admission on the blocking worker: approved lexicon first, residual Latin second.
+fn apply_text_mode(
+    request: PreparedRequest,
+    lexicon: &LexiconReload,
+    converter: Option<&russian_only::Converter>,
+) -> Result<PreparedRequest> {
+    let mut request = apply_speech_front(request, lexicon);
+    if request.text_mode == TextMode::RussianOnly {
+        russian_only::validate_input(&request.text)?;
+        let converter = converter.ok_or(ConversionError::Configuration)?;
+        // Trace shape and all readings/warnings were validated by the adapter. Never log
+        // or return user text/trace in HTTP headers; the preparation CLI exposes the trace.
+        request.text = converter.convert(&request.text)?.text;
+        request.language = Language::Ru;
+    }
+    Ok(request)
 }
 
 /// Runs once per enabled request on the existing blocking synthesis worker.
@@ -559,7 +606,11 @@ fn apply_speech_front(mut request: PreparedRequest, lexicon: &LexiconReload) -> 
             eprintln!("[teratts-server] speech-front reload rejected; keeping last valid snapshot: {diagnostic}");
         }
         if matches!(request.language, Language::Ru) {
-            request.text = normalize_russian_spans(&request.text, &refreshed.normalizer);
+            request.text = if request.text_mode == TextMode::RussianOnly {
+                refreshed.normalizer.normalize_russian_only(&request.text)
+            } else {
+                normalize_russian_spans(&request.text, &refreshed.normalizer)
+            };
         }
     }
     request
@@ -613,15 +664,68 @@ fn normalize_russian_spans(text: &str, normalizer: &speechfront::Normalizer) -> 
     output
 }
 
+#[cfg(test)]
 fn prepare_request(
     request: TtsRequest,
     voices: &[String],
     ruaccent_capable: bool,
     speech_front_default: bool,
 ) -> Result<PreparedRequest, ApiError> {
-    let text = chunk::sanitize(request.text.trim());
+    prepare_request_with_mode(
+        request,
+        voices,
+        ruaccent_capable,
+        speech_front_default,
+        TextMode::Compatible,
+        false,
+    )
+}
+
+fn prepare_request_with_mode(
+    request: TtsRequest,
+    voices: &[String],
+    ruaccent_capable: bool,
+    speech_front_default: bool,
+    default_mode: TextMode,
+    converter_configured: bool,
+) -> Result<PreparedRequest, ApiError> {
+    let text_mode = request.text_mode.unwrap_or(default_mode);
+    if text_mode == TextMode::RussianOnly {
+        if !converter_configured {
+            return Err(ApiError::bad_request(
+                "russian_only requires a configured converter",
+            ));
+        }
+        if request.text.chars().count() > MAX_TEXT_CHARS {
+            return Err(ApiError::bad_request("raw text exceeds 2400 characters"));
+        }
+        if matches!(request.language, Some(Language::En))
+            || request
+                .voice
+                .as_deref()
+                .is_some_and(|v| !v.starts_with("ru_"))
+        {
+            return Err(ApiError::bad_request(
+                "russian_only requires a Russian voice and language ru",
+            ));
+        }
+        if request
+            .text
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\t')
+        {
+            return Err(ApiError::bad_request(
+                "russian_only text contains unsupported controls",
+            ));
+        }
+    }
+    let mut text = chunk::sanitize(request.text.trim());
+    if text_mode == TextMode::RussianOnly {
+        text = russian_only::flatten_tags(&text).map_err(ApiError::conversion)?;
+        russian_only::validate_input(&text).map_err(ApiError::conversion)?;
+    }
     let text_chars = text.chars().count();
-    if text_chars == 0 || text_chars > MAX_TEXT_CHARS {
+    if text_chars == 0 || (text_mode == TextMode::Compatible && text_chars > MAX_TEXT_CHARS) {
         return Err(ApiError::bad_request(format!(
             "text must contain 1..={MAX_TEXT_CHARS} characters"
         )));
@@ -663,7 +767,10 @@ fn prepare_request(
         language,
         scale,
         russian_stress,
-        speech_front: request.speech_front.unwrap_or(speech_front_default),
+        speech_front: request
+            .speech_front
+            .unwrap_or(text_mode == TextMode::RussianOnly || speech_front_default),
+        text_mode,
     })
 }
 
@@ -725,6 +832,25 @@ struct ApiError {
 }
 
 impl ApiError {
+    fn conversion(error: ConversionError) -> Self {
+        let (status, code) = match error {
+            ConversionError::InvalidText => (StatusCode::BAD_REQUEST, "invalid_request"),
+            ConversionError::Configuration => {
+                (StatusCode::SERVICE_UNAVAILABLE, "text_mode_unavailable")
+            }
+            ConversionError::Timeout => (StatusCode::GATEWAY_TIMEOUT, "text_conversion_timeout"),
+            ConversionError::Failed | ConversionError::InvalidOutput => {
+                (StatusCode::BAD_GATEWAY, "text_conversion_failed")
+            }
+        };
+        Self {
+            status,
+            code,
+            message: error.to_string(),
+            retry_after_ms: None,
+        }
+    }
+
     fn bad_request(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
@@ -843,7 +969,211 @@ mod tests {
             duration_scale: None,
             russian_stress: None,
             speech_front: None,
+            text_mode: None,
         }
+    }
+
+    #[test]
+    fn russian_only_request_flags_and_voice_guards() {
+        let voices = vec!["ru_f1".into(), "eng_f3".into()];
+        for default in [TextMode::Compatible, TextMode::RussianOnly] {
+            for flag in [None, Some(false), Some(true)] {
+                let mut input = request("<en>Widget</en>");
+                input.text_mode = Some(TextMode::RussianOnly);
+                input.speech_front = flag;
+                let output =
+                    prepare_request_with_mode(input, &voices, true, false, default, true).unwrap();
+                assert_eq!(output.text, "Widget");
+                assert_eq!(output.voice, "ru_f1");
+                assert!(matches!(output.language, Language::Ru));
+                assert_eq!(output.speech_front, flag.unwrap_or(true));
+            }
+        }
+        for (voice, language) in [
+            (Some("eng_f3"), None),
+            (None, Some(Language::En)),
+            (Some("eng_f3"), Some(Language::Ru)),
+        ] {
+            let mut input = request("hello");
+            input.voice = voice.map(String::from);
+            input.language = language;
+            assert!(prepare_request_with_mode(
+                input,
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true
+            )
+            .is_err());
+        }
+        let mut input = request("hello");
+        input.text_mode = Some(TextMode::RussianOnly);
+        assert!(prepare_request_with_mode(
+            input,
+            &voices,
+            true,
+            false,
+            TextMode::Compatible,
+            false
+        )
+        .is_err());
+        for text in [
+            "<de>text</de>",
+            "<ru>x</en>",
+            "<ru><en>x</en></ru>",
+            "\u{0000}тест",
+        ] {
+            let result = prepare_request_with_mode(
+                request(text),
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            );
+            assert_eq!(result.err().unwrap().status, StatusCode::BAD_REQUEST);
+        }
+        let mut compatible = request("hello");
+        compatible.voice = Some("eng_f3".into());
+        compatible.text_mode = Some(TextMode::Compatible);
+        let output = prepare_request_with_mode(
+            compatible,
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        assert!(matches!(output.language, Language::En));
+        assert!(!output.speech_front);
+        assert!(serde_json::from_str::<TtsRequest>(r#"{"text":"x","text_mode":"typo"}"#).is_err());
+        assert!(
+            serde_json::from_str::<TtsRequest>(r#"{"text":"x","text_mode":"russian_only"}"#)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn russian_only_approved_plus_forms_precede_arithmetic_protection() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        for written in ["GPT+4", "C++17", "42+7"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("lexicon.toml");
+            approve(&path, &APPROVED.replace("Widget", written));
+            let loader = LexiconReload::new(Some(path)).unwrap();
+            let voices = vec!["ru_f1".into()];
+            let input = request(&format!("<en>{written}</en> и 2+2"));
+            let prepared =
+                prepare_request_with_mode(input, &voices, true, false, TextMode::RussianOnly, true)
+                    .unwrap();
+            assert_eq!(
+                apply_speech_front(prepared, &loader).text,
+                "первый и два плюс два"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn russian_only_lexicon_precedes_conversion_and_false_still_converts() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        use crate::russian_only::tests::fixture;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lexicon.toml");
+        approve(&path, APPROVED);
+        let loader = LexiconReload::new(Some(path)).unwrap();
+        let voices = vec!["ru_f1".into()];
+        for flag in [None, Some(true), Some(false)] {
+            let expected = if flag == Some(false) {
+                "Widget"
+            } else {
+                "первый"
+            };
+            let body = format!("read -r input; [ \"$input\" = '{expected}' ] || exit 1; printf '%s' '{{\"text\":\"первый\",\"readings\":[],\"warnings\":[]}}'");
+            let (_dir, converter) = fixture(&body);
+            let mut input = request("<en>Widget</en>");
+            input.speech_front = flag;
+            let prepared =
+                prepare_request_with_mode(input, &voices, true, false, TextMode::RussianOnly, true)
+                    .unwrap();
+            let output = apply_text_mode(prepared, &loader, Some(&converter)).unwrap();
+            assert_eq!(output.text, "первый");
+            assert!(!output.text.chars().any(|c| c.is_ascii_alphabetic()));
+            assert_eq!(
+                crate::textnorm::ensure_language_tags(&output.text, output.language.as_str()),
+                "<ru>первый</ru>"
+            );
+        }
+        let mut prepared = prepare_request_with_mode(
+            request("тест"),
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        prepared.speech_front = false;
+        prepared.text = "а".repeat(russian_only::MAX_EXPANDED_CHARS + 1);
+        let error = apply_text_mode(prepared, &loader, None).err().unwrap();
+        assert_eq!(
+            error.downcast_ref::<ConversionError>(),
+            Some(&ConversionError::InvalidText)
+        );
+        assert_eq!(
+            ApiError::conversion(ConversionError::InvalidOutput).status,
+            StatusCode::BAD_GATEWAY
+        );
+        assert_eq!(
+            ApiError::conversion(ConversionError::Timeout).status,
+            StatusCode::GATEWAY_TIMEOUT
+        );
+    }
+
+    #[test]
+    #[ignore = "requires operator-installed speech-front binary and CMUDICT database"]
+    fn installed_converter_cross_project_server_pipeline() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        let converter = russian_only::Converter::new(
+            std::env::var_os("SPEECH_FRONT_TEST_BIN").unwrap().into(),
+            std::env::var_os("SPEECH_FRONT_TEST_CMUDICT")
+                .unwrap()
+                .into(),
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lexicon.toml");
+        approve(&path, APPROVED);
+        let loader = LexiconReload::new(Some(path)).unwrap();
+        let voices = vec!["ru_f1".into()];
+        for flag in [None, Some(false), Some(true)] {
+            let mut input = request("<en>Widget</en> и <en>Hello</en>");
+            input.speech_front = flag;
+            let prepared =
+                prepare_request_with_mode(input, &voices, true, false, TextMode::RussianOnly, true)
+                    .unwrap();
+            assert_eq!(prepared.speech_front, flag.unwrap_or(true));
+            let output = apply_text_mode(prepared, &loader, Some(&converter)).unwrap();
+            assert!(!output.text.chars().any(|c| c.is_ascii_alphabetic()));
+            assert!(output.text.contains(" и "));
+            if flag != Some(false) {
+                assert!(output.text.starts_with("первый и "));
+            }
+            assert_eq!(converter.convert(&output.text).unwrap().text, output.text);
+        }
+        let prepared = prepare_request_with_mode(
+            request("42+7"),
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        let output = apply_text_mode(prepared, &loader, Some(&converter)).unwrap();
+        assert_eq!(output.text, "сорок два плюс семь");
     }
 
     #[test]

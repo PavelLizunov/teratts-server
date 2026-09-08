@@ -157,14 +157,38 @@ impl TeraEngine {
         lang: &str,
         russian_stress: bool,
     ) -> Result<PreprocessedText> {
+        self.preprocess_impl(text, lang, russian_stress, false)
+    }
+
+    /// Reject unsupported model characters instead of silently filtering them.
+    pub fn preprocess_strict(
+        &mut self,
+        text: &str,
+        lang: &str,
+        russian_stress: bool,
+    ) -> Result<PreprocessedText> {
+        self.preprocess_impl(text, lang, russian_stress, true)
+    }
+
+    fn preprocess_impl(
+        &mut self,
+        text: &str,
+        lang: &str,
+        russian_stress: bool,
+        strict: bool,
+    ) -> Result<PreprocessedText> {
         let tagged = textnorm::ensure_language_tags(text, lang);
         let manual_language_spans = textnorm::language_span_contents(&tagged)
             .into_iter()
             .enumerate()
             .filter_map(|(index, content)| content.contains('+').then_some(index))
             .collect();
-        let normalized = textnorm::normalize(&tagged, &self.indexer)
-            .map_err(|e| anyhow!("invalid-text: {e}"))?;
+        let normalized = if strict {
+            textnorm::normalize_strict(&tagged, &self.indexer)?
+        } else {
+            textnorm::normalize(&tagged, &self.indexer)
+                .map_err(|e| anyhow!("invalid-text: {e}"))?
+        };
         let text = if russian_stress {
             let russian_spans = textnorm::russian_span_ranges(&normalized);
             self.ruaccent
