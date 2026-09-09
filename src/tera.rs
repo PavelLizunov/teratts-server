@@ -445,7 +445,8 @@ impl TeraEngine {
     }
 }
 
-/// Run one bounded warmup only for explicit CUDA selection, before load returns.
+/// Run one short-input warmup only for explicit CUDA selection, before load returns.
+/// Native inference has no wall-clock interruption; supervise startup externally.
 /// ponytail: one short shape pays common cold initialization costs, not every
 /// future shape's kernel/autotuning cost; expand only with measured evidence.
 fn warmup_cuda(

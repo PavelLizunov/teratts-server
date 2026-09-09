@@ -6,6 +6,7 @@ mod lexicon_reload;
 mod manifest;
 mod npy;
 mod num2words;
+mod remote_primary;
 mod rng;
 mod russian_only;
 mod server;
