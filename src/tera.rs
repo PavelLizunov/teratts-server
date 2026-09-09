@@ -84,8 +84,10 @@ pub struct PreprocessedText {
 
 impl TeraEngine {
     /// Load and verify the pinned release. Fails with `not-installed` reasons
-    /// surfaced verbatim on the stdout protocol.
+    /// surfaced verbatim on the stdout protocol. CUDA also completes one short
+    /// inference on this engine before returning; warmup failure aborts loading.
     pub fn load(tts_root: &Path) -> Result<TeraEngine> {
+        let provider = crate::execution_provider::Provider::from_env()?;
         let started = Instant::now();
         let manifest = Manifest::pinned()?;
         let release = manifest.release_dir(tts_root);
@@ -93,23 +95,26 @@ impl TeraEngine {
             .map_err(|e| anyhow!("not-installed: {e}"))?;
 
         let models = release.join("models");
-        let text_encoder = load_session(&int8_variant(&models.join("text_encoder.onnx")))?;
+        let text_encoder =
+            load_session(&int8_variant(&models.join("text_encoder.onnx")), provider)?;
         eprintln!(
             "[teratts-server] load stage=text-encoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let duration_predictor =
-            load_session(&int8_variant(&models.join("duration_predictor.onnx")))?;
+        let duration_predictor = load_session(
+            &int8_variant(&models.join("duration_predictor.onnx")),
+            provider,
+        )?;
         eprintln!(
             "[teratts-server] load stage=duration elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let sampler = load_session(&models.join("sampler_distilled_cfg3_8step.onnx"))?;
+        let sampler = load_session(&models.join("sampler_distilled_cfg3_8step.onnx"), provider)?;
         eprintln!(
             "[teratts-server] load stage=sampler elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let vocoder = load_session(&models.join("vocoder.onnx"))?;
+        let vocoder = load_session(&models.join("vocoder.onnx"), provider)?;
         eprintln!(
             "[teratts-server] load stage=vocoder elapsed_ms={}",
             started.elapsed().as_millis()
@@ -133,7 +138,7 @@ impl TeraEngine {
             started.elapsed().as_millis()
         );
 
-        Ok(TeraEngine {
+        let mut engine = TeraEngine {
             release,
             text_encoder,
             duration_predictor,
@@ -146,7 +151,15 @@ impl TeraEngine {
             indexer,
             ruaccent,
             style_cache: HashMap::new(),
-        })
+        };
+        // All four graphs are loaded before exercising the actual inference path.
+        // Cyrillic needs no converter; stress stays off like the default request.
+        warmup_cuda(provider, || {
+            engine
+                .synthesize("Привет.", "ru_f1", "ru", 1.0, SEED, false)
+                .map(|_| ())
+        })?;
+        Ok(engine)
     }
 
     /// Normalize and optionally accent one whole request before any TTS
@@ -432,6 +445,31 @@ impl TeraEngine {
     }
 }
 
+/// Run one short-input warmup only for explicit CUDA selection, before load returns.
+/// Native inference has no wall-clock interruption; supervise startup externally.
+/// ponytail: one short shape pays common cold initialization costs, not every
+/// future shape's kernel/autotuning cost; expand only with measured evidence.
+fn warmup_cuda(
+    provider: crate::execution_provider::Provider,
+    infer: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let enabled = match provider {
+        crate::execution_provider::Provider::Cpu => false,
+        #[cfg(feature = "cuda")]
+        crate::execution_provider::Provider::Cuda { .. } => true,
+    };
+    if !enabled {
+        return Ok(());
+    }
+    let started = Instant::now();
+    infer().map_err(|_| anyhow!("load: CUDA warmup failed"))?;
+    eprintln!(
+        "[teratts-server] load stage=cuda-warmup elapsed_ms={}",
+        started.elapsed().as_millis()
+    );
+    Ok(())
+}
+
 /// Copy a `[1, channels, frames]` tensor window while preserving its
 /// row-major channel-first layout. A flat contiguous range would treat the
 /// tensor as frame-major and feed the vocoder interleaved channel fragments.
@@ -517,10 +555,9 @@ fn int8_variant(path: &Path) -> PathBuf {
     }
 }
 
-fn load_session(path: &Path) -> Result<Session> {
-    // Phase A (perf spec): full graph optimizations + sequential execution +
-    // memory pattern are numerically-safe, zero-risk latency wins on CPU.
-    Session::builder()
+fn load_session(path: &Path, provider: crate::execution_provider::Provider) -> Result<Session> {
+    // Retain the existing CPU session settings; CUDA is explicit and Tera-only.
+    let builder = Session::builder()
         .map_err(|e| anyhow!("ort session builder: {e}"))?
         .with_optimization_level(GraphOptimizationLevel::All)
         .map_err(|e| anyhow!("ort optimization level: {e}"))?
@@ -531,7 +568,9 @@ fn load_session(path: &Path) -> Result<Session> {
         .with_intra_threads(ort_threads())
         .map_err(|e| anyhow!("ort intra threads: {e}"))?
         .with_inter_threads(1)
-        .map_err(|e| anyhow!("ort inter threads: {e}"))?
+        .map_err(|e| anyhow!("ort inter threads: {e}"))?;
+    provider
+        .configure(builder)?
         .commit_from_file(path)
         .map_err(|e| anyhow!("load {}: {e}", path.display()))
 }
@@ -668,6 +707,44 @@ mod tests {
         assert_eq!(SEED, 1234);
         assert_eq!(GUIDANCE, 3.0);
         assert_eq!(MAX_AUDIO_SECONDS, 180.0);
+    }
+
+    #[test]
+    fn cpu_startup_skips_warmup() {
+        warmup_cuda(crate::execution_provider::Provider::Cpu, || {
+            panic!("CPU must not run startup inference")
+        })
+        .unwrap();
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn cuda_startup_completes_exactly_one_warmup() {
+        let mut calls = 0;
+        warmup_cuda(
+            crate::execution_provider::Provider::Cuda {
+                memory_limit: 1024 * 1024,
+            },
+            || {
+                calls += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 1);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn cuda_warmup_failure_aborts_without_leaking_inference_text() {
+        let error = warmup_cuda(
+            crate::execution_provider::Provider::Cuda {
+                memory_limit: 1024 * 1024,
+            },
+            || Err(anyhow!("inference details including input text")),
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "load: CUDA warmup failed");
     }
 
     #[test]

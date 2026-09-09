@@ -68,6 +68,41 @@ function cleanMarkdown(text) {
 }
 
 const FIRST_SPEECH_CHUNK_CHARS = 240;
+const SPEECH_RPC_TIMEOUT_MS = 65_000;
+
+// Bound client waiting too: the Host timeout cannot settle a lost RPC response.
+function synthesizeWithDeadline(voice, text, parentSignal, timeoutMs = SPEECH_RPC_TIMEOUT_MS) {
+  if (parentSignal.aborted) return Promise.reject(parentSignal.reason);
+  const controller = new AbortController();
+  return new Promise((resolve, reject) => {
+    let timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      parentSignal.removeEventListener("abort", cancel);
+    };
+    const cancel = () => {
+      cleanup();
+      controller.abort(parentSignal.reason);
+      reject(parentSignal.reason);
+    };
+    parentSignal.addEventListener("abort", cancel, { once: true });
+    timer = setTimeout(() => {
+      cleanup();
+      const error = new Error("Speech request timed out; try again");
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+    try {
+      Promise.resolve(voice.synthesize(text, controller.signal)).then(
+        value => { cleanup(); resolve(value); },
+        error => { cleanup(); reject(error); },
+      );
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
 const SECOND_SPEECH_CHUNK_CHARS = 480;
 const SPEECH_CHUNK_CHARS = 800;
 const MAX_STREAMED_AUDIO_BYTES = 256 * 1024 * 1024; // 256 MiB (~45 minutes of speech)
@@ -622,7 +657,7 @@ window.__ModuleLoader__.load({
         for (let index = 0; index < textChunks.length; index += 1) {
           let result;
           try {
-            result = await voice.synthesize(textChunks[index], abort.signal);
+            result = await synthesizeWithDeadline(voice, textChunks[index], abort.signal);
           } catch (chunkError) {
             if (epoch !== playback.epoch) return;
             // If audio is actively playing buffered segments, let them finish playing smoothly

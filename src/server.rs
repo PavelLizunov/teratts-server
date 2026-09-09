@@ -16,6 +16,7 @@ use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use crate::chunk;
 use crate::lexicon_reload::LexiconReload;
 use crate::manifest::{self, Manifest};
+use crate::remote_primary::{self, Failure, ForwardRequest, RemotePrimary};
 use crate::russian_only::{self, ConversionError, TextMode};
 use crate::speechfront;
 use crate::tera::{TeraEngine, MAX_AUDIO_SECONDS, SAMPLE_RATE, SEED};
@@ -55,6 +56,7 @@ struct AppState {
     speech_front_default: bool,
     lexicon: LexiconReload,
     text_config: russian_only::Config,
+    primary: Option<RemotePrimary>,
 }
 
 fn ort_threads() -> usize {
@@ -210,6 +212,7 @@ struct HealthResponse {
     verification: &'static str,
     ruaccent_mode: String,
     ruaccent_ready: bool,
+    primary_configured: bool,
     sample_rate: u32,
     voices: Vec<String>,
     queue: QueueView,
@@ -231,6 +234,7 @@ struct ErrorResponse {
 }
 
 pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
+    let primary = RemotePrimary::from_env(port)?;
     // Validate the installed converter and dictionary before any model access.
     let text_config = russian_only::Config::from_env()?;
     // Fail closed on an invalid explicit lexicon before touching model assets.
@@ -279,6 +283,7 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         speech_front_default,
         lexicon,
         text_config,
+        primary,
     });
     let app = Router::new()
         .route("/health", get(health))
@@ -316,6 +321,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Response {
             verification: if models_ready { "verified" } else { "failed" },
             ruaccent_mode: state.ruaccent_mode.clone(),
             ruaccent_ready: state.ruaccent_ready,
+            primary_configured: state.primary.is_some(),
             sample_rate: SAMPLE_RATE,
             voices: state.voices.clone(),
             queue: state.admission.view(),
@@ -332,6 +338,7 @@ async fn tts(
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
     let Json(request) = request.map_err(ApiError::from_json_rejection)?;
+    let raw_text = request.text.clone();
     let prepared_request = prepare_request_with_mode(
         request,
         &state.voices,
@@ -341,14 +348,30 @@ async fn tts(
         state.text_config.converter.is_some(),
     )?;
     let text_mode = prepared_request.text_mode;
-    let ticket = state.admission.try_reserve()?;
-    let active = ticket.activate().await?;
-    let remaining = REQUEST_DEADLINE
-        .checked_sub(started.elapsed())
-        .ok_or_else(ApiError::deadline)?;
-    let pool = Arc::clone(&state.pool);
+    let primary_configured = state.primary.is_some();
+    let budget = request_budget(primary_configured);
+    let deadline = tokio::time::Instant::from_std(started + budget);
     let cancel = Arc::new(AtomicBool::new(false));
     let _cancel_on_drop = CancelOnDrop(Arc::clone(&cancel));
+    let ticket = state.admission.try_reserve()?;
+    let active = tokio::time::timeout_at(deadline, ticket.activate())
+        .await
+        .map_err(|_| ApiError::deadline())??;
+    if let Some(audio) = primary_audio(
+        state.primary.as_ref(),
+        &raw_text,
+        &prepared_request,
+        deadline,
+        &cancel,
+    )
+    .await?
+    {
+        return Ok(audio_response(audio, text_mode, Some("primary")));
+    }
+    // No asynchronous boundary between the final cancellation/deadline check and
+    // CPU dispatch. The blocking closure checks again before any local work.
+    check_request_live(deadline, &cancel)?;
+    let pool = Arc::clone(&state.pool);
     let cancel_for_task = Arc::clone(&cancel);
     let task = tokio::task::spawn_blocking(move || {
         // Retain admission permit ownership inside the blocking task so
@@ -529,7 +552,7 @@ async fn tts(
         }
         wav::encode_mono_i16(&all)
     });
-    let task_result = tokio::time::timeout(remaining, task).await;
+    let task_result = tokio::time::timeout_at(deadline, task).await;
     if task_result.is_err() {
         cancel.store(true, Ordering::Release);
     }
@@ -547,7 +570,72 @@ async fn tts(
             ApiError::internal("synthesis failed")
         })?;
 
-    Ok((
+    Ok(audio_response(
+        audio,
+        text_mode,
+        primary_configured.then_some("cpu"),
+    ))
+}
+
+fn request_budget(primary_configured: bool) -> Duration {
+    if primary_configured {
+        remote_primary::TOTAL_DEADLINE
+    } else {
+        REQUEST_DEADLINE
+    }
+}
+
+fn check_request_live(deadline: tokio::time::Instant, cancel: &AtomicBool) -> Result<(), ApiError> {
+    if cancel.load(Ordering::Acquire) || tokio::time::Instant::now() >= deadline {
+        return Err(ApiError::deadline());
+    }
+    Ok(())
+}
+
+async fn primary_audio(
+    primary: Option<&RemotePrimary>,
+    raw_text: &str,
+    prepared: &PreparedRequest,
+    deadline: tokio::time::Instant,
+    cancel: &AtomicBool,
+) -> Result<Option<Vec<u8>>, ApiError> {
+    check_request_live(deadline, cancel)?;
+    let Some(primary) = primary else {
+        return Ok(None);
+    };
+    if !primary.has_attempt_budget(deadline.saturating_duration_since(tokio::time::Instant::now()))
+    {
+        return Ok(None);
+    }
+    let forward = ForwardRequest {
+        text: raw_text,
+        voice: &prepared.voice,
+        language: prepared.language.as_str(),
+        duration_scale: prepared.scale,
+        speech_front: prepared.speech_front,
+        text_mode: prepared.text_mode.as_str(),
+        russian_stress: matches!(prepared.language, Language::Ru)
+            .then_some(prepared.russian_stress),
+    };
+    let result = tokio::time::timeout_at(deadline, primary.attempt(&forward, cancel))
+        .await
+        .map_err(|_| ApiError::deadline())?;
+    check_request_live(deadline, cancel)?;
+    match result {
+        Ok(audio) => Ok(Some(audio)),
+        Err(Failure::Fallback) => Ok(None),
+        Err(Failure::Cancelled) => Err(ApiError::deadline()),
+        Err(Failure::Reject(status, code, retry_after_ms)) => Err(ApiError {
+            status,
+            code,
+            message: "primary synthesis rejected or returned invalid output".into(),
+            retry_after_ms,
+        }),
+    }
+}
+
+fn audio_response(audio: Vec<u8>, text_mode: TextMode, backend: Option<&'static str>) -> Response {
+    let mut response = (
         [
             (header::CONTENT_TYPE, HeaderValue::from_static("audio/wav")),
             (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
@@ -558,7 +646,13 @@ async fn tts(
         ],
         audio,
     )
-        .into_response())
+        .into_response();
+    if let Some(backend) = backend {
+        response
+            .headers_mut()
+            .insert("x-teratts-backend", HeaderValue::from_static(backend));
+    }
+    response
 }
 
 struct PreparedRequest {
@@ -587,7 +681,9 @@ fn apply_text_mode(
 ) -> Result<PreparedRequest> {
     let mut request = apply_speech_front(request, lexicon);
     if request.text_mode == TextMode::RussianOnly {
-        russian_only::validate_input(&request.text)?;
+        // Number ranges can introduce typographic dashes after input preparation.
+        // Normalize converter input only; never rewrite its validated output/trace.
+        request.text = russian_only::normalize_symbols(&request.text)?;
         let converter = converter.ok_or(ConversionError::Configuration)?;
         // Trace shape and all readings/warnings were validated by the adapter. Never log
         // or return user text/trace in HTTP headers; the preparation CLI exposes the trace.
@@ -719,11 +815,16 @@ fn prepare_request_with_mode(
             ));
         }
     }
-    let mut text = chunk::sanitize(request.text.trim());
-    if text_mode == TextMode::RussianOnly {
-        text = russian_only::flatten_tags(&text).map_err(ApiError::conversion)?;
-        russian_only::validate_input(&text).map_err(ApiError::conversion)?;
-    }
+    let text = if text_mode == TextMode::RussianOnly {
+        // Validate the entire input before trimming can hide unsupported whitespace.
+        let flat = russian_only::flatten_tags(&request.text).map_err(ApiError::conversion)?;
+        russian_only::normalize_symbols(&flat)
+            .map_err(ApiError::conversion)?
+            .trim()
+            .to_owned()
+    } else {
+        chunk::sanitize(request.text.trim())
+    };
     let text_chars = text.chars().count();
     if text_chars == 0 || (text_mode == TextMode::Compatible && text_chars > MAX_TEXT_CHARS) {
         return Err(ApiError::bad_request(format!(
@@ -882,7 +983,7 @@ impl ApiError {
         Self {
             status: StatusCode::GATEWAY_TIMEOUT,
             code: "deadline_exceeded",
-            message: "request exceeded 120 second deadline".into(),
+            message: "request exceeded its deadline or was cancelled".into(),
             retry_after_ms: None,
         }
     }
@@ -973,6 +1074,272 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn primary_routing_keeps_raw_input_and_single_admission() {
+        use crate::remote_primary::tests::{mock, response};
+        let raw = "  <en>Widget→API</en> — ⏵15%  ";
+        let prepared = prepare_request_with_mode(
+            request(raw),
+            &["ru_f1".into()],
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        assert_eq!(prepared.text, "Widget переход к API -  15%");
+        let (primary, server) = mock(
+            response(
+                500,
+                "application/json",
+                "russian_only",
+                b"{\"code\":\"internal\"}",
+            ),
+            Duration::ZERO,
+            1000,
+        )
+        .await;
+        let admission = Admission::new();
+        let active = admission.try_reserve().unwrap().activate().await.unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let guard = CancelOnDrop(Arc::clone(&cancel));
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        assert!(
+            primary_audio(Some(&primary), raw, &prepared, deadline, &cancel)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(admission.view().active, 1);
+        assert_eq!(admission.admitted.load(Ordering::Acquire), 1);
+        assert_eq!(
+            prepared.text, "Widget переход к API -  15%",
+            "CPU fallback retains original PreparedRequest"
+        );
+        let received = server.await.unwrap();
+        let split = received.windows(4).position(|v| v == b"\r\n\r\n").unwrap() + 4;
+        let json: serde_json::Value = serde_json::from_slice(&received[split..]).unwrap();
+        assert_eq!(json["text"], raw);
+        assert_eq!(json["speech_front"], true);
+        assert_eq!(json["text_mode"], "russian_only");
+        assert_eq!(json["russian_stress"], true);
+        drop(guard);
+        assert!(check_request_live(deadline, &cancel).is_err());
+        assert!(
+            primary_audio(Some(&primary), raw, &prepared, deadline, &cancel)
+                .await
+                .is_err()
+        );
+        drop(active);
+        assert_eq!(admission.admitted.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn total_budget_bounds_primary_and_queue_without_fallback() {
+        use crate::remote_primary::tests::{mock, response};
+        assert_eq!(request_budget(false), Duration::from_secs(120));
+        assert_eq!(request_budget(true), Duration::from_secs(55));
+        let prepared = prepare_request(request("hello"), &["ru_f1".into()], true, false).unwrap();
+        let (primary, server) = mock(
+            response(
+                500,
+                "application/json",
+                "compatible",
+                b"{\"code\":\"internal\"}",
+            ),
+            Duration::from_millis(200),
+            1000,
+        )
+        .await;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let guard = CancelOnDrop(Arc::clone(&cancel));
+        let started = tokio::time::Instant::now();
+        assert!(
+            primary_audio(
+                Some(&primary),
+                "hello",
+                &prepared,
+                started + Duration::from_secs(5),
+                &cancel
+            )
+            .await
+            .unwrap()
+            .is_none(),
+            "reserve skips primary before dispatch"
+        );
+        let result = primary_audio(Some(&primary), "hello", &prepared, started, &cancel).await;
+        assert_eq!(result.unwrap_err().code, "deadline_exceeded");
+        assert!(started.elapsed() < Duration::from_millis(500));
+        drop(guard);
+        assert!(cancel.load(Ordering::Acquire));
+        server.abort();
+        let _ = server.await;
+        let admission = Admission::new();
+        let active = admission.try_reserve().unwrap().activate().await.unwrap();
+        let ticket = admission.try_reserve().unwrap();
+        assert!(tokio::time::timeout_at(
+            tokio::time::Instant::now() + Duration::from_millis(10),
+            ticket.activate()
+        )
+        .await
+        .is_err());
+        assert_eq!(admission.admitted.load(Ordering::Acquire), 1);
+        drop(active);
+        assert_eq!(admission.admitted.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn dropping_request_owned_primary_future_sets_cancel_and_releases_admission() {
+        use crate::remote_primary::tests::{mock, response};
+        let prepared = prepare_request(request("hello"), &["ru_f1".into()], true, false).unwrap();
+        let (primary, server) = mock(
+            response(
+                500,
+                "application/json",
+                "compatible",
+                b"{\"code\":\"internal\"}",
+            ),
+            Duration::from_millis(200),
+            1000,
+        )
+        .await;
+        let admission = Admission::new();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let future = async {
+            let _guard = CancelOnDrop(Arc::clone(&cancel));
+            let _active = admission.try_reserve().unwrap().activate().await.unwrap();
+            primary_audio(
+                Some(&primary),
+                "hello",
+                &prepared,
+                tokio::time::Instant::now() + Duration::from_secs(10),
+                &cancel,
+            )
+            .await
+        };
+        assert!(tokio::time::timeout(Duration::from_millis(30), future)
+            .await
+            .is_err());
+        assert!(cancel.load(Ordering::Acquire));
+        assert_eq!(admission.admitted.load(Ordering::Acquire), 0);
+        server.abort();
+        let _ = server.await;
+    }
+
+    #[tokio::test]
+    async fn axum_http_disconnect_during_primary_never_starts_cpu() {
+        use crate::remote_primary::tests::response;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let upstream = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = upstream.local_addr().unwrap().port();
+        let (begun_tx, begun_rx) = tokio::sync::oneshot::channel();
+        let upstream_task = tokio::spawn(async move {
+            let (mut stream, _) = upstream.accept().await.unwrap();
+            let mut bytes = [0; 4096];
+            let _ = stream.read(&mut bytes).await.unwrap();
+            begun_tx.send(()).unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let _ = stream
+                .write_all(&response(
+                    500,
+                    "application/json",
+                    "compatible",
+                    b"{\"code\":\"internal\"}",
+                ))
+                .await;
+        });
+        let primary = RemotePrimary::parse(
+            Some(&format!("http://127.0.0.1:{port}/tts")),
+            Some("test-token"),
+            Some("100"),
+            1,
+        )
+        .unwrap()
+        .unwrap();
+        let primary = Arc::new(primary);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cpu = Arc::new(AtomicUsize::new(0));
+        let admission = Admission::new();
+        let route = {
+            let cancel = Arc::clone(&cancel);
+            let cpu = Arc::clone(&cpu);
+            let admission = Arc::clone(&admission);
+            post(move |Json(input): Json<TtsRequest>| {
+                let primary = Arc::clone(&primary);
+                let cancel = Arc::clone(&cancel);
+                let cpu = Arc::clone(&cpu);
+                let admission = Arc::clone(&admission);
+                async move {
+                    let _guard = CancelOnDrop(Arc::clone(&cancel));
+                    let _active = admission.try_reserve().unwrap().activate().await.unwrap();
+                    let raw = input.text.clone();
+                    let prepared = prepare_request(input, &["ru_f1".into()], true, false).unwrap();
+                    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+                    if primary_audio(Some(&primary), &raw, &prepared, deadline, &cancel)
+                        .await
+                        .unwrap()
+                        .is_none()
+                    {
+                        check_request_live(deadline, &cancel).unwrap();
+                        cpu.fetch_add(1, Ordering::AcqRel);
+                    }
+                    StatusCode::OK
+                }
+            })
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, Router::new().route("/tts", route))
+                .await
+                .unwrap();
+        });
+        let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let body = r#"{"text":"hello"}"#;
+        client.write_all(format!("POST /tts HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(1), begun_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        client.shutdown().await.unwrap();
+        drop(client);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let cpu_count = cpu.load(Ordering::Acquire);
+        let cancelled = cancel.load(Ordering::Acquire);
+        let admitted = admission.admitted.load(Ordering::Acquire);
+        server.abort();
+        let _ = server.await;
+        upstream_task.abort();
+        let _ = upstream_task.await;
+        assert_eq!(cpu_count, 0, "disconnect must not dispatch CPU fallback");
+        assert!(cancelled, "Axum must drop the request-owned guard");
+        assert_eq!(admitted, 0);
+    }
+
+    #[test]
+    fn backend_evidence_header_is_present_only_for_configured_routing() {
+        for backend in [None, Some("primary"), Some("cpu")] {
+            let response = audio_response(vec![1], TextMode::Compatible, backend);
+            assert_eq!(
+                response
+                    .headers()
+                    .get("x-teratts-backend")
+                    .map(|v| v.to_str().unwrap()),
+                backend
+            );
+        }
+    }
+
+    #[test]
+    fn english_rejects_explicit_stress_even_false() {
+        for stress in [false, true] {
+            let mut input = request("hello");
+            input.voice = Some("eng_f3".into());
+            input.russian_stress = Some(stress);
+            assert!(prepare_request(input, &["eng_f3".into()], true, false).is_err());
+        }
+    }
+
     #[test]
     fn russian_only_request_flags_and_voice_guards() {
         let voices = vec!["ru_f1".into(), "eng_f3".into()];
@@ -1053,6 +1420,161 @@ mod tests {
             serde_json::from_str::<TtsRequest>(r#"{"text":"x","text_mode":"russian_only"}"#)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn russian_only_symbols_normalize_before_conversion_and_model_validation() {
+        let voices = vec!["ru_f1".into()];
+        for (raw, expected) in [
+            ("а→б←в↔г", "а переход к б стрелка влево в связано с г"),
+            ("а⇒б⇐в⇔г↑д↓е", "а переход к б стрелка влево в связано с г стрелка вверх д стрелка вниз е"),
+            ("2≈3≤4≥5≠6×7÷8±9−10", "2 примерно равно 3 меньше или равно 4 больше или равно 5 не равно 6 умножить на 7 разделить на 8 плюс минус 9 минус 10"),
+            ("—“тест”–‘ёж’„да’", "-\"тест\"-'ёж'\"да'"),
+            ("а⏵б✅в•г‣д▪е●ж◦з·и│к─л", "а б в г д е ж з и к л"),
+            ("<en>Widget→API</en>", "Widget переход к API"),
+            ("а\nб\tв\u{00a0}г", "а б в г"),
+            ("[тест] {слово}", "(тест) (слово)"),
+            ("−5 $−5 2−3", "-5 $-5 2 минус 3"),
+            ("C++ 2+2 молок+о +ёж мо\u{301}ре 1<2>0", "C++ 2+2 молок+о +ёж мо\u{301}ре 1<2>0"),
+        ] {
+            let prepared = prepare_request_with_mode(
+                request(raw), &voices, true, false, TextMode::RussianOnly, true,
+            ).unwrap();
+            assert_eq!(prepared.text, expected, "{raw}");
+        }
+        // Model-free vocabulary fixture: ASCII and Russian, but no typographic dash/quotes.
+        let entries: Vec<i64> = (0..65_536u32)
+            .map(|cp| {
+                if char::from_u32(cp)
+                    .is_some_and(|c| c.is_ascii() || matches!(c, 'А'..='я' | 'Ё' | 'ё'))
+                {
+                    i64::from(cp)
+                } else {
+                    -1
+                }
+            })
+            .collect();
+        let indexer =
+            crate::indexer::UnicodeIndexer::from_json(&serde_json::to_string(&entries).unwrap())
+                .unwrap();
+        let raw = "тест — “слово”";
+        assert!(crate::textnorm::normalize_strict(&format!("<ru>{raw}</ru>"), &indexer).is_err());
+        let prepared = prepare_request_with_mode(
+            request(raw),
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        assert!(crate::textnorm::normalize_strict(
+            &format!("<ru>{}</ru>", prepared.text),
+            &indexer
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn russian_only_unknown_symbols_and_expansion_fail_before_converter() {
+        let voices = vec!["ru_f1".into()];
+        for raw in [
+            "тест😀",
+            "тест☃",
+            "тест↗",
+            "тестé",
+            "тест中",
+            "тесті",
+            "тестΩ",
+            "тест\u{200b}",
+            "тест\u{fe0f}",
+            "тест\u{0000}",
+            "тест\r",
+            "<de>тест</de>",
+            "<ru>тест</en>",
+            "<en><ru>тест</ru></en>",
+            "⏵✅•│─",
+            &"≤".repeat(MAX_TEXT_CHARS),
+        ] {
+            let error = prepare_request_with_mode(
+                request(raw),
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .err()
+            .expect(raw);
+            assert_eq!(error.status, StatusCode::BAD_REQUEST, "{raw}");
+            assert_eq!(error.code, "invalid_request", "{raw}");
+        }
+        for voice in ["ru_f1", "eng_f3"] {
+            let mut input = request("Hello → мир — ⏵✅");
+            input.voice = Some(voice.into());
+            let prepared = prepare_request_with_mode(
+                input,
+                &[voice.into()],
+                true,
+                false,
+                TextMode::Compatible,
+                true,
+            )
+            .unwrap();
+            assert_eq!(prepared.text, "Hello → мир — ⏵✅");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn russian_only_symbol_normalization_reaches_converter_after_approved_lexicon() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        use crate::russian_only::tests::fixture;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lexicon.toml");
+        approve(&path, APPROVED);
+        let loader = LexiconReload::new(Some(path)).unwrap();
+        for (raw, flag, expected) in [
+            (
+                "<en>Widget</en>→тест — ⏵✅",
+                None,
+                "первый переход к тест -",
+            ),
+            (
+                "<en>Widget</en>→тест — ⏵✅",
+                Some(false),
+                "Widget  переход к тест -",
+            ),
+            (
+                "−5 и 2−3 и 2+2 молок+о",
+                None,
+                "минус пять и два минус три и два плюс два молок+о",
+            ),
+            ("3–5", None, "три - пять"),
+            ("3-5", None, "три - пять"),
+            ("$−5", None, "минус пять долларов"),
+            ("$-5", None, "минус пять долларов"),
+        ] {
+            let body = format!("read -r input; [ \"$input\" = '{expected}' ] || exit 1; printf '%s' '{{\"text\":\"тест\",\"readings\":[{{\"written\":\"API\",\"text\":\"эй пи ай\",\"source\":\"structural\",\"warnings\":[]}}],\"warnings\":[\"automatic_not_approved\"]}}'");
+            let (_dir, converter) = fixture(&body);
+            let mut input = request(raw);
+            input.speech_front = flag;
+            let prepared = prepare_request_with_mode(
+                input,
+                &["ru_f1".into()],
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .unwrap();
+            assert_eq!(
+                apply_text_mode(prepared, &loader, Some(&converter))
+                    .unwrap_or_else(|error| panic!("{raw}, {flag:?}: {error}"))
+                    .text,
+                "тест"
+            );
+        }
     }
 
     #[test]
