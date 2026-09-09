@@ -2,7 +2,19 @@
 
 Date: 2026-09-09. Branch: `agent/speech-latency-gpu`; original CPU base `ebdbe89`.
 
-## Final admission decision
+## Updated user-approved topology (later on 2026-09-09)
+
+The user explicitly replaced the conditional speed gate with **GPU primary, separate CPU fallback**, and approved fixing the reproduced symbol errors. Release `9b5e4fd68af4fffcc4c8232605171d156e3f87b6` contains bounded input-only symbol normalization before lexicon processing and again before conversion (range parsing can emit another typographic dash). Converter output/schema and model validation remain strict; unknown symbols produce HTTP400, not a falsely reported converter HTTP502.
+
+Fresh lead verification: default suite **123 passed / 4 ignored**, CUDA suite **125 passed / 4 ignored**, production Clippy and diff check passed. Independent review reproduced and cleared intermediate numeric-range and signed-currency regressions. Real candidate synthesis returned HTTP200, `x-teratts-backend: primary`, `russian_only`, nonempty WAV for arrows (517 ms), math (418), decorations (228), dash (288), range (322), signed currency (245), and brackets (213). Unknown foreign text returned HTTP400. These are individual observations, not a new performance campaign.
+
+Full GUI→Host→Tailnet→new engine-backed candidate with delayed mock: corrected-symbol control returned audio in 3,362 ms with one upstream attempt and one CPU inference. Stop after the next upstream receipt produced no audio, no active speech button after 4.5 seconds, and no additional CPU synthesis. Settings were restored to the original endpoint with retries zero.
+
+Transport now uses a **separate OpenSSH instance bound only to the jump host's Tailnet address on port 22222**, not Tailscale SSH's port22 authentication. Dedicated key, pinned host keys, publickey-only authentication, no shell/PTY/agent/reverse forwarding, one allowed destination per hop. Live tests confirmed publickey authentication and rejected shell and unapproved destinations on both jump and guest. Root-owned private credential files were checked; jump and tunnel enabled. GPU models verified, converter/database/lexicon hashes identical across machines. Final activation passed the existing immutable-release/hash/health checks. Both machines report exact release `9b5e4fd68af4fffcc4c8232605171d156e3f87b6`; production health reports `primary_configured: true`. On the actual GUI button, a test-only browser request substitution supplied `⏵ GPU → CPU fallback — скорость ≈ 35%, задержка ≤ 3 с. ✅` through the unchanged RPC/Host path: HTTP200 business success, first play in **1,399 ms**. This is a controlled browser input injection, not a claim that the original transcript contained that exact string. No client code was installed or DSH restarted.
+
+Production fault check with corrected symbols: GPU available → backend `primary`, 262,802 WAV bytes, 551 ms; stop only the tunnel → backend `cpu`, identical byte count, 332 ms; restore tunnel → next response backend `primary`. GPU, CPU Tera, restricted jump and tunnel are enabled; checked services active with zero automatic restarts. GPU used 1,054 MiB / free 14,799 MiB. Temporary candidate/mock services stopped and HTTPS test path removed. The final state is intentionally **GPU-primary / separate CPU-fallback**, not the earlier rejected configuration below. Boot enablement and supervised startup were verified; no whole-machine reboot was performed.
+
+## Historical admission decision (superseded by explicit user preference)
 
 **GPU primary admission rejected after production verification.** The paired candidate run improved first play (1,991 → 1,292 ms), but the final production GUI first-play measurement was **2,366 ms**. GPU journal showed approximately 213 ms synthesis and no local CPU fallback; the complete delivery path did not demonstrate a stable improvement. Do not select only the favorable pair as acceptance evidence. No additional repeated campaign was run to search for a favorable result.
 
