@@ -1,5 +1,6 @@
 mod chunk;
 mod downloader;
+mod execution_provider;
 mod indexer;
 mod lexicon_reload;
 mod manifest;

@@ -485,7 +485,8 @@ test("first segment plays while later synthesis remains sequential", async () =>
     assert.equal(harness.audioInstances.length, 1);
     assert.equal(harness.audioInstances[0].playCalls, 1);
     assert.equal(harness.synthCalls.length, 2);
-    assert.equal(harness.synthCalls[1].signal, harness.synthCalls[0].signal);
+    assert.notEqual(harness.synthCalls[1].signal, harness.synthCalls[0].signal);
+    assert.equal(harness.synthCalls[1].signal.aborted, false);
 
     harness.synthCalls[1].deferred.resolve(playbackWav());
     await producer;
@@ -675,7 +676,8 @@ test("stop aborts background synthesis and releases every prepared segment", asy
     assert.equal(harness.synthCalls.length, 2);
 
     harness.api.stopPlayback();
-    assert.equal(signal.aborted, true);
+    assert.equal(signal.aborted, false); // Completed RPC has released its listener.
+    assert.equal(harness.synthCalls[1].signal.aborted, true);
     assert.deepEqual(harness.revokedUrls, ["blob:test-1"]);
     assert.equal(harness.audioInstances[0].src, "");
 

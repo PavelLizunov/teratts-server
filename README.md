@@ -14,6 +14,59 @@ cargo run --release -- --speak "Привет" --voice ru_f1 --output hello.wav
 
 Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache.
 
+## Execution provider (CPU default)
+
+Unset `TERATTS_EXECUTION_PROVIDER` or `cpu` retains CPU inference. Optional CUDA
+support is compiled with `cargo build --offline --locked --release --features cuda`;
+it does not install ONNX Runtime, CUDA, cuDNN, drivers, or models. The existing
+`ort` rc.13 `load-dynamic` / API27 contract is unchanged.
+
+For an **already admitted** GPU candidate, explicitly set
+`TERATTS_EXECUTION_PROVIDER=cuda` and `TERATTS_CUDA_MEMORY_LIMIT_MIB` to an integer
+in `1..=16384`. There is deliberately no default CUDA budget. Invalid provider,
+non-Unicode configuration, missing/invalid CUDA budget, or a build without the
+`cuda` feature fails before Tera model loading. The CUDA-only budget is ignored
+in CPU mode. CUDA registration failure fails startup, rather than silently
+running the requested candidate on CPU. Unsupported graph nodes may still run
+on ORT's CPU provider; enabling CUDA does not prove every node executes on GPU.
+To select the retained CPU fallback, unset the provider or set `cpu`; CUDA
+inference errors/OOM do not automatically retry on CPU.
+
+CUDA applies only to the four Tera sessions, not RUAccent. Each session gets its
+own arena limit: budget accounting is **four sessions × engine slots × the
+configured MiB**, plus CUDA/cuDNN context, workspace and other allocations outside
+those arenas. This is **not a process-wide VRAM cap or an admission check**.
+Keep `TERATTS_PARALLEL_CHUNKS=1` for a first candidate. CUDA uses device 0,
+`SameAsRequested` arena growth, heuristic convolution selection, restricted
+convolution workspace and TF32 disabled; no model conversion or CUDA graph
+capture is enabled.
+
+Before any GPU model load, an operator must validate the complete candidate's
+peak at the intended input bounds on safely available hardware, add an explicit
+reserve for existing workloads, and recheck actual free VRAM (`nvidia-smi
+memory.free`). Graph file size is not peak VRAM. Unknown peak means no admission;
+this code does not automatically measure, reserve, or prove available capacity.
+Do not OOM-probe or change/stop an existing workload to make a candidate fit.
+
+The driver-570-compatible API27 route is Microsoft's explicit
+[`onnxruntime-linux-x64-gpu_cuda12-1.27.0.tgz`](https://github.com/microsoft/onnxruntime/releases/tag/v1.27.0)
+(CUDA 12 builds are deprecated but published), CUDA 12.8 and compatible cuDNN 9
+for CUDA 12. Default ORT 1.27 GPU PyPI/NuGet packages use CUDA 13, which requires a
+newer driver; do not substitute them. Pin and verify the runtime archive, select
+its `libonnxruntime.so` using `ORT_DYLIB_PATH`, and supply process-private library
+paths for its providers, CUDA 12 and cuDNN 9. Check the actual library versions:
+`/usr/local/cuda` may point to a different major version. Use explicit paths
+without changing global alternatives or other workloads. Inspect loader dependencies/API/provider
+availability before model loading. See the [ORT CUDA requirements](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html)
+and [cuDNN 9.19 compatibility matrix](https://docs.nvidia.com/deeplearning/cudnn/backend/v9.19.0/reference/support-matrix.html).
+
+Model-free configuration checks (neither command creates an ORT session):
+
+```sh
+cargo test --offline --locked --bin teratts-server execution_provider::tests
+cargo test --offline --locked --features cuda --bin teratts-server execution_provider::tests
+```
+
 ## HTTP
 
 ```sh
@@ -146,5 +199,10 @@ synthesis routes through the Host plugin. Active playback exposes
 −10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. Technical fenced blocks
 and checklist items are converted to speakable text instead of being dropped.
 For long speech, the first bounded segment begins as soon as ready, remaining
-segments synthesize sequentially in the background, total audio remains
-16 MiB bounded, and controls apply across buffered speech.
+segments synthesize sequentially in the background, each response remains
+16 MiB bounded (256 MiB cumulative buffered audio), and controls apply across
+buffered speech. The client caps each synthesis RPC wait at 65 seconds, including
+lost responses that outlive the Host timeout. Stop or expiry aborts the current
+RPC; a late result cannot restart playback. This is a client waiting bound, not
+a guarantee that a running native inference can be interrupted immediately.
+The first-fragment limit remains 240 characters; no GPU speedup is implied.

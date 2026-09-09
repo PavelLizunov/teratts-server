@@ -5,6 +5,10 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 publish = false
 
+[features]
+default = []
+cuda = ["ort/cuda"]
+
 [dependencies]
 anyhow = "1"
 axum = "0.8"

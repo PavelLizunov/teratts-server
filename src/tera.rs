@@ -86,6 +86,7 @@ impl TeraEngine {
     /// Load and verify the pinned release. Fails with `not-installed` reasons
     /// surfaced verbatim on the stdout protocol.
     pub fn load(tts_root: &Path) -> Result<TeraEngine> {
+        let provider = crate::execution_provider::Provider::from_env()?;
         let started = Instant::now();
         let manifest = Manifest::pinned()?;
         let release = manifest.release_dir(tts_root);
@@ -93,23 +94,26 @@ impl TeraEngine {
             .map_err(|e| anyhow!("not-installed: {e}"))?;
 
         let models = release.join("models");
-        let text_encoder = load_session(&int8_variant(&models.join("text_encoder.onnx")))?;
+        let text_encoder =
+            load_session(&int8_variant(&models.join("text_encoder.onnx")), provider)?;
         eprintln!(
             "[teratts-server] load stage=text-encoder elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let duration_predictor =
-            load_session(&int8_variant(&models.join("duration_predictor.onnx")))?;
+        let duration_predictor = load_session(
+            &int8_variant(&models.join("duration_predictor.onnx")),
+            provider,
+        )?;
         eprintln!(
             "[teratts-server] load stage=duration elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let sampler = load_session(&models.join("sampler_distilled_cfg3_8step.onnx"))?;
+        let sampler = load_session(&models.join("sampler_distilled_cfg3_8step.onnx"), provider)?;
         eprintln!(
             "[teratts-server] load stage=sampler elapsed_ms={}",
             started.elapsed().as_millis()
         );
-        let vocoder = load_session(&models.join("vocoder.onnx"))?;
+        let vocoder = load_session(&models.join("vocoder.onnx"), provider)?;
         eprintln!(
             "[teratts-server] load stage=vocoder elapsed_ms={}",
             started.elapsed().as_millis()
@@ -517,10 +521,9 @@ fn int8_variant(path: &Path) -> PathBuf {
     }
 }
 
-fn load_session(path: &Path) -> Result<Session> {
-    // Phase A (perf spec): full graph optimizations + sequential execution +
-    // memory pattern are numerically-safe, zero-risk latency wins on CPU.
-    Session::builder()
+fn load_session(path: &Path, provider: crate::execution_provider::Provider) -> Result<Session> {
+    // Retain the existing CPU session settings; CUDA is explicit and Tera-only.
+    let builder = Session::builder()
         .map_err(|e| anyhow!("ort session builder: {e}"))?
         .with_optimization_level(GraphOptimizationLevel::All)
         .map_err(|e| anyhow!("ort optimization level: {e}"))?
@@ -531,7 +534,9 @@ fn load_session(path: &Path) -> Result<Session> {
         .with_intra_threads(ort_threads())
         .map_err(|e| anyhow!("ort intra threads: {e}"))?
         .with_inter_threads(1)
-        .map_err(|e| anyhow!("ort inter threads: {e}"))?
+        .map_err(|e| anyhow!("ort inter threads: {e}"))?;
+    provider
+        .configure(builder)?
         .commit_from_file(path)
         .map_err(|e| anyhow!("load {}: {e}", path.display()))
 }
