@@ -220,8 +220,25 @@ The mode rejects non-Russian voices or `language: "en"` before inference rather
 than silently overriding them. The default voice remains `ru_f1`, language `ru`.
 Strict, balanced, non-nested `<ru>`/`<en>` tags are flattened to plain text with
 word boundaries **before** approved server lexicon/number normalization, including
-all former English spans. Unknown/malformed markup returns 400. Numeric comparison
-symbols remain text for conversion. Numeric or space-separated arithmetic `+`
+all former English spans. Unknown/malformed markup returns 400. Before the lexicon
+and converter, bounded input-only substitutions speak `→ ⇒` as `переход к`, `← ⇐`
+as `стрелка влево`, `↔ ⇔` as `связано с`, and `↑ ↓` as `стрелка вверх/вниз`.
+Math `≈ ≤ ≥ ≠ × ÷ ± −` becomes `примерно равно`, `меньше или равно`,
+`больше или равно`, `не равно`, `умножить на`, `разделить на`, `плюс минус`,
+`минус`, with word boundaries. A Unicode minus immediately before a digit and not
+immediately after a letter/digit becomes ASCII `-` instead, preserving signed
+number/currency normalization (e.g. `$−5`); ASCII hyphens and `+` stay unchanged.
+Em/en dashes become ASCII `-`; curly double/single quotes become ASCII quotes;
+`[] {}` become parentheses; newlines, tabs and nonbreaking spaces become ordinary spaces.
+The same input-only cleanup runs after server normalization, which can generate
+new typographic range dashes.
+Only the explicit decorations/list separators `⏵ ✅ • ‣ ▪ ● ◦ · │ ─` become spaces;
+no Unicode/emoji ranges are silently deleted. Decoration-only empty text returns 400.
+Other unsupported characters, including non-ASCII foreign letters, return 400 before
+converter invocation; Russian text, ASCII Latin, supported punctuation and stress
+marks remain accepted. This input cleanup also applies with `speech_front: false`;
+converter output/traces and strict model checks are not rewritten or relaxed.
+Numeric comparison `< >` symbols remain text for conversion. Numeric or space-separated arithmetic `+`
 is protected as `плюс` in unmatched gaps before number normalization; approved
 lexicon forms/readings always take priority, and Russian stress markers and `C++`
 remain intact. Russian-only enables the server normalizer

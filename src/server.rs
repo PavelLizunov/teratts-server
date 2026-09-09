@@ -681,7 +681,9 @@ fn apply_text_mode(
 ) -> Result<PreparedRequest> {
     let mut request = apply_speech_front(request, lexicon);
     if request.text_mode == TextMode::RussianOnly {
-        russian_only::validate_input(&request.text)?;
+        // Number ranges can introduce typographic dashes after input preparation.
+        // Normalize converter input only; never rewrite its validated output/trace.
+        request.text = russian_only::normalize_symbols(&request.text)?;
         let converter = converter.ok_or(ConversionError::Configuration)?;
         // Trace shape and all readings/warnings were validated by the adapter. Never log
         // or return user text/trace in HTTP headers; the preparation CLI exposes the trace.
@@ -813,11 +815,16 @@ fn prepare_request_with_mode(
             ));
         }
     }
-    let mut text = chunk::sanitize(request.text.trim());
-    if text_mode == TextMode::RussianOnly {
-        text = russian_only::flatten_tags(&text).map_err(ApiError::conversion)?;
-        russian_only::validate_input(&text).map_err(ApiError::conversion)?;
-    }
+    let text = if text_mode == TextMode::RussianOnly {
+        // Validate the entire input before trimming can hide unsupported whitespace.
+        let flat = russian_only::flatten_tags(&request.text).map_err(ApiError::conversion)?;
+        russian_only::normalize_symbols(&flat)
+            .map_err(ApiError::conversion)?
+            .trim()
+            .to_owned()
+    } else {
+        chunk::sanitize(request.text.trim())
+    };
     let text_chars = text.chars().count();
     if text_chars == 0 || (text_mode == TextMode::Compatible && text_chars > MAX_TEXT_CHARS) {
         return Err(ApiError::bad_request(format!(
@@ -1070,7 +1077,7 @@ mod tests {
     #[tokio::test]
     async fn primary_routing_keeps_raw_input_and_single_admission() {
         use crate::remote_primary::tests::{mock, response};
-        let raw = "  <en>Widget 15%</en>  ";
+        let raw = "  <en>Widget→API</en> — ⏵15%  ";
         let prepared = prepare_request_with_mode(
             request(raw),
             &["ru_f1".into()],
@@ -1080,7 +1087,7 @@ mod tests {
             true,
         )
         .unwrap();
-        assert_eq!(prepared.text, "Widget 15%");
+        assert_eq!(prepared.text, "Widget переход к API -  15%");
         let (primary, server) = mock(
             response(
                 500,
@@ -1106,7 +1113,7 @@ mod tests {
         assert_eq!(admission.view().active, 1);
         assert_eq!(admission.admitted.load(Ordering::Acquire), 1);
         assert_eq!(
-            prepared.text, "Widget 15%",
+            prepared.text, "Widget переход к API -  15%",
             "CPU fallback retains original PreparedRequest"
         );
         let received = server.await.unwrap();
@@ -1413,6 +1420,161 @@ mod tests {
             serde_json::from_str::<TtsRequest>(r#"{"text":"x","text_mode":"russian_only"}"#)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn russian_only_symbols_normalize_before_conversion_and_model_validation() {
+        let voices = vec!["ru_f1".into()];
+        for (raw, expected) in [
+            ("а→б←в↔г", "а переход к б стрелка влево в связано с г"),
+            ("а⇒б⇐в⇔г↑д↓е", "а переход к б стрелка влево в связано с г стрелка вверх д стрелка вниз е"),
+            ("2≈3≤4≥5≠6×7÷8±9−10", "2 примерно равно 3 меньше или равно 4 больше или равно 5 не равно 6 умножить на 7 разделить на 8 плюс минус 9 минус 10"),
+            ("—“тест”–‘ёж’„да’", "-\"тест\"-'ёж'\"да'"),
+            ("а⏵б✅в•г‣д▪е●ж◦з·и│к─л", "а б в г д е ж з и к л"),
+            ("<en>Widget→API</en>", "Widget переход к API"),
+            ("а\nб\tв\u{00a0}г", "а б в г"),
+            ("[тест] {слово}", "(тест) (слово)"),
+            ("−5 $−5 2−3", "-5 $-5 2 минус 3"),
+            ("C++ 2+2 молок+о +ёж мо\u{301}ре 1<2>0", "C++ 2+2 молок+о +ёж мо\u{301}ре 1<2>0"),
+        ] {
+            let prepared = prepare_request_with_mode(
+                request(raw), &voices, true, false, TextMode::RussianOnly, true,
+            ).unwrap();
+            assert_eq!(prepared.text, expected, "{raw}");
+        }
+        // Model-free vocabulary fixture: ASCII and Russian, but no typographic dash/quotes.
+        let entries: Vec<i64> = (0..65_536u32)
+            .map(|cp| {
+                if char::from_u32(cp)
+                    .is_some_and(|c| c.is_ascii() || matches!(c, 'А'..='я' | 'Ё' | 'ё'))
+                {
+                    i64::from(cp)
+                } else {
+                    -1
+                }
+            })
+            .collect();
+        let indexer =
+            crate::indexer::UnicodeIndexer::from_json(&serde_json::to_string(&entries).unwrap())
+                .unwrap();
+        let raw = "тест — “слово”";
+        assert!(crate::textnorm::normalize_strict(&format!("<ru>{raw}</ru>"), &indexer).is_err());
+        let prepared = prepare_request_with_mode(
+            request(raw),
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        assert!(crate::textnorm::normalize_strict(
+            &format!("<ru>{}</ru>", prepared.text),
+            &indexer
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn russian_only_unknown_symbols_and_expansion_fail_before_converter() {
+        let voices = vec!["ru_f1".into()];
+        for raw in [
+            "тест😀",
+            "тест☃",
+            "тест↗",
+            "тестé",
+            "тест中",
+            "тесті",
+            "тестΩ",
+            "тест\u{200b}",
+            "тест\u{fe0f}",
+            "тест\u{0000}",
+            "тест\r",
+            "<de>тест</de>",
+            "<ru>тест</en>",
+            "<en><ru>тест</ru></en>",
+            "⏵✅•│─",
+            &"≤".repeat(MAX_TEXT_CHARS),
+        ] {
+            let error = prepare_request_with_mode(
+                request(raw),
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .err()
+            .expect(raw);
+            assert_eq!(error.status, StatusCode::BAD_REQUEST, "{raw}");
+            assert_eq!(error.code, "invalid_request", "{raw}");
+        }
+        for voice in ["ru_f1", "eng_f3"] {
+            let mut input = request("Hello → мир — ⏵✅");
+            input.voice = Some(voice.into());
+            let prepared = prepare_request_with_mode(
+                input,
+                &[voice.into()],
+                true,
+                false,
+                TextMode::Compatible,
+                true,
+            )
+            .unwrap();
+            assert_eq!(prepared.text, "Hello → мир — ⏵✅");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn russian_only_symbol_normalization_reaches_converter_after_approved_lexicon() {
+        use crate::lexicon_reload::tests::{approve, APPROVED};
+        use crate::russian_only::tests::fixture;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lexicon.toml");
+        approve(&path, APPROVED);
+        let loader = LexiconReload::new(Some(path)).unwrap();
+        for (raw, flag, expected) in [
+            (
+                "<en>Widget</en>→тест — ⏵✅",
+                None,
+                "первый переход к тест -",
+            ),
+            (
+                "<en>Widget</en>→тест — ⏵✅",
+                Some(false),
+                "Widget  переход к тест -",
+            ),
+            (
+                "−5 и 2−3 и 2+2 молок+о",
+                None,
+                "минус пять и два минус три и два плюс два молок+о",
+            ),
+            ("3–5", None, "три - пять"),
+            ("3-5", None, "три - пять"),
+            ("$−5", None, "минус пять долларов"),
+            ("$-5", None, "минус пять долларов"),
+        ] {
+            let body = format!("read -r input; [ \"$input\" = '{expected}' ] || exit 1; printf '%s' '{{\"text\":\"тест\",\"readings\":[{{\"written\":\"API\",\"text\":\"эй пи ай\",\"source\":\"structural\",\"warnings\":[]}}],\"warnings\":[\"automatic_not_approved\"]}}'");
+            let (_dir, converter) = fixture(&body);
+            let mut input = request(raw);
+            input.speech_front = flag;
+            let prepared = prepare_request_with_mode(
+                input,
+                &["ru_f1".into()],
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .unwrap();
+            assert_eq!(
+                apply_text_mode(prepared, &loader, Some(&converter))
+                    .unwrap_or_else(|error| panic!("{raw}, {flag:?}: {error}"))
+                    .text,
+                "тест"
+            );
+        }
     }
 
     #[test]

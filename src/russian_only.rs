@@ -257,22 +257,88 @@ impl Converter {
     }
 }
 
+/// Bounded input-only substitutions, after markup flattening and before the lexicon.
+/// Do not apply this to converter output: its text and trace must pass unchanged.
+pub fn normalize_symbols(text: &str) -> Result<String> {
+    if text.chars().count() > MAX_EXPANDED_CHARS {
+        return Err(ConversionError::InvalidText);
+    }
+    let mut output = String::with_capacity(text.len());
+    let mut count = 0;
+    for (index, c) in text.char_indices() {
+        let replacement = match c {
+            '→' | '⇒' => " переход к ",
+            '←' | '⇐' => " стрелка влево ",
+            '↔' | '⇔' => " связано с ",
+            '↑' => " стрелка вверх ",
+            '↓' => " стрелка вниз ",
+            '≈' => " примерно равно ",
+            '≤' => " меньше или равно ",
+            '≥' => " больше или равно ",
+            '≠' => " не равно ",
+            '×' => " умножить на ",
+            '÷' => " разделить на ",
+            '±' => " плюс минус ",
+            // Keep a numeric sign attached for existing negative amounts/units.
+            '−' if text[index + c.len_utf8()..].starts_with(|c: char| c.is_ascii_digit())
+                && !text[..index].ends_with(char::is_alphanumeric) =>
+            {
+                "-"
+            }
+            '−' => " минус ",
+            // ASCII hyphens and '+' remain untouched for approved forms and stress.
+            '—' | '–' => "-",
+            '[' | '{' => "(",
+            ']' | '}' => ")",
+            '“' | '”' | '„' => "\"",
+            '‘' | '’' => "'",
+            '\n' | '\t' | '\u{00a0}' => " ",
+            // Exact decorative/list separators only, never an emoji/Unicode range.
+            '⏵' | '✅' | '•' | '‣' | '▪' | '●' | '◦' | '·' | '│' | '─' => " ",
+            _ => {
+                output.push(c);
+                count += 1;
+                if count > MAX_EXPANDED_CHARS {
+                    return Err(ConversionError::InvalidText);
+                }
+                continue;
+            }
+        };
+        count += replacement.chars().count();
+        if count > MAX_EXPANDED_CHARS {
+            return Err(ConversionError::InvalidText);
+        }
+        output.push_str(replacement);
+    }
+    validate_input(&output)?;
+    Ok(output)
+}
+
 pub fn validate_input(text: &str) -> Result<()> {
-    if text.trim().is_empty() || text.chars().count() > MAX_EXPANDED_CHARS {
+    if text.trim().is_empty()
+        || text.chars().count() > MAX_EXPANDED_CHARS
+        || !text
+            .chars()
+            .all(|c| plain_char(c) || c.is_ascii_alphabetic() || matches!(c, '<' | '>'))
+    {
         Err(ConversionError::InvalidText)
     } else {
         Ok(())
     }
 }
 
+// speech-front's ordinary plaintext grammar; ASCII Latin and comparison angles
+// are permitted only on input. No broader alphabet/emoji acceptance is inferred.
+fn plain_char(c: char) -> bool {
+    matches!(c, 'А'..='я' | 'Ё' | 'ё' | '0'..='9'
+        | ' ' | '\n' | '\t' | '\r' | '\u{00a0}' | '\u{0301}')
+        || ".,:;!?-—–…()[]{}«»“”„’\"'/\\_+#@%=&~$*|^".contains(c)
+}
+
 fn valid_plaintext(text: &str) -> bool {
     !text.trim().is_empty()
         && text.chars().count() <= MAX_EXPANDED_CHARS
-        && text.chars().all(|c| {
-            matches!(c, 'А'..='я' | 'Ё' | 'ё' | '0'..='9'
-            | ' ' | '\n' | '\t' | '\r' | '\u{00a0}' | '\u{0301}')
-                || ".,:;!?-—–…()[]{}«»“”„’\"'/\\_+#@%=&~$*|^".contains(c)
-        })
+        && text.chars().all(plain_char)
 }
 
 fn decode(bytes: &[u8]) -> Result<Conversion> {
@@ -471,6 +537,58 @@ pub(crate) mod tests {
         assert!(decode(&vec![b' '; MAX_JSON_BYTES + 1]).is_err());
         let bytes = serde_json::to_vec(&serde_json::json!({"text":"а".repeat(MAX_EXPANDED_CHARS+1),"readings":[],"warnings":[]})).unwrap();
         assert!(decode(&bytes).is_err());
+    }
+
+    #[test]
+    fn input_allowlist_and_symbol_bounds_do_not_relax_output_validation() {
+        let ordinary = "АяЁё09 \n\t\r\u{00a0}\u{0301}.,:;!?-—–…()[]{}«»“”„’\"'/\\_+#@%=&~$*|^";
+        assert!(validate_input(&format!("{ordinary}AZaz<> ")).is_ok());
+        for raw in [
+            "тест😀",
+            "тестé",
+            "тестΩ",
+            "тесті",
+            "тест中",
+            "тест\u{200b}",
+            "тест\0",
+        ] {
+            let (_dir, converter) = fixture("exit 1");
+            assert_eq!(
+                converter.convert(raw).unwrap_err(),
+                ConversionError::InvalidText
+            );
+        }
+        let exact = "а".repeat(MAX_EXPANDED_CHARS - " меньше или равно ".chars().count()) + "≤";
+        assert_eq!(
+            normalize_symbols(&exact).unwrap().chars().count(),
+            MAX_EXPANDED_CHARS
+        );
+        assert_eq!(
+            normalize_symbols(&(exact + "а")).unwrap_err(),
+            ConversionError::InvalidText
+        );
+        assert_eq!(
+            normalize_symbols("⏵✅•│─").unwrap_err(),
+            ConversionError::InvalidText
+        );
+        for text in [
+            "тест→",
+            "тест⏵",
+            "тест≤",
+            "тест😀",
+            "Latin",
+            "<ru>тест</ru>",
+        ] {
+            let bytes =
+                serde_json::to_vec(&serde_json::json!({"text":text,"readings":[],"warnings":[]}))
+                    .unwrap();
+            assert_eq!(decode(&bytes).unwrap_err(), ConversionError::InvalidOutput);
+            let bytes = serde_json::to_vec(&serde_json::json!({"text":"тест","readings":[{"written":"API","text":text,"source":"structural","warnings":[]}],"warnings":[]})).unwrap();
+            assert_eq!(decode(&bytes).unwrap_err(), ConversionError::InvalidOutput);
+        }
+        let bytes =
+            br#"{"text":"\u0442\u0435\u0441\u0442","readings":[],"warnings":[],"extra":true}"#;
+        assert_eq!(decode(bytes).unwrap_err(), ConversionError::InvalidOutput);
     }
 
     #[test]
