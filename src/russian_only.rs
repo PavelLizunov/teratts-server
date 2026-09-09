@@ -406,12 +406,22 @@ pub fn flatten_tags(text: &str) -> Result<String> {
             .into_iter()
             .find(|tag| text[start..].starts_with(tag));
         let Some(tag) = tag else {
-            // Comparison symbols remain text, but tag-like unknown markup fails closed.
-            if text[start + 1..]
-                .trim_start()
-                .starts_with(|c: char| c.is_alphabetic() || "/!?".contains(c))
-            {
-                return Err(ConversionError::InvalidText);
+            if let Some(end_rel) = text[start..].find('>') {
+                let candidate = &text[start + 1..start + end_rel];
+                let inner = candidate.trim();
+                let name = inner.strip_prefix('/').unwrap_or(inner);
+                if !name.is_empty()
+                    && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ':'))
+                {
+                    if name.len() == 2 && !matches!(name, "ru" | "en") {
+                        return Err(ConversionError::InvalidText);
+                    }
+                    append(&mut output, name, &mut boundary);
+                    boundary = true;
+                    cursor = start + end_rel + 1;
+                    continue;
+                }
             }
             append(&mut output, "<", &mut boundary);
             cursor = start + 1;
