@@ -279,6 +279,10 @@ pub fn normalize_symbols(text: &str) -> Result<String> {
             '×' => " умножить на ",
             '÷' => " разделить на ",
             '±' => " плюс минус ",
+            '₽' => " руб ",
+            '€' => " евро ",
+            '£' => " фунт ",
+            '¥' => " иен ",
             // Keep a numeric sign attached for existing negative amounts/units.
             '−' if text[index + c.len_utf8()..].starts_with(|c: char| c.is_ascii_digit())
                 && !text[..index].ends_with(char::is_alphanumeric) =>
@@ -296,10 +300,19 @@ pub fn normalize_symbols(text: &str) -> Result<String> {
             // Exact decorative/list separators only, never an emoji/Unicode range.
             '⏵' | '✅' | '•' | '‣' | '▪' | '●' | '◦' | '·' | '│' | '─' => " ",
             _ => {
-                output.push(c);
-                count += 1;
-                if count > MAX_EXPANDED_CHARS {
-                    return Err(ConversionError::InvalidText);
+                if plain_char(c) || c.is_ascii_alphabetic() || matches!(c, '<' | '>') {
+                    output.push(c);
+                    count += 1;
+                    if count > MAX_EXPANDED_CHARS {
+                        return Err(ConversionError::InvalidText);
+                    }
+                } else {
+                    // Unsupported alphabet / emoji / symbol: replace with space so speech-front never fails.
+                    output.push(' ');
+                    count += 1;
+                    if count > MAX_EXPANDED_CHARS {
+                        return Err(ConversionError::InvalidText);
+                    }
                 }
                 continue;
             }
@@ -570,6 +583,15 @@ pub(crate) mod tests {
         assert_eq!(
             normalize_symbols("⏵✅•│─").unwrap_err(),
             ConversionError::InvalidText
+        );
+        assert_eq!(
+            normalize_symbols("в веб-интерфейсе отображается как «梁神模式» / «Liangshen mode»")
+                .unwrap(),
+            "в веб-интерфейсе отображается как «    » / «Liangshen mode»"
+        );
+        assert_eq!(
+            normalize_symbols("цена 100 ₽ и 50 €").unwrap(),
+            "цена 100  руб  и 50  евро "
         );
         for text in [
             "тест→",

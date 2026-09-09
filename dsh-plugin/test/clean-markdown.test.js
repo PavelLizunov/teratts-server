@@ -786,3 +786,26 @@ test("progressive playback allows cumulative audio across chunks to exceed 16 Mi
     harness.cleanup();
   }
 });
+
+test("filters out unsupported CJK, emojis, and stray language tags", () => {
+  assert.equal(
+    cleanMarkdown("в веб-интерфейсе DSH отображается как «梁神模式» / «Liangshen mode»"),
+    "в веб-интерфейсе DSH отображается как « » / «Liangshen mode»",
+  );
+  assert.equal(
+    cleanMarkdown("Запуск 🚀 успешен ⚠️!"),
+    "Запуск успешен !",
+  );
+  assert.equal(
+    cleanMarkdown("Внимание: <ru>незакрытый тег"),
+    "Внимание: ru незакрытый тег",
+  );
+  assert.equal(
+    cleanMarkdown("Укажите параметр <file_path> и тип Array<T>"),
+    "Укажите параметр и тип Array",
+  );
+  assert.equal(
+    cleanMarkdown("Цена 100 ₽ и 50 €"),
+    "Цена 100 ₽ и 50 €",
+  );
+});

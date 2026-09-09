@@ -1479,15 +1479,6 @@ mod tests {
     fn russian_only_unknown_symbols_and_expansion_fail_before_converter() {
         let voices = vec!["ru_f1".into()];
         for raw in [
-            "тест😀",
-            "тест☃",
-            "тест↗",
-            "тестé",
-            "тест中",
-            "тесті",
-            "тестΩ",
-            "тест\u{200b}",
-            "тест\u{fe0f}",
             "тест\u{0000}",
             "тест\r",
             "<de>тест</de>",
@@ -1508,6 +1499,34 @@ mod tests {
             .expect(raw);
             assert_eq!(error.status, StatusCode::BAD_REQUEST, "{raw}");
             assert_eq!(error.code, "invalid_request", "{raw}");
+        }
+        for (raw, expected) in [
+            ("тест😀", "тест"),
+            ("тест☃", "тест"),
+            ("тестé", "тест"),
+            ("тест中", "тест"),
+            ("тесті", "тест"),
+            ("тестΩ", "тест"),
+            ("тест\u{200b}", "тест"),
+            ("тест\u{fe0f}", "тест"),
+            ("тест «梁神模式»", "тест « »"),
+            ("100 ₽", "100 руб"),
+            ("50 €", "50 евро"),
+        ] {
+            let prepared = prepare_request_with_mode(
+                request(raw),
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .unwrap();
+            assert_eq!(
+                prepared.text.split_whitespace().collect::<Vec<_>>().join(" "),
+                expected,
+                "{raw}"
+            );
         }
         for voice in ["ru_f1", "eng_f3"] {
             let mut input = request("Hello → мир — ⏵✅");
