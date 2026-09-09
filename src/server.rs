@@ -395,15 +395,9 @@ async fn tts(
         if cancel_for_task.load(Ordering::Acquire) {
             return Err(anyhow!("synthesis cancelled"));
         }
-        let prepared = if text_mode == TextMode::RussianOnly {
-            pool[0]
-                .blocking_lock()
-                .preprocess_strict(&text, language.as_str(), russian_stress)?
-        } else {
-            pool[0]
-                .blocking_lock()
-                .preprocess(&text, language.as_str(), russian_stress)?
-        };
+        let prepared = pool[0]
+            .blocking_lock()
+            .preprocess(&text, language.as_str(), russian_stress)?;
         let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
         if parts.is_empty() {
             return wav::encode_mono_i16(&[]);

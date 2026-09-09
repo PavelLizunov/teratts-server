@@ -174,6 +174,7 @@ impl TeraEngine {
     }
 
     /// Reject unsupported model characters instead of silently filtering them.
+    #[allow(dead_code)]
     pub fn preprocess_strict(
         &mut self,
         text: &str,
