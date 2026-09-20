@@ -281,6 +281,11 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         pool.push(Mutex::new(TeraEngine::load(model_root)?));
     }
     println!("[teratts-server] parallel chunk slots: {slots}");
+    println!(
+        "[teratts-server] session profile: spinning={} vocoder_policy={:?}",
+        std::env::var("TERATTS_ORT_ALLOW_SPINNING").unwrap_or_else(|_| "1 (default)".into()),
+        crate::tera::configured_vocoder_window_policy()
+    );
     let state = Arc::new(AppState {
         pool: Arc::new(pool),
         voices,

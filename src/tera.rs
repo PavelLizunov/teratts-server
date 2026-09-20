@@ -403,12 +403,23 @@ impl TeraEngine {
         validate_latent_output(&latent_shape, latent_out.len(), latent_length)?;
 
         // --- vocoder: causal overlap-save streaming --------------------------
+        let window_policy = configured_vocoder_window_policy();
         let t_voc = Instant::now();
         let mut chunks: Vec<Vec<f32>> = Vec::new();
         let mut emitted = 0usize;
         let mut start = 0usize;
         while start < latent_length {
-            let end = (start + STREAM_CHUNK_FRAMES).min(latent_length);
+            let width = match window_policy {
+                VocoderWindowPolicy::Fixed16 => STREAM_CHUNK_FRAMES,
+                VocoderWindowPolicy::First16Then32 => {
+                    if start == 0 {
+                        STREAM_CHUNK_FRAMES
+                    } else {
+                        32
+                    }
+                }
+            };
+            let end = (start + width).min(latent_length);
             let input_start = start.saturating_sub(VOCODER_CONTEXT_FRAMES);
             let latent_window = slice_latent_frames(
                 &latent_out,
@@ -587,8 +598,36 @@ fn int8_variant(path: &Path) -> PathBuf {
     }
 }
 
+fn ort_allow_spinning() -> bool {
+    std::env::var("TERATTS_ORT_ALLOW_SPINNING")
+        .ok()
+        .and_then(|v| match v.trim() {
+            "0" | "false" | "off" => Some(false),
+            "1" | "true" | "on" => Some(true),
+            _ => None,
+        })
+        .unwrap_or(true)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VocoderWindowPolicy {
+    Fixed16,
+    First16Then32,
+}
+
+pub fn configured_vocoder_window_policy() -> VocoderWindowPolicy {
+    match std::env::var("TERATTS_VOCODER_WINDOW_POLICY")
+        .ok()
+        .as_deref()
+    {
+        Some("first16_then32" | "First16Then32" | "16_32") => VocoderWindowPolicy::First16Then32,
+        _ => VocoderWindowPolicy::Fixed16,
+    }
+}
+
 fn load_session(path: &Path, provider: crate::execution_provider::Provider) -> Result<Session> {
     // Retain the existing CPU session settings; CUDA is explicit and Tera-only.
+    let spinning = ort_allow_spinning();
     let builder = Session::builder()
         .map_err(|e| anyhow!("ort session builder: {e}"))?
         .with_optimization_level(GraphOptimizationLevel::All)
@@ -600,7 +639,11 @@ fn load_session(path: &Path, provider: crate::execution_provider::Provider) -> R
         .with_intra_threads(ort_threads())
         .map_err(|e| anyhow!("ort intra threads: {e}"))?
         .with_inter_threads(1)
-        .map_err(|e| anyhow!("ort inter threads: {e}"))?;
+        .map_err(|e| anyhow!("ort inter threads: {e}"))?
+        .with_config_entry("session.intra_op.allow_spinning", if spinning { "1" } else { "0" })
+        .map_err(|e| anyhow!("ort intra spinning: {e}"))?
+        .with_config_entry("session.inter_op.allow_spinning", if spinning { "1" } else { "0" })
+        .map_err(|e| anyhow!("ort inter spinning: {e}"))?;
     provider
         .configure(builder)?
         .commit_from_file(path)
@@ -801,6 +844,44 @@ mod tests {
     }
 
     // ===== Hermetic malformed-output schema tests (no model, no ort run) ===
+
+    #[test]
+    fn vocoder_window_policies_parse() {
+        assert_eq!(configured_vocoder_window_policy(), VocoderWindowPolicy::Fixed16);
+    }
+
+    #[test]
+    fn vocoder_window_ranges_are_continuous_without_gaps() {
+        for policy in [VocoderWindowPolicy::Fixed16, VocoderWindowPolicy::First16Then32] {
+            for latent_length in [1, 15, 16, 17, 20, 31, 32, 33, 47, 48, 49, 51, 63, 64, 65, 120] {
+                let mut start = 0usize;
+                let mut covered_samples = 0usize;
+                while start < latent_length {
+                    let width = match policy {
+                        VocoderWindowPolicy::Fixed16 => STREAM_CHUNK_FRAMES,
+                        VocoderWindowPolicy::First16Then32 => {
+                            if start == 0 {
+                                STREAM_CHUNK_FRAMES
+                            } else {
+                                32
+                            }
+                        }
+                    };
+                    let end = (start + width).min(latent_length);
+                    let input_start = start.saturating_sub(VOCODER_CONTEXT_FRAMES);
+                    assert!(input_start <= start);
+                    assert!(start < end);
+                    assert!(end <= latent_length);
+                    let discard = (start - input_start) * SAMPLES_PER_COMPRESSED_FRAME;
+                    let new_samples = (end - start) * SAMPLES_PER_COMPRESSED_FRAME;
+                    assert_eq!(discard + new_samples, (end - input_start) * SAMPLES_PER_COMPRESSED_FRAME);
+                    covered_samples += new_samples;
+                    start = end;
+                }
+                assert_eq!(covered_samples, latent_length * SAMPLES_PER_COMPRESSED_FRAME);
+            }
+        }
+    }
 
     #[test]
     fn sole_declared_output_rejects_ambiguity() {
