@@ -420,14 +420,17 @@ window.__ModuleLoader__.load({
     }
 
     function messageText(snapshot, messageId) {
-      const node = snapshot.chat?.legacy?.nodes?.find(
+      const chat = snapshot?.chat ?? snapshot;
+      const legacy = chat?.legacy ?? chat;
+      const nodes = legacy?.nodes ?? chat?.nodes;
+      const node = nodes?.find(
         (candidate) => candidate.kind === "assistant" && candidate.messageId === messageId,
       );
       return cleanMarkdown(
         node?.blocks
-          .filter((block) => block.kind === "text")
-          .map((block) => block.text)
-          .join("\n") || "",
+          ?.filter((block) => block.kind === "text")
+          ?.map((block) => block.text)
+          ?.join("\n") || "",
       );
     }
 
@@ -799,8 +802,9 @@ window.__ModuleLoader__.load({
       return value;
     }
 
-    function TeraTtsAction({ messageId, useSession, voice }) {
-      const text = useSession((session) => messageText(session, messageId));
+    function TeraTtsAction({ messageId, useChat, useSession, voice }) {
+      const useTextSnapshot = useChat ?? useSession;
+      const text = useTextSnapshot ? useTextSnapshot((session) => messageText(session, messageId)) : "";
       const current = usePlayback();
       const owner = React.useRef(Symbol(messageId));
       const buttonRef = React.useRef(null);
@@ -942,7 +946,7 @@ window.__ModuleLoader__.load({
           (props) =>
             React.createElement(TeraTtsAction, {
               ...props,
-              voice,
+              voice: props.voice || voice || ctx.get("remote.terattsVoice"),
             }),
         ),
       );
