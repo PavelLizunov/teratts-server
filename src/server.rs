@@ -209,6 +209,7 @@ struct HealthResponse {
     app_git_sha: &'static str,
     app_sha_verified: bool,
     model_revision: String,
+    synthesis_revision: String,
     verification: &'static str,
     ruaccent_mode: String,
     ruaccent_ready: bool,
@@ -216,6 +217,15 @@ struct HealthResponse {
     sample_rate: u32,
     voices: Vec<String>,
     queue: QueueView,
+}
+
+fn current_synthesis_revision(state: &AppState) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(state.manifest.revision.as_bytes());
+    hasher.update(&state.lexicon.revision());
+    hasher.update(APP_GIT_SHA.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 #[derive(Debug, Serialize)]
@@ -318,6 +328,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Response {
             app_git_sha: APP_GIT_SHA,
             app_sha_verified,
             model_revision: state.manifest.revision.clone(),
+            synthesis_revision: current_synthesis_revision(&state),
             verification: if models_ready { "verified" } else { "failed" },
             ruaccent_mode: state.ruaccent_mode.clone(),
             ruaccent_ready: state.ruaccent_ready,
@@ -353,10 +364,15 @@ async fn tts(
     let deadline = tokio::time::Instant::from_std(started + budget);
     let cancel = Arc::new(AtomicBool::new(false));
     let _cancel_on_drop = CancelOnDrop(Arc::clone(&cancel));
+    static REQUEST_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let request_id = format!("{:x}", REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed));
+    let q_start = Instant::now();
     let ticket = state.admission.try_reserve()?;
     let active = tokio::time::timeout_at(deadline, ticket.activate())
         .await
         .map_err(|_| ApiError::deadline())??;
+    let queue_wait_ms = q_start.elapsed().as_millis();
+    let synthesis_revision = current_synthesis_revision(&state);
     if let Some(audio) = primary_audio(
         state.primary.as_ref(),
         &raw_text,
@@ -366,13 +382,14 @@ async fn tts(
     )
     .await?
     {
-        return Ok(audio_response(audio, text_mode, Some("primary")));
+        return Ok(audio_response(audio, text_mode, Some("primary"), &synthesis_revision));
     }
     // No asynchronous boundary between the final cancellation/deadline check and
     // CPU dispatch. The blocking closure checks again before any local work.
     check_request_live(deadline, &cancel)?;
     let pool = Arc::clone(&state.pool);
     let cancel_for_task = Arc::clone(&cancel);
+    let req_id = request_id.clone();
     let task = tokio::task::spawn_blocking(move || {
         // Retain admission permit ownership inside the blocking task so
         // admission is released only when inference actually finishes or joins.
@@ -380,6 +397,7 @@ async fn tts(
         if cancel_for_task.load(Ordering::Acquire) {
             return Err(anyhow!("synthesis cancelled"));
         }
+        let p_start = Instant::now();
         let PreparedRequest {
             text,
             voice,
@@ -398,6 +416,11 @@ async fn tts(
         let prepared = pool[0]
             .blocking_lock()
             .preprocess(&text, language.as_str(), russian_stress)?;
+        let preprocess_ms = p_start.elapsed().as_millis();
+        eprintln!(
+            "[teratts-server] request_id={} queue_wait_ms={} preprocess_ms={}",
+            req_id, queue_wait_ms, preprocess_ms
+        );
         let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
         if parts.is_empty() {
             return wav::encode_mono_i16(&[]);
@@ -410,10 +433,11 @@ async fn tts(
                                samples: &mut usize,
                                index: usize,
                                part: &str,
-                               engine: &mut TeraEngine|
+                               engine: &mut TeraEngine,
+                               r_id: &str|
          -> Result<()> {
             let output =
-                engine.synthesize_preprocessed(part, &voice, scale, SEED + index as u64)?;
+                engine.synthesize_preprocessed_traced(part, &voice, scale, SEED + index as u64, r_id, index)?;
             for chunk in output.chunks {
                 *samples = checked_audio_samples(*samples, chunk.len())?;
                 all.try_reserve(1)
@@ -431,7 +455,7 @@ async fn tts(
                 if cancel_for_task.load(Ordering::Acquire) {
                     return Err(anyhow!("synthesis cancelled"));
                 }
-                synthesize_into(&mut all, &mut samples, index, part, &mut engine)?;
+                synthesize_into(&mut all, &mut samples, index, part, &mut engine, &req_id)?;
             }
         } else {
             // Bounded parallelism: spawn at most `pool.len()` worker threads.
@@ -448,6 +472,7 @@ async fn tts(
                 let parts = Arc::clone(&parts);
                 let next_chunk = Arc::clone(&next_chunk);
                 let voice = voice.clone();
+                let worker_req_id = req_id.clone();
                 handles.push(std::thread::spawn(move || {
                     let guarded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let mut engine = pool[worker_idx].blocking_lock();
@@ -463,11 +488,13 @@ async fn tts(
                             if cancel.load(Ordering::Acquire) {
                                 return Err(anyhow!("synthesis cancelled"));
                             }
-                            let res = engine.synthesize_preprocessed(
+                            let res = engine.synthesize_preprocessed_traced(
                                 &parts[idx],
                                 &voice,
                                 scale,
                                 SEED + idx as u64,
+                                &worker_req_id,
+                                idx,
                             );
                             match res {
                                 Ok(output) => outputs.push((idx, output)),
@@ -568,6 +595,7 @@ async fn tts(
         audio,
         text_mode,
         primary_configured.then_some("cpu"),
+        &synthesis_revision,
     ))
 }
 
@@ -628,7 +656,12 @@ async fn primary_audio(
     }
 }
 
-fn audio_response(audio: Vec<u8>, text_mode: TextMode, backend: Option<&'static str>) -> Response {
+fn audio_response(
+    audio: Vec<u8>,
+    text_mode: TextMode,
+    backend: Option<&'static str>,
+    synthesis_revision: &str,
+) -> Response {
     let mut response = (
         [
             (header::CONTENT_TYPE, HeaderValue::from_static("audio/wav")),
@@ -645,6 +678,11 @@ fn audio_response(audio: Vec<u8>, text_mode: TextMode, backend: Option<&'static 
         response
             .headers_mut()
             .insert("x-teratts-backend", HeaderValue::from_static(backend));
+    }
+    if let Ok(value) = HeaderValue::from_str(synthesis_revision) {
+        response
+            .headers_mut()
+            .insert("x-teratts-synthesis-revision", value);
     }
     response
 }
@@ -1313,13 +1351,20 @@ mod tests {
     #[test]
     fn backend_evidence_header_is_present_only_for_configured_routing() {
         for backend in [None, Some("primary"), Some("cpu")] {
-            let response = audio_response(vec![1], TextMode::Compatible, backend);
+            let response = audio_response(vec![1], TextMode::Compatible, backend, "test_synthesis_rev");
             assert_eq!(
                 response
                     .headers()
                     .get("x-teratts-backend")
                     .map(|v| v.to_str().unwrap()),
                 backend
+            );
+            assert_eq!(
+                response
+                    .headers()
+                    .get("x-teratts-synthesis-revision")
+                    .map(|v| v.to_str().unwrap()),
+                Some("test_synthesis_rev")
             );
         }
     }

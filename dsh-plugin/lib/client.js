@@ -118,7 +118,7 @@ function cleanMarkdown(text) {
   return sanitizeLanguageTags(unified).replace(/\s+/g, " ").trim();
 }
 
-const FIRST_SPEECH_CHUNK_CHARS = 240;
+const FIRST_SPEECH_CHUNK_CHARS = 140;
 const SPEECH_RPC_TIMEOUT_MS = 65_000;
 
 // Bound client waiting too: the Host timeout cannot settle a lost RPC response.
@@ -154,8 +154,8 @@ function synthesizeWithDeadline(voice, text, parentSignal, timeoutMs = SPEECH_RP
     }
   });
 }
-const SECOND_SPEECH_CHUNK_CHARS = 480;
-const SPEECH_CHUNK_CHARS = 800;
+const SECOND_SPEECH_CHUNK_CHARS = 240;
+const SPEECH_CHUNK_CHARS = 320;
 const MAX_STREAMED_AUDIO_BYTES = 256 * 1024 * 1024; // 256 MiB (~45 minutes of speech)
 
 function speechChunkLimits(options, laterMaxChars) {
@@ -379,6 +379,12 @@ window.__ModuleLoader__.load({
       },
     };
 
+    const anySchema = {
+      parse(value) {
+        return value;
+      },
+    };
+
     const REMOTE = {
       package: "dsh-client-ui-teratts",
       descriptors: [
@@ -405,6 +411,108 @@ window.__ModuleLoader__.load({
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
             schema: audioSchema,
+          },
+        },
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/acquireForeground",
+          service: "terattsVoice",
+          namespace: "terattsVoice",
+          method: "acquireForeground",
+          invocation: { kind: "direct" },
+          parameters: [
+            {
+              name: "ownerId",
+              wire: "ownerId",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:ownerId",
+                schema: textSchema,
+              },
+            },
+            {
+              name: "epoch",
+              wire: "epoch",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:epoch",
+                schema: anySchema,
+              },
+            },
+          ],
+          result: {
+            mode: "strict",
+            typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:result",
+            schema: anySchema,
+          },
+        },
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/renewForeground",
+          service: "terattsVoice",
+          namespace: "terattsVoice",
+          method: "renewForeground",
+          invocation: { kind: "direct" },
+          parameters: [
+            {
+              name: "ownerId",
+              wire: "ownerId",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:ownerId",
+                schema: textSchema,
+              },
+            },
+            {
+              name: "epoch",
+              wire: "epoch",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:epoch",
+                schema: anySchema,
+              },
+            },
+          ],
+          result: {
+            mode: "strict",
+            typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:result",
+            schema: anySchema,
+          },
+        },
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/releaseForeground",
+          service: "terattsVoice",
+          namespace: "terattsVoice",
+          method: "releaseForeground",
+          invocation: { kind: "direct" },
+          parameters: [
+            {
+              name: "ownerId",
+              wire: "ownerId",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:ownerId",
+                schema: textSchema,
+              },
+            },
+            {
+              name: "epoch",
+              wire: "epoch",
+              source: "json",
+              codec: {
+                mode: "strict",
+                typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:epoch",
+                schema: anySchema,
+              },
+            },
+          ],
+          result: {
+            mode: "strict",
+            typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:result",
+            schema: anySchema,
           },
         },
       ],
@@ -454,6 +562,8 @@ window.__ModuleLoader__.load({
     const playback = {
       epoch: 0,
       owner: null,
+      voice: null,
+      heartbeatTimer: null,
       state: "idle",
       error: null,
       errorOwner: null,
@@ -530,19 +640,37 @@ window.__ModuleLoader__.load({
     }
 
     function stopPlayback() {
+      if (playback.heartbeatTimer) {
+        clearInterval(playback.heartbeatTimer);
+        playback.heartbeatTimer = null;
+      }
+      if (playback.owner && playback.voice) {
+        const ownerId = String(playback.owner.description || playback.owner);
+        playback.voice.releaseForeground?.(ownerId, playback.epoch)?.catch?.(() => {});
+      }
       playback.epoch += 1;
       releaseMedia();
       playback.owner = null;
+      playback.voice = null;
       playback.state = "idle";
       publish();
     }
 
     function failPlayback(epoch, message) {
       if (epoch !== playback.epoch) return;
+      if (playback.heartbeatTimer) {
+        clearInterval(playback.heartbeatTimer);
+        playback.heartbeatTimer = null;
+      }
+      if (playback.owner && playback.voice) {
+        const ownerId = String(playback.owner.description || playback.owner);
+        playback.voice.releaseForeground?.(ownerId, epoch)?.catch?.(() => {});
+      }
       const errorOwner = playback.owner;
       playback.epoch += 1;
       releaseMedia();
       playback.owner = null;
+      playback.voice = null;
       playback.state = "idle";
       playback.error = message;
       playback.errorOwner = errorOwner;
@@ -691,12 +819,24 @@ window.__ModuleLoader__.load({
       stopPlayback();
       const epoch = playback.epoch;
       const abort = new AbortController();
+      const ownerId = String(owner.description || owner);
       playback.owner = owner;
+      playback.voice = voice;
       playback.state = "loading";
       playback.error = null;
       playback.errorOwner = null;
       playback.abort = abort;
       publish();
+
+      voice?.acquireForeground?.(ownerId, epoch)?.catch?.(() => {});
+      playback.heartbeatTimer = setInterval(() => {
+        if (playback.epoch === epoch && (playback.state === "loading" || playback.state === "playing")) {
+          voice?.renewForeground?.(ownerId, epoch)?.catch?.(() => {});
+        } else if (playback.heartbeatTimer) {
+          clearInterval(playback.heartbeatTimer);
+          playback.heartbeatTimer = null;
+        }
+      }, 5000);
 
       try {
         if (!voice) throw new Error("TeraTTS voice service is unavailable");

@@ -250,7 +250,20 @@ impl TeraEngine {
         duration_scale: f32,
         seed: u64,
     ) -> Result<SynthOutput> {
-        let started = Instant::now();
+        self.synthesize_preprocessed_traced(text, voice, duration_scale, seed, "local", 0)
+    }
+
+    /// Synthesize independently-valid tagged text with request/subchunk tracing.
+    pub fn synthesize_preprocessed_traced(
+        &mut self,
+        text: &str,
+        voice: &str,
+        duration_scale: f32,
+        seed: u64,
+        request_id: &str,
+        subchunk_id: usize,
+    ) -> Result<SynthOutput> {
+        let subchunk_start = Instant::now();
         if !duration_scale.is_finite() || duration_scale <= 0.0 {
             return Err(anyhow!("invalid-rate"));
         }
@@ -267,6 +280,7 @@ impl TeraEngine {
             .map_err(|e| anyhow!("invalid-text: {e}"))?;
 
         // --- text encoder -------------------------------------------------
+        let t_enc = Instant::now();
         let text_len = text_ids.len();
         let text_ids_t = Tensor::from_array(([1, text_len], text_ids.into_boxed_slice()))
             .map_err(|e| anyhow!("synth: {e}"))?;
@@ -282,14 +296,17 @@ impl TeraEngine {
                 "text_mask" => &text_mask_t,
             ])
             .map_err(|e| anyhow!("synth: text encoder failed: {e}"))?;
+        let encoder_ms = t_enc.elapsed().as_millis();
+        let subchunk_ms = subchunk_start.elapsed().as_millis();
         eprintln!(
-            "[teratts-server] synth stage=text-encoder elapsed_ms={}",
-            started.elapsed().as_millis()
+            "[teratts-server] synth request_id={} subchunk_id={} stage=text-encoder stage_ms={} total_ms={}",
+            request_id, subchunk_id, encoder_ms, subchunk_ms
         );
         let (emb_shape, emb_data) = named_output_f32(&encoder_outputs, &self.text_encoder_out)?;
         validate_tensor_shape(&emb_shape, emb_data.len(), "text_emb")?;
 
         // --- duration predictor --------------------------------------------
+        let t_dur = Instant::now();
         let dur_len = duration_ids.len();
         let duration_ids_t = Tensor::from_array(([1, dur_len], duration_ids.into_boxed_slice()))
             .map_err(|e| anyhow!("synth: {e}"))?;
@@ -306,9 +323,11 @@ impl TeraEngine {
                 "text_mask" => &duration_mask_t,
             ])
             .map_err(|e| anyhow!("synth: duration predictor failed: {e}"))?;
+        let duration_ms = t_dur.elapsed().as_millis();
+        let subchunk_ms = subchunk_start.elapsed().as_millis();
         eprintln!(
-            "[teratts-server] synth stage=duration elapsed_ms={}",
-            started.elapsed().as_millis()
+            "[teratts-server] synth request_id={} subchunk_id={} stage=duration stage_ms={} total_ms={}",
+            request_id, subchunk_id, duration_ms, subchunk_ms
         );
         let (dur_shape, dur_data) =
             named_output_f32(&duration_outputs, &self.duration_predictor_out)?;
@@ -356,6 +375,7 @@ impl TeraEngine {
             .map_err(|e| anyhow!("synth: {e}"))?;
         let guidance_t = Tensor::from_array(([1], [GUIDANCE].into_iter().collect::<Box<[f32]>>()))
             .map_err(|e| anyhow!("synth: {e}"))?;
+        let t_sam = Instant::now();
         let sampler_outputs = self
             .sampler
             .run(ort::inputs![
@@ -367,10 +387,15 @@ impl TeraEngine {
                 "guidance" => &guidance_t,
             ])
             .map_err(|e| anyhow!("synth: sampler failed: {e}"))?;
+        let sampler_ms = t_sam.elapsed().as_millis();
+        let subchunk_ms = subchunk_start.elapsed().as_millis();
         eprintln!(
-            "[teratts-server] synth stage=sampler frames={} elapsed_ms={}",
+            "[teratts-server] synth request_id={} subchunk_id={} stage=sampler frames={} stage_ms={} total_ms={}",
+            request_id,
+            subchunk_id,
             latent_length,
-            started.elapsed().as_millis()
+            sampler_ms,
+            subchunk_ms
         );
         let (latent_shape, latent_out) = named_output_f32(&sampler_outputs, &self.sampler_out)?;
         // Validate the exact [1, 144, L] contract BEFORE the vocoder loop
@@ -378,6 +403,7 @@ impl TeraEngine {
         validate_latent_output(&latent_shape, latent_out.len(), latent_length)?;
 
         // --- vocoder: causal overlap-save streaming --------------------------
+        let t_voc = Instant::now();
         let mut chunks: Vec<Vec<f32>> = Vec::new();
         let mut emitted = 0usize;
         let mut start = 0usize;
@@ -418,11 +444,16 @@ impl TeraEngine {
             start = end;
         }
 
+        let vocoder_ms = t_voc.elapsed().as_millis();
+        let subchunk_ms = subchunk_start.elapsed().as_millis();
         eprintln!(
-            "[teratts-server] synth stage=vocoder chunks={} samples={} elapsed_ms={}",
+            "[teratts-server] synth request_id={} subchunk_id={} stage=vocoder chunks={} samples={} stage_ms={} total_ms={}",
+            request_id,
+            subchunk_id,
             chunks.len(),
             emitted,
-            started.elapsed().as_millis()
+            vocoder_ms,
+            subchunk_ms
         );
 
         Ok(SynthOutput { chunks })

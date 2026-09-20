@@ -82,7 +82,6 @@ impl LexiconReload {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn revision(&self) -> [u8; 32] {
         self.state
             .lock()

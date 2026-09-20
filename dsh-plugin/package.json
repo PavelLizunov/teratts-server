@@ -39,6 +39,8 @@
   "files": [
     "cordis.patch.yml",
     "lib/index.js",
-    "lib/client.js"
+    "lib/client.js",
+    "lib/speech-text.js",
+    "lib/coordinator.js"
   ]
 }

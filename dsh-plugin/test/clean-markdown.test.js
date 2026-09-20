@@ -247,8 +247,8 @@ test("technical spec keeps fenced YAML and removes checklist markers", () => {
 test("technical spec uses a small first chunk without losing text", () => {
   const cleaned = cleanMarkdown(technicalMarkdown);
   const chunks = splitSpeechText(cleaned);
-  assert.ok(chunks[0].length <= 240);
-  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 800));
+  assert.ok(chunks[0].length <= 140);
+  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 320));
   assert.equal(chunks.join(" "), cleaned);
 
   const legacy = splitSpeechText(cleaned, 800);
@@ -261,8 +261,8 @@ test("long language spans split into independently balanced requests", () => {
   const tagged = `<ru>${"слово ".repeat(200).trim()}</ru> and <en>${"word ".repeat(200).trim()}</en>`;
   const chunks = splitSpeechText(tagged);
   assert.ok(chunks.length > 2);
-  assert.ok(chunks[0].length <= 240);
-  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 800));
+  assert.ok(chunks[0].length <= 140);
+  assert.ok(chunks.slice(1).every((chunk) => chunk.length <= 320));
   for (const chunk of chunks) {
     const opens = [...chunk.matchAll(/<(ru|en)>/g)].map((match) => match[1]);
     const closes = [...chunk.matchAll(/<\/(ru|en)>/g)].map((match) => match[1]);
@@ -476,7 +476,7 @@ const playbackWav = (sampleRate = 10) => ({
 test("first segment plays while later synthesis remains sequential", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     assert.equal(harness.synthCalls.length, 1);
     assert.ok(harness.synthCalls[0].text.length <= 240);
 
@@ -505,7 +505,7 @@ test("first segment plays while later synthesis remains sequential", async () =>
 test("global seek crosses buffered segments and rate propagates", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.synthCalls[1].deferred.resolve(playbackWav());
@@ -538,7 +538,7 @@ test("global seek crosses buffered segments and rate propagates", async () => {
 test("stale play rejection cannot stop a newer same-epoch seek", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.synthCalls[1].deferred.resolve(playbackWav());
@@ -567,7 +567,7 @@ test("stale play rejection cannot stop a newer same-epoch seek", async () => {
 test("stale successful play cannot undo wait-at-buffer-end", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(250), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.synthCalls[1].deferred.resolve(playbackWav());
@@ -600,7 +600,7 @@ test("stale successful play cannot undo wait-at-buffer-end", async () => {
 test("queue resumes after the first segment outruns background synthesis", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.audioInstances[0].finish();
@@ -620,7 +620,7 @@ test("queue resumes after the first segment outruns background synthesis", async
 test("seek past the buffered end waits for background audio without replay", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.api.seekPlayback(99);
@@ -640,7 +640,7 @@ test("seek past the buffered end waits for background audio without replay", asy
 test("background arrival cannot override a rewind started during a gap", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
     harness.audioInstances[0].finish();
@@ -669,7 +669,7 @@ test("background arrival cannot override a rewind started during a gap", async (
 test("stop aborts background synthesis and releases every prepared segment", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     const signal = harness.synthCalls[0].signal;
     harness.synthCalls[0].deferred.resolve(playbackWav());
     await flushPromises();
@@ -692,7 +692,7 @@ test("stop aborts background synthesis and releases every prepared segment", asy
 test("stale synthesis result cannot restart playback", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     const firstDeferred = harness.synthCalls[0].deferred;
     harness.api.stopPlayback();
     firstDeferred.resolve(playbackWav());
@@ -716,7 +716,7 @@ test("malformed WAV and format mismatch fail safely in inspection", () => {
 test("background WAV format failure stops current playback with one error", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav(10));
     await flushPromises();
     harness.synthCalls[1].deferred.resolve(playbackWav(12));
@@ -734,7 +734,7 @@ test("background WAV format failure stops current playback with one error", asyn
 test("background synthesis failure allows active buffered segment to finish playing", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(100), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(50), harness.voice);
     harness.synthCalls[0].deferred.resolve(playbackWav(10));
     await flushPromises();
     assert.equal(harness.api.getPlayback().state, "playing");
@@ -763,7 +763,7 @@ test("background synthesis failure allows active buffered segment to finish play
 test("progressive playback allows cumulative audio across chunks to exceed 16 MiB", async () => {
   const harness = setupPlaybackHarness();
   try {
-    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(350), harness.voice);
+    const producer = harness.api.startPlayback(Symbol("owner"), "word ".repeat(150), harness.voice);
     // Each simulated chunk is ~5 MB
     const largeWav = (rate) => ({
       audioBase64: Buffer.from(pcmWav(new Uint8Array(5 * 1024 * 1024), rate)).toString("base64"),

@@ -1,8 +1,10 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import s from "@deepseek-ai/schemastery";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import { cleanMarkdown, splitSpeechText } from "./speech-text.js";
 
 const SETTINGS_NAMESPACE = settingsNamespace("teratts");
 const DEFAULT_TOKEN_REF = "TERATTS_TOKEN";
@@ -56,6 +58,20 @@ export function validateAndResolveEndpoint(endpointConfig) {
   const basePath = parsed.pathname.replace(/\/+$/, "").replace(/\/tts$/, "");
   parsed.pathname = `${basePath}/tts`;
   return parsed.toString();
+}
+
+export function normalizeEndpointWithoutAuth(endpointStr) {
+  try {
+    const u = new URL(endpointConfigSafe(endpointStr));
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return String(endpointStr || "").replace(/\/+$/, "");
+  }
+}
+
+function endpointConfigSafe(endpoint) {
+  if (typeof endpoint === "string") return endpoint;
+  return "http://127.0.0.1:8088";
 }
 
 function parseRetryAfter(response, errorBody) {
@@ -180,13 +196,183 @@ async function readAudioResponse(response) {
   return audio;
 }
 
+export function audioKey(text, config, synthesisRevision = "unknown") {
+  const cleanEndpoint = normalizeEndpointWithoutAuth(config?.endpoint);
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        text,
+        config?.voice ?? "ru_f1",
+        config?.language ?? "ru",
+        config?.stress === true,
+        config?.speechFront !== false,
+        cleanEndpoint,
+        synthesisRevision,
+        "v1_140_240_320",
+      ]),
+    )
+    .digest("hex");
+}
+
+export class AudioCache {
+  constructor(maxItems = 64) {
+    this.maxItems = maxItems;
+    this.cache = new Map();
+    this.inFlight = new Map();
+  }
+
+  get(key) {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      this.cache.delete(key);
+      this.cache.set(key, value);
+      return value;
+    }
+    return undefined;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxItems) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, value);
+  }
+
+  clear() {
+    this.cache.clear();
+    this.inFlight.clear();
+  }
+}
+
+export class PlaybackCoordinator {
+  constructor() {
+    this.activeOwnerId = null;
+    this.activeEpoch = null;
+    this.activeUntil = 0;
+
+    this.backgroundRunning = 0; // <= 1
+    this.backgroundPending = null; // <= 1
+    this.currentBackgroundTask = null; // { key, isForeground, abortController, promise }
+  }
+
+  isForegroundActive() {
+    // Strict invariant: while an unreleased ownerId exists, treat as active/unknown
+    // to strictly prevent speculative background synthesis.
+    return this.activeOwnerId !== null;
+  }
+
+  acquireForeground(ownerId, epoch) {
+    this.activeOwnerId = String(ownerId);
+    this.activeEpoch = Number(epoch);
+    this.activeUntil = Date.now() + 15_000;
+    this.backgroundPending = null;
+    return { ok: true };
+  }
+
+  renewForeground(ownerId, epoch) {
+    if (this.activeOwnerId === String(ownerId) && this.activeEpoch === Number(epoch)) {
+      this.activeUntil = Date.now() + 15_000;
+      return { ok: true };
+    }
+    return { ok: false };
+  }
+
+  releaseForeground(ownerId, epoch) {
+    if (this.activeOwnerId === String(ownerId) && this.activeEpoch === Number(epoch)) {
+      this.activeOwnerId = null;
+      this.activeEpoch = null;
+      this.activeUntil = 0;
+      this.pumpBackground();
+      return { ok: true };
+    }
+    return { ok: false };
+  }
+
+  scheduleBackground(candidate) {
+    // A new candidate replaces backgroundPending (bounded to <= 1)
+    this.backgroundPending = candidate;
+    this.pumpBackground();
+  }
+
+  pumpBackground() {
+    if (this.backgroundRunning >= 1) return;
+    if (this.isForegroundActive()) return;
+    if (!this.backgroundPending) return;
+
+    const candidate = this.backgroundPending;
+    this.backgroundPending = null;
+
+    // Reserve slot synchronously before any await
+    this.backgroundRunning = 1;
+    const abortController = new AbortController();
+    const task = {
+      key: candidate.key,
+      isForeground: false,
+      abortController,
+      promise: null,
+    };
+    this.currentBackgroundTask = task;
+
+    task.promise = (async () => {
+      try {
+        if (this.isForegroundActive()) return;
+        await candidate.run(abortController.signal);
+      } catch {
+        // Discard background errors
+      } finally {
+        if (this.currentBackgroundTask === task) {
+          this.currentBackgroundTask = null;
+        }
+        this.backgroundRunning = 0;
+        this.pumpBackground();
+      }
+    })();
+  }
+
+  promoteToForeground(key) {
+    if (this.currentBackgroundTask && this.currentBackgroundTask.key === key) {
+      this.currentBackgroundTask.isForeground = true;
+      return this.currentBackgroundTask.promise;
+    }
+    return null;
+  }
+
+  cancelBackground(reason) {
+    this.backgroundPending = null;
+    if (this.currentBackgroundTask && !this.currentBackgroundTask.isForeground) {
+      this.currentBackgroundTask.abortController.abort(
+        reason instanceof Error ? reason : new Error(reason || "Cancelled by foreground"),
+      );
+    }
+  }
+}
+
 const remoteInitializers = [];
 
 export class TeraTtsVoiceService extends TypertRemoteService {
   constructor(ctx, current) {
     super(ctx, "terattsVoice");
     this.current = current;
+    this.cache = new AudioCache();
+    this.coordinator = new PlaybackCoordinator();
+    this.synthesisRevision = "unknown";
+
     for (const initialize of remoteInitializers) initialize.call(this);
+  }
+
+  async acquireForeground(ownerId, epoch) {
+    return this.coordinator.acquireForeground(ownerId, epoch);
+  }
+
+  async renewForeground(ownerId, epoch) {
+    return this.coordinator.renewForeground(ownerId, epoch);
+  }
+
+  async releaseForeground(ownerId, epoch) {
+    return this.coordinator.releaseForeground(ownerId, epoch);
   }
 
   async synthesize(text, signal) {
@@ -195,6 +381,44 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     }
 
     const config = this.current();
+    const key = audioKey(text, config, this.synthesisRevision);
+
+    // 1. If this exact key is currently being computed in background, promote it
+    const promotedPromise = this.coordinator.promoteToForeground(key);
+    if (promotedPromise) {
+      try {
+        await promotedPromise;
+      } catch {
+        // If background failed, proceed to foreground fetch
+      }
+    } else {
+      // Manual playback of a different text cancels background in-flight tasks
+      this.coordinator.cancelBackground("manual_play");
+    }
+
+    // 2. Check LRU cache
+    const cached = this.cache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    // 3. Deduplicate in-flight fetch for the exact same key
+    let inFlight = this.cache.inFlight.get(key);
+    if (!inFlight) {
+      inFlight = this.synthesizeConfigured(text, signal, config, key);
+      this.cache.inFlight.set(key, inFlight);
+    }
+
+    try {
+      const result = await inFlight;
+      this.cache.set(key, result);
+      return result;
+    } finally {
+      this.cache.inFlight.delete(key);
+    }
+  }
+
+  async synthesizeConfigured(text, signal, config, key) {
     const language = config.language === "en" ? "en" : "ru";
     const endpoint = validateAndResolveEndpoint(config.endpoint);
     const maxRetries = config.maxRetries ?? 3;
@@ -306,6 +530,13 @@ export class TeraTtsVoiceService extends TypertRemoteService {
         throw httpError;
       }
 
+      // Check revision header for cache invalidation
+      const revHeader = response.headers.get("x-teratts-synthesis-revision");
+      if (revHeader && revHeader !== this.synthesisRevision) {
+        this.synthesisRevision = revHeader;
+        this.cache.clear();
+      }
+
       const audio = await readAudioResponse(response);
       return {
         audioBase64: audio.toString("base64"),
@@ -327,7 +558,95 @@ Remote("synthesize")(TeraTtsVoiceService.prototype.synthesize, {
   },
 });
 
+Remote("acquireForeground")(TeraTtsVoiceService.prototype.acquireForeground, {
+  kind: "method",
+  name: "acquireForeground",
+  static: false,
+  private: false,
+  addInitializer(initializer) {
+    remoteInitializers.push(initializer);
+  },
+});
+
+Remote("renewForeground")(TeraTtsVoiceService.prototype.renewForeground, {
+  kind: "method",
+  name: "renewForeground",
+  static: false,
+  private: false,
+  addInitializer(initializer) {
+    remoteInitializers.push(initializer);
+  },
+});
+
+Remote("releaseForeground")(TeraTtsVoiceService.prototype.releaseForeground, {
+  kind: "method",
+  name: "releaseForeground",
+  static: false,
+  private: false,
+  addInitializer(initializer) {
+    remoteInitializers.push(initializer);
+  },
+});
+
 export const inject = [];
+
+export function messageFirstChunk(session, messageId) {
+  if (!session || typeof session.deriveMessages !== "function") return null;
+  const message = session.deriveMessages().find((item) => item.id === messageId && item.role === "assistant");
+  if (!message) return null;
+  const text = message.content
+    ?.filter((block) => block.type === "text")
+    ?.map((block) => block.text)
+    ?.join("\n");
+  if (!text || text.length > 100_000) return null;
+  const cleaned = cleanMarkdown(text);
+  if (!cleaned) return null;
+  const chunks = splitSpeechText(cleaned);
+  return chunks.length > 0 ? chunks[0] : null;
+}
+
+export function preparationListener(service, current) {
+  const candidates = new WeakMap();
+  return (session, event) => {
+    if (session.header?.origin === "subagent") return;
+    if (event.type === "turn/start") candidates.delete(session);
+    if (event.type === "assistant/message") {
+      candidates.delete(session);
+      const { message, turn, interrupted } = event.data;
+      if (
+        !interrupted &&
+        message.content.some((block) => block.type === "text") &&
+        !message.content.some((block) => block.type === "tool-call")
+      ) {
+        candidates.set(session, { turn, messageId: message.id });
+      }
+    }
+    if (event.type !== "turn/end") return;
+    const candidate = candidates.get(session);
+    candidates.delete(session);
+    if (event.data.reason?.kind !== "completed" || candidate?.turn !== event.data.turn) return;
+
+    try {
+      const firstChunk = messageFirstChunk(session, candidate.messageId);
+      if (!firstChunk) return;
+      const config = { ...current() };
+      const key = audioKey(firstChunk, config, service.synthesisRevision);
+
+      if (service.cache.get(key) || service.coordinator.isForegroundActive()) return;
+
+      service.coordinator.scheduleBackground({
+        key,
+        run: async (signal) => {
+          if (service.coordinator.isForegroundActive() || service.cache.get(key)) return;
+          const audio = await service.synthesizeConfigured(firstChunk, signal, config, key);
+          service.cache.set(key, audio);
+        },
+      });
+    } catch {
+      // Discard errors in background preparation
+    }
+  };
+}
 
 export function apply(ctx, config = {}) {
   const base = {
@@ -341,11 +660,17 @@ export function apply(ctx, config = {}) {
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
   };
   let current = () => base;
+  const service = new TeraTtsVoiceService(ctx, () => current());
+
   installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, base, {
     setSource(source) {
       current = source;
+      service.cache.clear();
     },
-    onChange() {},
+    onChange() {
+      service.cache.clear();
+    },
   });
-  new TeraTtsVoiceService(ctx, () => current());
+
+  ctx.on("session/event", preparationListener(service, () => current()));
 }
