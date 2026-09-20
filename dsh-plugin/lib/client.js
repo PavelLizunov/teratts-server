@@ -523,7 +523,16 @@ window.__ModuleLoader__.load({
       const style = document.createElement("style");
       style.dataset.plugin = "dsh-client-ui-teratts";
       style.dataset.pluginCss = styleId;
-      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}.teratts-group{display:inline-flex;align-items:center;gap:2px}.teratts-control{min-width:28px;height:28px;padding:0 4px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:14px;justify-content:center;align-items:center;display:inline-flex;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;font-family:inherit}.teratts-control:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
+      style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
+      style.textContent += '[class*="_actions"]:has(.teratts-player){height:auto!important;min-height:calc(28px + var(--dsh-content-font-delta,0px));overflow:visible!important;flex-wrap:wrap!important;align-items:flex-start!important}';
+      style.textContent += ".teratts-player{flex-basis:100%;width:100%;max-width:440px;order:10;margin:6px 0 2px 0;padding:8px 12px 6px 12px;background:var(--dsw-alias-bubble-secondary,rgba(125,125,125,0.08));border:1px solid var(--dsw-alias-border-l3,rgba(125,125,125,0.18));border-radius:14px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}";
+      style.textContent += ".teratts-main-row{display:flex;align-items:center;gap:10px;width:100%}.teratts-play-btn{width:36px;height:36px;min-width:36px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-label-primary,#000);color:var(--dsw-alias-label-primary-foreground,var(--dsw-alias-bg-base,#fff));border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0;transition:transform .1s ease,opacity .1s ease}.teratts-play-btn:hover{opacity:.9;transform:scale(1.04)}.teratts-play-btn:active{transform:scale(.96)}.teratts-play-btn svg{width:16px;height:16px}";
+      style.textContent += ".teratts-track-wrap{flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0}.teratts-time-row{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 1px}.teratts-time{font-size:11px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex-shrink:0}";
+      style.textContent += ".teratts-sub-row{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:100%;padding-top:4px;border-top:1px solid var(--dsw-alias-border-l4,rgba(125,125,125,0.08))}";
+      style.textContent += ".teratts-pill-btn{height:28px;padding:0 10px;border-radius:14px;background:var(--dsw-alias-interactive-bg-subtle,rgba(125,125,125,0.08));color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l4,transparent);font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;user-select:none;white-space:nowrap}.teratts-pill-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.teratts-stop-btn{color:var(--dsw-alias-label-tertiary);padding:0 8px}.teratts-stop-btn:hover{color:var(--dsw-alias-label-primary)}";
+      style.textContent += ".teratts-progress{min-height:32px;cursor:pointer;accent-color:var(--dsw-alias-label-primary);margin:0}.teratts-progress{min-height:44px}.teratts-action:focus-visible,.teratts-play-btn:focus-visible,.teratts-pill-btn:focus-visible,.teratts-progress:focus-visible{outline:2px solid currentColor;outline-offset:2px}";
+      style.textContent += ".teratts-pinned{position:fixed!important;left:12px!important;right:12px!important;bottom:var(--teratts-composer-offset,calc(var(--dsh-composer-height,80px) + 12px))!important;width:auto!important;max-width:440px!important;margin:0 auto!important;z-index:1000!important;box-shadow:0 8px 32px rgba(0,0,0,0.32)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;background:var(--dsw-specific-menu,rgba(28,28,30,0.92))!important;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.16))!important;border-radius:16px!important;padding:10px 14px 8px 14px!important;pointer-events:auto!important;animation:teratts-pop-in .18s cubic-bezier(0.16,1,0.3,1)}@media(min-width:601px){.teratts-pinned{left:auto!important;right:24px!important;width:380px!important;margin:0!important}}@keyframes teratts-pop-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}";
+      style.textContent += "@media(max-width:600px),(pointer:coarse){.teratts-play-btn{width:44px;height:44px;min-width:44px}.teratts-pill-btn{min-width:44px;min-height:44px;border-radius:22px;font-size:13px;padding:0 12px}}@media(prefers-reduced-motion:reduce){.teratts-loading{animation:none}}";
       document.head.appendChild(style);
     }
 
@@ -579,9 +588,24 @@ window.__ModuleLoader__.load({
       producerDone: false,
       listeners: new Set(),
       rate: 1,
+      volume: 1,
+      paused: false,
+      playAttempt: 0,
+      duration: 0,
+      position: 0,
+      complete: false,
     };
 
+    function setPlaybackVolume(volume) {
+      playback.volume = Math.max(0, Math.min(1, Number(volume) || 0));
+      for (const segment of playback.segments) segment.audio.volume = playback.volume;
+      publish();
+    }
+
     function snapshot() {
+      const durations = playback.segments.map((segment) => segment.duration);
+      const duration = durations.reduce((sum, d) => sum + d, 0);
+      const position = globalCurrentTime();
       return {
         owner: playback.owner,
         state: playback.state,
@@ -589,12 +613,86 @@ window.__ModuleLoader__.load({
         errorOwner: playback.errorOwner,
         errorSeq: playback.errorSeq,
         rate: playback.rate,
+        volume: playback.volume,
+        paused: playback.paused,
+        duration,
+        position,
+        complete: playback.producerDone,
       };
     }
 
     function publish() {
       const next = snapshot();
+      playback.duration = next.duration;
+      playback.position = next.position;
+      playback.complete = next.complete;
       for (const listener of playback.listeners) listener(next);
+    }
+
+    function togglePause() {
+      if (!playback.owner) return;
+      playback.paused = !playback.paused;
+      if (playback.paused) {
+        playback.playAttempt += 1;
+        playback.audio?.pause();
+        playback.state = "paused";
+        publish();
+      } else {
+        if (playback.audio) {
+          const epoch = playback.epoch;
+          void playSegment(epoch, playback.index, playback.audio.currentTime).catch((error) => {
+            failPlayback(epoch, error instanceof Error ? error.message : "Audio playback failed");
+          });
+        } else if (playback.segments.length) {
+          seekPlayback(0);
+        } else {
+          playback.state = "loading";
+          publish();
+        }
+      }
+    }
+
+    function seekToTime(targetTime) {
+      const durations = playback.segments.map((segment) => segment.duration);
+      const location = locateBufferedTime(durations, targetTime);
+      if (!location) return;
+      if (location.target === location.total && location.offset === durations[location.index]) {
+        if (playback.producerDone) {
+          playback.index = location.index;
+          finishPlayback();
+          return;
+        }
+        if (playback.audio) {
+          playback.audio.onended = null;
+          playback.audio.onerror = null;
+          playback.audio.ontimeupdate = null;
+          playback.audio.pause();
+        }
+        playback.index = location.index;
+        playback.audio = null;
+        playback.state = playback.paused ? "paused" : "loading";
+        publish();
+        return;
+      }
+      if (location.index === playback.index && playback.audio) {
+        playback.audio.currentTime = location.offset;
+        publish();
+        return;
+      }
+      const epoch = playback.epoch;
+      playback.index = location.index;
+      void playSegment(epoch, location.index, location.offset).catch((error) => {
+        failPlayback(epoch, error instanceof Error ? error.message : "Audio playback failed");
+      });
+      publish();
+    }
+
+    function finishPlayback() {
+      playback.audio?.pause();
+      playback.audio = null;
+      playback.state = "ended";
+      playback.paused = false;
+      publish();
     }
 
     function setPlaybackRate(rate) {
@@ -723,6 +821,7 @@ window.__ModuleLoader__.load({
       }
       audio.preload = "auto";
       audio.playbackRate = playback.rate;
+      audio.volume = playback.volume;
       playback.format ??= info.format;
       playback.bufferedBytes = bufferedBytes;
       return { audio, duration: info.duration, url };
@@ -732,32 +831,46 @@ window.__ModuleLoader__.load({
       if (epoch !== playback.epoch) return;
       const segment = playback.segments[index];
       if (!segment) return;
+      const attempt = ++playback.playAttempt;
       if (playback.audio && playback.audio !== segment.audio) {
         playback.audio.onended = null;
         playback.audio.onerror = null;
+        playback.audio.ontimeupdate = null;
         playback.audio.pause();
       }
       playback.index = index;
       playback.audio = segment.audio;
       segment.audio.playbackRate = playback.rate;
+      segment.audio.volume = playback.volume;
       segment.audio.currentTime = clampSeekTime(0, offset, segment.duration);
       segment.audio.onended = () => {
         if (epoch !== playback.epoch || playback.index !== index) return;
         void advancePlayback(epoch, index);
       };
       segment.audio.onerror = () => failPlayback(epoch, "Audio playback failed");
+      segment.audio.ontimeupdate = () => {
+        if (epoch === playback.epoch && playback.audio === segment.audio) publish();
+      };
+      if (playback.paused) {
+        segment.audio.pause();
+        playback.state = "paused";
+        publish();
+        return;
+      }
       try {
         await segment.audio.play();
       } catch (error) {
-        if (epoch !== playback.epoch || playback.index !== index || playback.audio !== segment.audio) {
+        if (epoch !== playback.epoch || attempt !== playback.playAttempt || playback.index !== index || playback.audio !== segment.audio) {
           return;
         }
+        if (playback.paused && error?.name === "AbortError") return;
         throw error;
       }
-      if (epoch !== playback.epoch || playback.index !== index || playback.audio !== segment.audio) {
+      if (epoch !== playback.epoch || attempt !== playback.playAttempt || playback.index !== index || playback.audio !== segment.audio) {
         return;
       }
-      playback.state = "playing";
+      if (playback.paused) segment.audio.pause();
+      playback.state = playback.paused ? "paused" : "playing";
       publish();
     }
 
@@ -775,12 +888,8 @@ window.__ModuleLoader__.load({
       playback.audio = null;
       if (playback.producerDone) {
         const pendingErr = playback.pendingError;
-        stopPlayback();
-        if (pendingErr) {
-          playback.error = pendingErr;
-          playback.errorSeq += 1;
-          publish();
-        }
+        if (pendingErr) failPlayback(epoch, pendingErr);
+        else finishPlayback();
       } else {
         playback.state = "loading";
         publish();
@@ -909,12 +1018,39 @@ window.__ModuleLoader__.load({
       return value;
     }
 
+    let ReactDOM = null;
+    try {
+      ReactDOM = require("react-dom");
+    } catch (_) {}
+
+    function PlayIcon() {
+      return React.createElement(
+        "svg",
+        { width: 16, height: 16, viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
+        React.createElement("path", { d: "M4 2.5v11L13 8z" })
+      );
+    }
+
+    function PauseIcon() {
+      return React.createElement(
+        "svg",
+        { width: 16, height: 16, viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
+        React.createElement("path", { d: "M3 2h4v12H3zm6 0h4v12H9z" })
+      );
+    }
+
+    function formatTime(seconds) {
+      const value = Math.max(0, Math.floor(seconds || 0));
+      return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+    }
+
     function TeraTtsAction({ messageId, useChat, useSession, voice }) {
       const useTextSnapshot = useChat ?? useSession;
       const text = useTextSnapshot ? useTextSnapshot((session) => messageText(session, messageId)) : "";
       const current = usePlayback();
       const owner = React.useRef(Symbol(messageId));
       const buttonRef = React.useRef(null);
+      const playerRef = React.useRef(null);
       const active = current.owner === owner.current;
       const state = active ? current.state : "idle";
 
@@ -955,47 +1091,12 @@ window.__ModuleLoader__.load({
       const error =
         current.errorOwner === owner.current && current.errorSeq ? current.error : null;
 
-      if (active && state === "playing") {
-        const rateText = `${current.rate || 1}×`;
-        const control = (label, content, onClick, className = "teratts-control", ref) =>
-          React.createElement(
-            Tooltip,
-            { label, side: "bottom" },
-            React.createElement(
-              "button",
-              {
-                ref,
-                type: "button",
-                className,
-                "aria-label": label,
-                "data-active": className === "teratts-action" || undefined,
-                onClick,
-              },
-              content,
-            ),
-          );
-        return React.createElement(
-          "div",
-          { className: "teratts-group" },
-          control("Rewind 10 seconds", "-10", handleSeek(-10)),
-          control(`Playback speed ${rateText}`, rateText, handleRate),
-          control("Fast forward 15 seconds", "+15", handleSeek(15)),
-          control(
-            "Stop speech",
-            React.createElement(IconStopFill16, {}),
-            toggle,
-            "teratts-action",
-            buttonRef,
-          ),
-        );
-      }
-
       const label =
         state === "loading"
           ? "Generating speech"
           : "Read response aloud";
 
-      return React.createElement(
+      const actionButton = React.createElement(
         React.Fragment,
         null,
         React.createElement(
@@ -1032,6 +1133,133 @@ window.__ModuleLoader__.load({
             },
           }),
       );
+
+      if (!active) {
+        return actionButton;
+      }
+
+      const rateText = `${current.rate || 1}×`;
+      const playerCard = React.createElement(
+        "div",
+        {
+          ref: playerRef,
+          className: "teratts-player teratts-card teratts-pinned",
+          role: "region",
+          "aria-label": "Speech player",
+        },
+        React.createElement(
+          "div",
+          { className: "teratts-main-row" },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "teratts-play-btn",
+              "aria-label": state === "ended" ? "Replay speech" : current.paused ? "Resume speech" : "Pause speech",
+              title: state === "ended" ? "Replay speech" : current.paused ? "Resume speech" : "Pause speech",
+              onClick: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (state === "ended") void startPlayback(owner.current, text, voice);
+                else togglePause();
+              },
+            },
+            React.createElement(current.paused || state === "ended" ? PlayIcon : PauseIcon),
+          ),
+          React.createElement(
+            "div",
+            { className: "teratts-track-wrap" },
+            React.createElement("input", {
+              type: "range",
+              className: "teratts-progress",
+              min: 0,
+              max: current.duration || 0,
+              step: 0.1,
+              value: Math.min(current.position, current.duration),
+              disabled: !current.duration,
+              "aria-label": "Seek within generated audio",
+              onClick: (e) => e.stopPropagation(),
+              onInput: (e) => {
+                e.stopPropagation();
+                seekToTime(Number(e.target.value));
+              },
+              onChange: (e) => {
+                e.stopPropagation();
+                seekToTime(Number(e.target.value));
+              },
+            }),
+            React.createElement(
+              "div",
+              { className: "teratts-time-row" },
+              React.createElement("span", { className: "teratts-time" }, formatTime(current.position)),
+              React.createElement(
+                "span",
+                { className: "teratts-time" },
+                `${formatTime(current.duration)}${current.complete ? "" : " · generating"}`,
+              ),
+            ),
+          ),
+        ),
+        React.createElement(
+          "div",
+          { className: "teratts-sub-row" },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "teratts-pill-btn",
+              "aria-label": "Rewind 10 seconds",
+              title: "Rewind 10 seconds (Alt+Left)",
+              onClick: handleSeek(-10),
+            },
+            "-10s",
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "teratts-pill-btn",
+              "aria-label": `Playback speed ${rateText}`,
+              title: `Playback speed ${rateText}`,
+              onClick: handleRate,
+            },
+            rateText,
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "teratts-pill-btn",
+              "aria-label": "Fast forward 15 seconds",
+              title: "Fast forward 15 seconds (Alt+Right)",
+              onClick: handleSeek(15),
+            },
+            "+15s",
+          ),
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "teratts-pill-btn teratts-stop-btn",
+              "aria-label": "Stop speech",
+              title: "Stop speech (Escape)",
+              onClick: toggle,
+            },
+            React.createElement(IconStopFill16, {}),
+          ),
+        ),
+      );
+
+      const usePortal = typeof document !== "undefined" && document.body && ReactDOM && typeof ReactDOM.createPortal === "function" && typeof window !== "undefined" && !globalThis.__teratts_testNoPortal;
+      if (usePortal) {
+        return React.createElement(
+          React.Fragment,
+          null,
+          actionButton,
+          ReactDOM.createPortal(playerCard, document.body),
+        );
+      }
+      return playerCard;
     }
 
     const inject = ["remote", "slots"];
