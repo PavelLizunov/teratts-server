@@ -379,12 +379,6 @@ window.__ModuleLoader__.load({
       },
     };
 
-    const anySchema = {
-      parse(value) {
-        return value;
-      },
-    };
-
     const REMOTE = {
       package: "dsh-client-ui-teratts",
       descriptors: [
@@ -411,108 +405,6 @@ window.__ModuleLoader__.load({
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
             schema: audioSchema,
-          },
-        },
-        {
-          id: "dsh-client-ui-teratts#terattsVoice/acquireForeground",
-          service: "terattsVoice",
-          namespace: "terattsVoice",
-          method: "acquireForeground",
-          invocation: { kind: "direct" },
-          parameters: [
-            {
-              name: "ownerId",
-              wire: "ownerId",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:ownerId",
-                schema: textSchema,
-              },
-            },
-            {
-              name: "epoch",
-              wire: "epoch",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:epoch",
-                schema: anySchema,
-              },
-            },
-          ],
-          result: {
-            mode: "strict",
-            typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:result",
-            schema: anySchema,
-          },
-        },
-        {
-          id: "dsh-client-ui-teratts#terattsVoice/renewForeground",
-          service: "terattsVoice",
-          namespace: "terattsVoice",
-          method: "renewForeground",
-          invocation: { kind: "direct" },
-          parameters: [
-            {
-              name: "ownerId",
-              wire: "ownerId",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:ownerId",
-                schema: textSchema,
-              },
-            },
-            {
-              name: "epoch",
-              wire: "epoch",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:epoch",
-                schema: anySchema,
-              },
-            },
-          ],
-          result: {
-            mode: "strict",
-            typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:result",
-            schema: anySchema,
-          },
-        },
-        {
-          id: "dsh-client-ui-teratts#terattsVoice/releaseForeground",
-          service: "terattsVoice",
-          namespace: "terattsVoice",
-          method: "releaseForeground",
-          invocation: { kind: "direct" },
-          parameters: [
-            {
-              name: "ownerId",
-              wire: "ownerId",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:ownerId",
-                schema: textSchema,
-              },
-            },
-            {
-              name: "epoch",
-              wire: "epoch",
-              source: "json",
-              codec: {
-                mode: "strict",
-                typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:epoch",
-                schema: anySchema,
-              },
-            },
-          ],
-          result: {
-            mode: "strict",
-            typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:result",
-            schema: anySchema,
           },
         },
       ],
