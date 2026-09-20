@@ -28,135 +28,362 @@ export function audioKey(text, config, synthesisRevision = "unknown") {
     .digest("hex");
 }
 
-export class AudioCache {
-  constructor(maxItems = 64) {
-    this.maxItems = maxItems;
-    this.cache = new Map();
-    this.inFlight = new Map();
+export class ByteBoundedAudioCache {
+  constructor(options = {}) {
+    this.maxBytes = options.maxBytes ?? 32 * 1024 * 1024; // 32 MiB
+    this.maxEntries = options.maxEntries ?? 64;
+    this.maxEntryBytes = options.maxEntryBytes ?? 4 * 1024 * 1024; // 4 MiB
+    this.ttlMs = options.ttlMs ?? 10 * 60 * 1000; // 10 minutes
+
+    this.cache = new Map(); // key -> { audioBuffer, mimeType, synthesisRevision, duration, createdAt, size, cacheGeneration }
+    this.currentBytes = 0;
+    this.generation = 1;
   }
 
-  get(key) {
-    const value = this.cache.get(key);
-    if (value !== undefined) {
-      this.cache.delete(key);
-      this.cache.set(key, value);
-      return value;
+  get entryCount() {
+    return this.cache.size;
+  }
+
+  get(key, synthesisRevision) {
+    this.purgeExpired();
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    if (entry.synthesisRevision !== synthesisRevision) {
+      this.delete(key);
+      return undefined;
     }
-    return undefined;
+
+    // Refresh LRU position
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
+    return {
+      audioBuffer: entry.audioBuffer,
+      mimeType: entry.mimeType,
+      synthesisRevision: entry.synthesisRevision,
+      duration: entry.duration,
+    };
   }
 
-  set(key, value) {
+  set(key, audio, jobGeneration) {
+    if (!audio || !audio.audioBuffer) return false;
+    // Late completions from older generations are rejected
+    if (jobGeneration !== undefined && jobGeneration < this.generation) {
+      return false;
+    }
+
+    const size = audio.audioBuffer.byteLength;
+    // Entries larger than maxEntryBytes are returned to the caller but not cached
+    if (size > this.maxEntryBytes || size > this.maxBytes) {
+      return false;
+    }
+
+    // Copy buffer slice if it retains a larger backing array buffer
+    let storedBuffer = audio.audioBuffer;
+    if (storedBuffer.byteLength !== storedBuffer.buffer.byteLength) {
+      storedBuffer = Buffer.from(storedBuffer);
+    }
+
+    // If key already exists, subtract old size
     if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxItems) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey !== undefined) this.cache.delete(oldestKey);
+      this.delete(key);
     }
-    this.cache.set(key, value);
+
+    // Evict oldest entries by LRU until fits
+    while (
+      (this.currentBytes + size > this.maxBytes || this.cache.size >= this.maxEntries) &&
+      this.cache.size > 0
+    ) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) this.delete(oldestKey);
+      else break;
+    }
+
+    const entry = {
+      audioBuffer: storedBuffer,
+      mimeType: audio.mimeType || "audio/wav",
+      synthesisRevision: audio.synthesisRevision,
+      duration: audio.duration,
+      createdAt: Date.now(),
+      size,
+      cacheGeneration: this.generation,
+    };
+
+    this.cache.set(key, entry);
+    this.currentBytes += size;
+    return true;
+  }
+
+  delete(key) {
+    const existing = this.cache.get(key);
+    if (existing) {
+      this.currentBytes -= existing.size;
+      this.cache.delete(key);
+      return true;
+    }
+    return false;
   }
 
   clear() {
+    this.generation += 1;
     this.cache.clear();
-    this.inFlight.clear();
+    this.currentBytes = 0;
+  }
+
+  invalidateRevision(newRevision) {
+    this.generation += 1;
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.synthesisRevision !== newRevision) {
+        this.delete(key);
+      }
+    }
+  }
+
+  purgeExpired() {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.createdAt > this.ttlMs) {
+        this.delete(key);
+      }
+    }
   }
 }
 
 export class PlaybackCoordinator {
-  constructor() {
-    this.activeOwnerId = null;
-    this.activeEpoch = null;
-    this.activeUntil = 0;
+  constructor(options = {}) {
+    this.maxSessions = options.maxSessions ?? 8;
 
-    this.backgroundRunning = 0; // <= 1
-    this.backgroundPending = null; // <= 1
-    this.currentBackgroundTask = null; // { key, isForeground, abortController, promise }
+    // Multi-lease registry for tabs: ownerKey -> { ownerId, epoch, until }
+    this.activeLeases = new Map();
+
+    // Session candidate registry: sessionId -> candidate object
+    this.sessionCandidates = new Map();
+    this.roundRobinCursor = 0;
+
+    // In-flight execution state
+    this.backgroundRunning = 0; // strictly <= 1
+    this.currentJob = null; // InFlightJob | null
+    this.inFlightJobs = new Map(); // key -> InFlightJob
+
+    // Network defensive state
+    this.speculationSuspended = false;
+    this.suspensionReason = null;
+
+    // Metadata freshness cache: 30s bounded staleness
+    this.metadataFreshnessMs = options.metadataFreshnessMs ?? 30_000;
+    this.cachedRevision = null;
+    this.cachedRevisionTimestamp = 0;
+    this.revisionFetchPromise = null;
   }
 
+  // --- Foreground Lease Management (per tab / owner) ---
+
   isForegroundActive() {
-    return this.activeOwnerId !== null;
+    return this.activeLeases.size > 0;
   }
 
   acquireForeground(ownerId, epoch) {
-    this.activeOwnerId = String(ownerId);
-    this.activeEpoch = Number(epoch);
-    this.activeUntil = Date.now() + 15_000;
-    this.backgroundPending = null;
+    const key = String(ownerId);
+    this.activeLeases.set(key, {
+      ownerId: key,
+      epoch: Number(epoch),
+      until: Date.now() + 15_000,
+    });
     return { ok: true };
   }
 
   renewForeground(ownerId, epoch) {
-    if (this.activeOwnerId === String(ownerId) && this.activeEpoch === Number(epoch)) {
-      this.activeUntil = Date.now() + 15_000;
+    const key = String(ownerId);
+    const lease = this.activeLeases.get(key);
+    if (lease && lease.epoch === Number(epoch)) {
+      lease.until = Date.now() + 15_000;
       return { ok: true };
     }
     return { ok: false };
   }
 
   releaseForeground(ownerId, epoch) {
-    if (this.activeOwnerId === String(ownerId) && this.activeEpoch === Number(epoch)) {
-      this.activeOwnerId = null;
-      this.activeEpoch = null;
-      this.activeUntil = 0;
-      this.pumpBackground();
+    const key = String(ownerId);
+    const lease = this.activeLeases.get(key);
+    if (lease && lease.epoch === Number(epoch)) {
+      this.activeLeases.delete(key);
+      if (!this.isForegroundActive()) {
+        this.pump();
+      }
       return { ok: true };
     }
     return { ok: false };
   }
 
-  scheduleBackground(candidate) {
-    this.backgroundPending = candidate;
-    this.pumpBackground();
+  // --- Speculation Suspension (BACKEND_OUTCOME_UNKNOWN) ---
+
+  isSpeculationSuspended() {
+    return this.speculationSuspended;
   }
 
-  pumpBackground() {
+  suspendSpeculation(reason) {
+    this.speculationSuspended = true;
+    this.suspensionReason = String(reason);
+  }
+
+  resetSpeculationSuspensionAdmin(reason) {
+    this.speculationSuspended = false;
+    this.suspensionReason = null;
+    this.pump();
+  }
+
+  // --- Candidate Queue Management (Round-Robin up to 8 sessions) ---
+
+  scheduleSessionCandidate(sessionId, candidate) {
+    if (typeof sessionId !== "string" || !sessionId) return false;
+
+    // Reject 9th session if pool is full and this session is not already registered
+    if (!this.sessionCandidates.has(sessionId) && this.sessionCandidates.size >= this.maxSessions) {
+      return false;
+    }
+
+    // Replace candidate for this session (preserving candidateGeneration logic)
+    this.sessionCandidates.set(sessionId, candidate);
+    this.pump();
+    return true;
+  }
+
+  removeSession(sessionId) {
+    this.sessionCandidates.delete(sessionId);
+  }
+
+  dropPendingSpeculation() {
+    this.sessionCandidates.clear();
+  }
+
+  // --- Job Registry and Atomic Promotion ---
+
+  getInFlightJob(key) {
+    return this.inFlightJobs.get(key);
+  }
+
+  promoteJob(key, consumerId) {
+    const job = this.inFlightJobs.get(key);
+    if (!job) return null;
+
+    job.foregroundConsumers.add(String(consumerId));
+    return job.promise;
+  }
+
+  // --- Dispatcher / Pump ---
+
+  pump() {
     if (this.backgroundRunning >= 1) return;
     if (this.isForegroundActive()) return;
-    if (!this.backgroundPending) return;
+    if (this.isSpeculationSuspended()) return;
+    if (this.sessionCandidates.size === 0) return;
 
-    const candidate = this.backgroundPending;
-    this.backgroundPending = null;
+    // Round-robin selection of next candidate
+    const sessionKeys = Array.from(this.sessionCandidates.keys());
+    if (sessionKeys.length === 0) return;
 
+    this.roundRobinCursor = this.roundRobinCursor % sessionKeys.length;
+    const selectedSessionId = sessionKeys[this.roundRobinCursor];
+
+    const candidate = this.sessionCandidates.get(selectedSessionId);
+    if (!candidate) return;
+
+    // Reserve slot synchronously before any await
     this.backgroundRunning = 1;
+
     const abortController = new AbortController();
-    const task = {
+    const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const job = {
+      id: jobId,
       key: candidate.key,
-      isForeground: false,
       abortController,
+      foregroundConsumers: new Set(),
       promise: null,
     };
-    this.currentBackgroundTask = task;
 
-    task.promise = (async () => {
+    this.currentJob = job;
+    this.inFlightJobs.set(candidate.key, job);
+
+    job.promise = (async () => {
+      let isUnknownOutcome = false;
       try {
-        if (this.isForegroundActive()) return;
-        await candidate.run(abortController.signal);
-      } catch {
-        // Discard background errors
+        if (this.isForegroundActive()) return null;
+        const result = await candidate.run(abortController.signal);
+
+        // Remove session candidate ONLY if generation matches
+        const currentCand = this.sessionCandidates.get(selectedSessionId);
+        if (currentCand && currentCand.candidateGeneration === candidate.candidateGeneration) {
+          this.sessionCandidates.delete(selectedSessionId);
+        } else {
+          // If candidate was replaced, advance cursor
+          this.roundRobinCursor = (this.roundRobinCursor + 1) % Math.max(1, this.sessionCandidates.size);
+        }
+
+        return result;
+      } catch (error) {
+        // Classify network failure / timeout as BACKEND_OUTCOME_UNKNOWN
+        const isNetworkErr =
+          error?.name === "TimeoutError" ||
+          error?.code === "ECONNRESET" ||
+          error?.code === "ETIMEDOUT" ||
+          error?.code === "ECONNREFUSED" ||
+          (error instanceof TypeError && /fetch failed/i.test(error.message));
+
+        if (isNetworkErr && !abortController.signal.aborted) {
+          isUnknownOutcome = true;
+          this.suspendSpeculation("network_timeout_unknown_outcome");
+        }
+
+        // If promoted to foreground, propagate error to foreground consumers
+        if (job.foregroundConsumers.size > 0) {
+          throw error;
+        }
+        // Otherwise, background speculative errors are quietly absorbed
+        return null;
       } finally {
-        if (this.currentBackgroundTask === task) {
-          this.currentBackgroundTask = null;
+        if (this.currentJob === job) {
+          this.currentJob = null;
+        }
+        if (this.inFlightJobs.get(candidate.key) === job) {
+          this.inFlightJobs.delete(candidate.key);
         }
         this.backgroundRunning = 0;
-        this.pumpBackground();
+        this.pump();
       }
     })();
   }
 
-  promoteToForeground(key) {
-    if (this.currentBackgroundTask && this.currentBackgroundTask.key === key) {
-      this.currentBackgroundTask.isForeground = true;
-      return this.currentBackgroundTask.promise;
-    }
-    return null;
-  }
+  // --- Metadata Freshness (30s Bounded Staleness) ---
 
-  cancelBackground(reason) {
-    this.backgroundPending = null;
-    if (this.currentBackgroundTask && !this.currentBackgroundTask.isForeground) {
-      this.currentBackgroundTask.abortController.abort(
-        reason instanceof Error ? reason : new Error(reason || "Cancelled by foreground"),
-      );
+  async getOrFetchSynthesisRevision(endpoint) {
+    const now = Date.now();
+    if (this.cachedRevision && now - this.cachedRevisionTimestamp < this.metadataFreshnessMs) {
+      return this.cachedRevision;
     }
+
+    if (!this.revisionFetchPromise) {
+      this.revisionFetchPromise = (async () => {
+        try {
+          const healthUrl = `${endpoint.replace(/\/+$/, "").replace(/\/tts$/, "")}/health`;
+          const res = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (data && typeof data.synthesis_revision === "string" && data.synthesis_revision) {
+            this.cachedRevision = data.synthesis_revision;
+            this.cachedRevisionTimestamp = Date.now();
+            return this.cachedRevision;
+          }
+          return null;
+        } catch {
+          return null;
+        } finally {
+          this.revisionFetchPromise = null;
+        }
+      })();
+    }
+
+    return this.revisionFetchPromise;
   }
 }
 

@@ -527,7 +527,7 @@ test("global seek crosses buffered segments and rate propagates", async () => {
 
     harness.api.seekPlayback(99);
     await flushPromises();
-    assert.ok(harness.api.getPlayback().state === "idle" || harness.api.getPlayback().state === "ended");
+    assert.equal(harness.api.getPlayback().state, "idle");
     assert.equal(harness.api.getPlayback().segments.length, 0);
     assert.deepEqual(harness.revokedUrls, ["blob:test-1", "blob:test-2"]);
   } finally {
