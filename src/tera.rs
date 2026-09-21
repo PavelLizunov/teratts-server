@@ -242,6 +242,186 @@ impl TeraEngine {
         self.synthesize_preprocessed(&prepared.text, voice, duration_scale, seed)
     }
 
+    /// Sample raw latent frames [1, 144, L] for vocoder comparison and testing.
+    pub fn sample_latent(
+        &mut self,
+        text: &str,
+        voice: &str,
+        duration_scale: f32,
+        seed: u64,
+    ) -> Result<(Vec<f32>, usize, usize)> {
+        if !duration_scale.is_finite() || duration_scale <= 0.0 {
+            return Err(anyhow!("invalid-rate"));
+        }
+        let style_ttl = self.load_style(voice, "style_ttl.npy", &[1, 50, 256])?;
+        let style_dp = self.load_style(voice, "style_dp.npy", &[1, 8, 16])?;
+        let model_text = textnorm::finalize(text);
+        let (text_ids, text_mask) = self
+            .indexer
+            .batch(&model_text.model_text)
+            .map_err(|e| anyhow!("invalid-text: {e}"))?;
+        let (duration_ids, duration_mask) = self
+            .indexer
+            .batch(&model_text.duration_text)
+            .map_err(|e| anyhow!("invalid-text: {e}"))?;
+
+        // --- text encoder -------------------------------------------------
+        let text_len = text_ids.len();
+        let text_ids_t = Tensor::from_array(([1, text_len], text_ids.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let text_mask_t = Tensor::from_array(([1, 1, text_len], text_mask.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let style_ttl_t = Tensor::from_array(([1, 50, 256], style_ttl.data.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let encoder_outputs = self
+            .text_encoder
+            .run(ort::inputs![
+                "text_ids" => &text_ids_t,
+                "style_ttl" => &style_ttl_t,
+                "text_mask" => &text_mask_t,
+            ])
+            .map_err(|e| anyhow!("synth: text encoder failed: {e}"))?;
+        let (emb_shape, emb_data) = named_output_f32(&encoder_outputs, &self.text_encoder_out)?;
+        validate_tensor_shape(&emb_shape, emb_data.len(), "text_emb")?;
+
+        // --- duration predictor --------------------------------------------
+        let dur_len = duration_ids.len();
+        let duration_ids_t = Tensor::from_array(([1, dur_len], duration_ids.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let duration_mask_t =
+            Tensor::from_array(([1, 1, dur_len], duration_mask.into_boxed_slice()))
+                .map_err(|e| anyhow!("synth: {e}"))?;
+        let style_dp_t = Tensor::from_array(([1, 8, 16], style_dp.data.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let duration_outputs = self
+            .duration_predictor
+            .run(ort::inputs![
+                "text_ids" => &duration_ids_t,
+                "style_dp" => &style_dp_t,
+                "text_mask" => &duration_mask_t,
+            ])
+            .map_err(|e| anyhow!("synth: duration predictor failed: {e}"))?;
+        let (dur_shape, dur_data) =
+            named_output_f32(&duration_outputs, &self.duration_predictor_out)?;
+        validate_tensor_shape(&dur_shape, dur_data.len(), "duration")?;
+        let Some(&raw_duration) = dur_data.first() else {
+            return Err(anyhow!("synth: duration predictor returned no value"));
+        };
+        let duration_seconds = raw_duration * duration_scale / SPEED;
+        if !duration_seconds.is_finite() || duration_seconds <= 0.0 {
+            return Err(anyhow!("synth: non-positive duration"));
+        }
+        if duration_seconds > MAX_AUDIO_SECONDS {
+            return Err(anyhow!("synth: predicted duration exceeds 180 seconds"));
+        }
+        let latent_length = (duration_seconds * SAMPLE_RATE as f32
+            / SAMPLES_PER_COMPRESSED_FRAME as f32)
+            .ceil()
+            .max(1.0) as usize;
+        let maximum_samples = (duration_seconds * SAMPLE_RATE as f32).round() as usize;
+        let latent_elements = LATENT_CHANNELS
+            .checked_mul(latent_length)
+            .ok_or_else(|| anyhow!("synth: latent allocation overflow"))?;
+
+        // --- distilled 8-step sampler ---------------------------------------
+        let mut latent = Vec::new();
+        latent
+            .try_reserve_exact(latent_elements)
+            .map_err(|_| anyhow!("synth: latent allocation failed"))?;
+        latent.resize(latent_elements, 0.0_f32);
+        Rng::new(seed).fill_normal_f32(&mut latent);
+        let initial_latent_t = Tensor::from_array((
+            [1, LATENT_CHANNELS, latent_length],
+            latent.into_boxed_slice(),
+        ))
+        .map_err(|e| anyhow!("synth: {e}"))?;
+        let mut latent_mask = Vec::new();
+        latent_mask
+            .try_reserve_exact(latent_length)
+            .map_err(|_| anyhow!("synth: latent mask allocation failed"))?;
+        latent_mask.resize(latent_length, 1.0_f32);
+        let latent_mask_t =
+            Tensor::from_array(([1, 1, latent_length], latent_mask.into_boxed_slice()))
+                .map_err(|e| anyhow!("synth: {e}"))?;
+        let text_emb_t = Tensor::from_array((emb_shape.clone(), emb_data.into_boxed_slice()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let guidance_t = Tensor::from_array(([1], [GUIDANCE].into_iter().collect::<Box<[f32]>>()))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+        let sampler_outputs = self
+            .sampler
+            .run(ort::inputs![
+                "initial_latent" => &initial_latent_t,
+                "text_emb" => &text_emb_t,
+                "style_ttl" => &style_ttl_t,
+                "latent_mask" => &latent_mask_t,
+                "text_mask" => &text_mask_t,
+                "guidance" => &guidance_t,
+            ])
+            .map_err(|e| anyhow!("synth: sampler failed: {e}"))?;
+        let (latent_shape, latent_out) = named_output_f32(&sampler_outputs, &self.sampler_out)?;
+        validate_latent_output(&latent_shape, latent_out.len(), latent_length)?;
+        Ok((latent_out, latent_length, maximum_samples))
+    }
+
+    /// Decode raw latent frames with a specific vocoder window policy.
+    pub fn decode_latent_with_policy(
+        &mut self,
+        latent_out: &[f32],
+        latent_length: usize,
+        maximum_samples: usize,
+        window_policy: VocoderWindowPolicy,
+    ) -> Result<SynthOutput> {
+        let mut chunks: Vec<Vec<f32>> = Vec::new();
+        let mut emitted = 0usize;
+        let mut start = 0usize;
+        while start < latent_length {
+            let width = match window_policy {
+                VocoderWindowPolicy::Fixed16 => STREAM_CHUNK_FRAMES,
+                VocoderWindowPolicy::First16Then32 => {
+                    if start == 0 {
+                        STREAM_CHUNK_FRAMES
+                    } else {
+                        32
+                    }
+                }
+            };
+            let end = (start + width).min(latent_length);
+            let input_start = start.saturating_sub(VOCODER_CONTEXT_FRAMES);
+            let latent_window = slice_latent_frames(
+                latent_out,
+                LATENT_CHANNELS,
+                latent_length,
+                input_start,
+                end,
+            )?;
+            let latent_chunk_t = Tensor::from_array((
+                [1, LATENT_CHANNELS, end - input_start],
+                latent_window.into_boxed_slice(),
+            ))
+            .map_err(|e| anyhow!("synth: {e}"))?;
+            let vocoder_outputs = self
+                .vocoder
+                .run(ort::inputs!["latent" => &latent_chunk_t])
+                .map_err(|e| anyhow!("synth: vocoder failed: {e}"))?;
+            let (wav_shape, decoded) = named_output_f32_borrowed(&vocoder_outputs, &self.vocoder_out)?;
+            let discard = (start - input_start) * SAMPLES_PER_COMPRESSED_FRAME;
+            let new_samples = (end - start) * SAMPLES_PER_COMPRESSED_FRAME;
+            validate_vocoder_output(&wav_shape, decoded.len(), discard + new_samples)?;
+            let mut chunk = decoded[discard..discard + new_samples].to_vec();
+            let remaining = maximum_samples.saturating_sub(emitted);
+            if remaining == 0 {
+                break;
+            }
+            chunk.truncate(remaining);
+            emitted += chunk.len();
+            if !chunk.is_empty() {
+                chunks.push(chunk);
+            }
+            start = end;
+        }
+        Ok(SynthOutput { chunks })
+    }
+
     /// Synthesize independently-valid tagged text produced by [`Self::preprocess`].
     pub fn synthesize_preprocessed(
         &mut self,
