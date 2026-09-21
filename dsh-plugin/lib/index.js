@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import s from "@deepseek-ai/schemastery";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
-import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import {
   ByteBoundedAudioCache,
@@ -14,7 +13,7 @@ import {
   normalizeEndpointWithoutAuth,
 } from "./coordinator.js";
 
-const SETTINGS_NAMESPACE = settingsNamespace("teratts");
+const SETTINGS_NAMESPACE = "teratts";
 const DEFAULT_TOKEN_REF = "TERATTS_TOKEN";
 export const MAX_RESPONSE_BYTES = 16 * 1024 * 1024; // 16 MiB
 
@@ -27,7 +26,7 @@ export const Config = s.object({
   stress: s.boolean().default(false),
   speechFront: s.boolean().default(true),
   tokenEnv: s.string().role("credential-ref").default(DEFAULT_TOKEN_REF),
-  prepareMode: s.string().default("shadow"),
+  prepareMode: s.string().default("off"),
 });
 
 function isLoopbackHost(hostname) {
@@ -208,6 +207,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     this.preparedTextCache = new PreparedTextCache();
     this.coordinator = new PlaybackCoordinator();
     this.synthesisRevision = "unknown";
+    this.preparationRevision = "unknown";
 
     for (const initialize of remoteInitializers) initialize.call(this);
   }
@@ -283,17 +283,25 @@ export class TeraTtsVoiceService extends TypertRemoteService {
 
   async prepareText(rawMarkdown, messageId, messageRevision = "1", signal, consumerId) {
     const config = this.current();
-    const mode = config.prepareMode || "shadow";
+    const mode = config.prepareMode || "off";
 
     if (mode === "off") {
       return null;
     }
 
-    const key = prepareKey(messageId, messageRevision, "markdown", config.language, "v1");
+    const key = prepareKey(
+      messageId,
+      rawMarkdown,
+      "markdown",
+      config.language,
+      config.endpoint,
+      this.preparationRevision,
+    );
 
     // 1. Check cached prepared text
-    const cached = this.preparedTextCache.get(key);
+    const cached = this.preparedTextCache.get(key, this.preparationRevision);
     if (cached) {
+      this.coordinator.prepareStats.cacheHits += 1;
       return cached;
     }
 
@@ -302,6 +310,9 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       const result = await this.coordinator.schedulePrepareJob(key, consumerId, async (jobSignal) => {
         const effectiveSignal = signal ? AbortSignal.any([signal, jobSignal]) : jobSignal;
         const outcome = await this.prepareConfigured(rawMarkdown, effectiveSignal, config);
+        if (outcome?.preparationRevision && outcome.preparationRevision !== this.preparationRevision) {
+          this.preparationRevision = outcome.preparationRevision;
+        }
         this.preparedTextCache.set(key, outcome);
         return outcome;
       });
@@ -561,7 +572,7 @@ export function preparationListener(service, current) {
       const oldChunk0 = oldChunks[0];
 
       const config = { ...current() };
-      const mode = config.prepareMode || "shadow";
+      const mode = config.prepareMode || "off";
 
       if (mode === "shadow") {
         const t0 = Date.now();
@@ -589,16 +600,7 @@ export function preparationListener(service, current) {
           });
       }
 
-      let firstChunk = oldChunk0;
-      if (mode === "on") {
-        const prepKey = prepareKey(candidateData.messageId, "1", "markdown", config.language, "v1");
-        const cachedPrep = service.preparedTextCache.get(prepKey);
-        if (cachedPrep?.text) {
-          const prepChunks = splitSpeechText(cachedPrep.text);
-          if (prepChunks.length > 0) firstChunk = prepChunks[0];
-        }
-      }
-
+      const firstChunk = oldChunk0;
       const key = audioKey(firstChunk, config, service.synthesisRevision);
 
       // If already cached or lease is active, skip scheduling
@@ -642,22 +644,37 @@ export function apply(ctx, config = {}) {
     stress: config.stress ?? false,
     speechFront: config.speechFront ?? true,
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
-    prepareMode: config.prepareMode ?? "shadow",
+    prepareMode: config.prepareMode ?? "off",
   };
   let current = () => base;
   const service = new TeraTtsVoiceService(ctx, () => current());
 
-  installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, base, {
-    setSource(source) {
-      current = source;
-      service.cache.clear();
-      service.preparedTextCache.clear();
-    },
-    onChange() {
-      service.cache.clear();
-      service.preparedTextCache.clear();
-    },
-  });
+  const installSection = (settingsService) => {
+    settingsService.installSection(ctx, SETTINGS_NAMESPACE, Config, base, {
+      setSource(source) {
+        current = source;
+        service.cache.clear();
+        service.preparedTextCache.clear();
+      },
+      onChange() {
+        service.cache.clear();
+        service.preparedTextCache.clear();
+      },
+    });
+  };
+
+  if (typeof ctx.inject === "function") {
+    ctx.inject(["settings"], (settingsCtx) => {
+      if (settingsCtx.settings && typeof settingsCtx.settings.installSection === "function") {
+        installSection(settingsCtx.settings);
+      }
+    });
+  } else {
+    const settingsService = ctx.get ? ctx.get("settings") : ctx.settings;
+    if (settingsService && typeof settingsService.installSection === "function") {
+      installSection(settingsService);
+    }
+  }
 
   ctx.on("session/event", preparationListener(service, () => current()));
 }

@@ -30,19 +30,23 @@ export function audioKey(text, config, synthesisRevision = "unknown") {
 
 export function prepareKey(
   messageId,
-  messageRevision = "1",
+  rawText,
   inputFormat = "markdown",
   language = "ru",
-  prepPolicyVersion = "v1"
+  endpoint = "",
+  preparationRevision = "unknown",
 ) {
+  const cleanEndpoint = normalizeEndpointWithoutAuth(endpoint);
+  const textHash = createHash("sha256").update(String(rawText || "")).digest("hex").slice(0, 16);
   return createHash("sha256")
     .update(
       JSON.stringify([
         String(messageId || ""),
-        String(messageRevision || "1"),
+        textHash,
         String(inputFormat || "markdown"),
         String(language || "ru"),
-        String(prepPolicyVersion || "v1"),
+        cleanEndpoint,
+        String(preparationRevision || "unknown"),
       ]),
     )
     .digest("hex");
@@ -51,8 +55,10 @@ export function prepareKey(
 export class PreparedTextCache {
   constructor(options = {}) {
     this.maxEntries = options.maxEntries ?? 128;
+    this.maxBytes = options.maxBytes ?? 16 * 1024 * 1024; // 16 MiB accounted limit
     this.ttlMs = options.ttlMs ?? 15 * 60 * 1000; // 15 minutes
-    this.cache = new Map(); // key -> { text, preparationRevision, warnings, createdAt }
+    this.cache = new Map(); // key -> { text, preparationRevision, warnings, createdAt, size }
+    this.accountedBytes = 0;
   }
 
   get entryCount() {
@@ -64,12 +70,12 @@ export class PreparedTextCache {
     if (!entry) return undefined;
 
     if (Date.now() - entry.createdAt > this.ttlMs) {
-      this.cache.delete(key);
+      this.delete(key);
       return undefined;
     }
 
     if (expectedRevision && entry.preparationRevision !== expectedRevision) {
-      this.cache.delete(key);
+      this.delete(key);
       return undefined;
     }
 
@@ -87,9 +93,20 @@ export class PreparedTextCache {
   set(key, value) {
     if (!value || typeof value.text !== "string") return false;
 
-    if (this.cache.size >= this.maxEntries && !this.cache.has(key)) {
+    const entrySize = Buffer.byteLength(value.text, "utf8");
+    if (entrySize > this.maxBytes) return false;
+
+    if (this.cache.has(key)) {
+      this.delete(key);
+    }
+
+    // Evict oldest until within entries and bytes bounds
+    while (
+      (this.cache.size >= this.maxEntries || this.accountedBytes + entrySize > this.maxBytes) &&
+      this.cache.size > 0
+    ) {
       const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+      this.delete(oldestKey);
     }
 
     this.cache.set(key, {
@@ -97,12 +114,25 @@ export class PreparedTextCache {
       preparationRevision: String(value.preparationRevision || "unknown"),
       warnings: Array.isArray(value.warnings) ? value.warnings : [],
       createdAt: Date.now(),
+      size: entrySize,
     });
+    this.accountedBytes += entrySize;
     return true;
+  }
+
+  delete(key) {
+    const existing = this.cache.get(key);
+    if (existing) {
+      this.accountedBytes = Math.max(0, this.accountedBytes - (existing.size || 0));
+      this.cache.delete(key);
+      return true;
+    }
+    return false;
   }
 
   clear() {
     this.cache.clear();
+    this.accountedBytes = 0;
   }
 }
 
@@ -244,6 +274,17 @@ export class PlaybackCoordinator {
     this.currentJob = null; // InFlightJob | null
     this.inFlightJobs = new Map(); // key -> InFlightJob
     this.inFlightPrepares = new Map(); // prepareKey -> { promise, consumers, abortController }
+    this.prepareRunning = 0; // strictly <= 1 active prepare request
+    this.prepareQueue = new Map(); // key -> { resolve, reject }
+    this.prepareStats = {
+      requests: 0,
+      cacheHits: 0,
+      deduplicatedWaiters: 0,
+      errors: 0,
+      timeouts: 0,
+      queueDrops: 0,
+      latencies: [],
+    };
 
     // Network defensive state
     this.speculationSuspended = false;
@@ -343,8 +384,11 @@ export class PlaybackCoordinator {
   }
 
   schedulePrepareJob(key, consumerId, runFn) {
+    this.prepareStats.requests += 1;
+
     const existing = this.inFlightPrepares.get(key);
     if (existing) {
+      this.prepareStats.deduplicatedWaiters += 1;
       if (consumerId) existing.consumers.add(String(consumerId));
       return existing.promise;
     }
@@ -354,12 +398,45 @@ export class PlaybackCoordinator {
     if (consumerId) consumers.add(String(consumerId));
 
     const promise = (async () => {
+      if (this.prepareRunning >= 1) {
+        if (this.prepareQueue.size >= 8) {
+          const oldest = this.prepareQueue.keys().next().value;
+          const dropped = this.prepareQueue.get(oldest);
+          this.prepareQueue.delete(oldest);
+          this.prepareStats.queueDrops += 1;
+          dropped?.reject?.(new Error("prepare queue capacity exceeded"));
+        }
+        await new Promise((resolve, reject) => {
+          this.prepareQueue.set(key, { resolve, reject });
+        });
+      }
+
+      this.prepareRunning = 1;
+      const t0 = Date.now();
       try {
         const result = await runFn(abortController.signal);
+        const latency = Date.now() - t0;
+        this.prepareStats.latencies.push(latency);
+        if (this.prepareStats.latencies.length > 200) {
+          this.prepareStats.latencies.shift();
+        }
         return result;
+      } catch (err) {
+        this.prepareStats.errors += 1;
+        if (err?.name === "TimeoutError") {
+          this.prepareStats.timeouts += 1;
+        }
+        throw err;
       } finally {
         if (this.inFlightPrepares.get(key)?.promise === promise) {
           this.inFlightPrepares.delete(key);
+        }
+        this.prepareRunning = 0;
+        if (this.prepareQueue.size > 0) {
+          const nextKey = this.prepareQueue.keys().next().value;
+          const nextItem = this.prepareQueue.get(nextKey);
+          this.prepareQueue.delete(nextKey);
+          nextItem?.resolve?.();
         }
       }
     })();

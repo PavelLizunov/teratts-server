@@ -65,22 +65,98 @@ test("PreparedTextCache: invalidates on revision mismatch or TTL expiry", async 
   assert.equal(cache.entryCount, 0);
 });
 
-test("prepareKey: depends only on message identity, revision, format and language (voice/model independent)", () => {
-  const key1 = prepareKey("msg_123", "1", "markdown", "ru", "v1");
-  const key2 = prepareKey("msg_123", "1", "markdown", "ru", "v1");
+test("prepareKey: binds to message id, raw text content hash, endpoint, and revision", () => {
+  const key1 = prepareKey("msg_1", "Hello world", "markdown", "ru", "http://127.0.0.1:8088", "r1");
+  const key2 = prepareKey("msg_1", "Hello world", "markdown", "ru", "http://127.0.0.1:8088", "r1");
   assert.equal(key1, key2);
 
-  // Different message revision
-  const keyRev2 = prepareKey("msg_123", "2", "markdown", "ru", "v1");
+  // Different text content produces different key even with same messageId
+  const keyEdited = prepareKey("msg_1", "Hello edited world", "markdown", "ru", "http://127.0.0.1:8088", "r1");
+  assert.notEqual(key1, keyEdited);
+
+  // Different endpoint produces different key
+  const keyTailnet = prepareKey("msg_1", "Hello world", "markdown", "ru", "https://teratts.tail9fd337.ts.net", "r1");
+  assert.notEqual(key1, keyTailnet);
+
+  // Different revision produces different key
+  const keyRev2 = prepareKey("msg_1", "Hello world", "markdown", "ru", "http://127.0.0.1:8088", "r2");
   assert.notEqual(key1, keyRev2);
+});
 
-  // Different language
-  const keyEn = prepareKey("msg_123", "1", "markdown", "en", "v1");
-  assert.notEqual(key1, keyEn);
+test("PlaybackCoordinator.schedulePrepareJob: enforces concurrency limit of 1 and bounded queue", async () => {
+  const coordinator = new PlaybackCoordinator();
+  const running = [];
+  const finishes = [];
 
-  // Different input format
-  const keyPlain = prepareKey("msg_123", "1", "plain", "ru", "v1");
-  assert.notEqual(key1, keyPlain);
+  const makeJob = (id) => async () => {
+    running.push(id);
+    return new Promise((resolve) => {
+      finishes.push(() => resolve({ text: `Done ${id}`, preparationRevision: "r1" }));
+    });
+  };
+
+  const p1 = coordinator.schedulePrepareJob("k1", "c1", makeJob("job1"));
+  const p2 = coordinator.schedulePrepareJob("k2", "c2", makeJob("job2"));
+
+  // Only job1 starts immediately; job2 waits in queue
+  assert.deepEqual(running, ["job1"]);
+  assert.equal(coordinator.prepareRunning, 1);
+  assert.equal(coordinator.prepareQueue.size, 1);
+
+  // Finish job1 -> job2 begins
+  finishes[0]();
+  await p1;
+  assert.deepEqual(running, ["job1", "job2"]);
+
+  finishes[1]();
+  await p2;
+  assert.equal(coordinator.prepareRunning, 0);
+  assert.equal(coordinator.prepareStats.requests, 2);
+});
+
+test("Shadow Mode invariant: failing or slow /prepare does NOT suspend speculation or abort audio job", async () => {
+  const coordinator = new PlaybackCoordinator();
+
+  // 1. Slow prepare task blocked on promise
+  let finishSlowPrepare;
+  const pPrepare = coordinator.schedulePrepareJob("prep_slow", "c1", async () => {
+    return new Promise((resolve) => {
+      finishSlowPrepare = () => resolve({ text: "Slow prepared text", preparationRevision: "r1" });
+    });
+  });
+
+  // 2. Audio candidate runs and completes without waiting for prepare
+  let audioRan = false;
+  coordinator.scheduleSessionCandidate("session_1", {
+    sessionId: "session_1",
+    messageId: "msg_1",
+    candidateGeneration: 1,
+    key: "audio_k1",
+    run: async () => {
+      audioRan = true;
+      return { audioBuffer: Buffer.from("wav"), mimeType: "audio/wav" };
+    },
+  });
+
+  // Audio ran immediately even though prepare is still pending
+  assert.equal(audioRan, true);
+  assert.equal(coordinator.isSpeculationSuspended(), false);
+
+  finishSlowPrepare();
+  await pPrepare;
+
+  // 3. Failing prepare (500, network drop)
+  try {
+    await coordinator.schedulePrepareJob("prep_fail", "c1", async () => {
+      throw new Error("HTTP 500 error from prepare");
+    });
+  } catch {
+    // Error caught
+  }
+
+  // Speculation is NOT suspended by prepare failures
+  assert.equal(coordinator.isSpeculationSuspended(), false);
+  assert.equal(coordinator.prepareStats.errors, 1);
 });
 
 test("PlaybackCoordinator.schedulePrepareJob: deduplicates simultaneous prepare requests and shares single promise", async () => {
