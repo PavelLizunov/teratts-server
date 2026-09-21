@@ -6,8 +6,11 @@ import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import {
   ByteBoundedAudioCache,
   PlaybackCoordinator,
+  PreparedTextCache,
   audioKey,
+  prepareKey,
   messageFirstChunk,
+  messageRawText,
   normalizeEndpointWithoutAuth,
 } from "./coordinator.js";
 
@@ -24,6 +27,7 @@ export const Config = s.object({
   stress: s.boolean().default(false),
   speechFront: s.boolean().default(true),
   tokenEnv: s.string().role("credential-ref").default(DEFAULT_TOKEN_REF),
+  prepareMode: s.string().default("shadow"),
 });
 
 function isLoopbackHost(hostname) {
@@ -63,6 +67,13 @@ export function validateAndResolveEndpoint(endpointConfig) {
   const basePath = parsed.pathname.replace(/\/+$/, "").replace(/\/tts$/, "");
   parsed.pathname = `${basePath}/tts`;
   return parsed.toString();
+}
+
+export function validateAndResolvePrepareEndpoint(endpointConfig) {
+  const ttsUrl = new URL(validateAndResolveEndpoint(endpointConfig));
+  const basePath = ttsUrl.pathname.replace(/\/+$/, "").replace(/\/tts$/, "");
+  ttsUrl.pathname = `${basePath}/prepare`;
+  return ttsUrl.toString();
 }
 
 function parseRetryAfter(response, errorBody) {
@@ -194,6 +205,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     super(ctx, "terattsVoice");
     this.current = current;
     this.cache = new ByteBoundedAudioCache();
+    this.preparedTextCache = new PreparedTextCache();
     this.coordinator = new PlaybackCoordinator();
     this.synthesisRevision = "unknown";
 
@@ -210,6 +222,94 @@ export class TeraTtsVoiceService extends TypertRemoteService {
 
   async releaseForeground(ownerId, epoch) {
     return this.coordinator.releaseForeground(ownerId, epoch);
+  }
+
+  async prepareConfigured(text, signal, config) {
+    validateAndResolveEndpoint(config.endpoint);
+    const endpoint = validateAndResolvePrepareEndpoint(config.endpoint);
+    const timeout = AbortSignal.timeout(Math.min(config.timeoutMs ?? 60_000, 10_000));
+    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
+    const credentials = this.ctx.get("credentials");
+    let tokenValue;
+    if (credentials) {
+      try {
+        const token = await credentials.resolve(credentialRef(config.tokenEnv));
+        tokenValue = token?.value;
+      } catch (err) {
+        console.warn(`[teratts] failed to resolve credential ${config.tokenEnv}:`, err);
+      }
+    }
+    if (!tokenValue && typeof process !== "undefined" && process.env) {
+      tokenValue = process.env[config.tokenEnv];
+    }
+
+    const requestPayload = JSON.stringify({
+      text,
+      input_format: "markdown",
+      language: config.language === "en" ? "en" : "ru",
+    });
+
+    const headers = {
+      "content-type": "application/json",
+      ...(tokenValue ? { authorization: `Bearer ${tokenValue}` } : {}),
+    };
+
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        redirect: "error",
+        headers,
+        body: requestPayload,
+        signal: requestSignal,
+      });
+    } catch (error) {
+      console.warn(`[teratts] prepare fetch failed:`, error);
+      throw error;
+    }
+
+    if (!response.ok) {
+      throw new Error(`TeraTTS prepare failed with HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      text: typeof data.text === "string" ? data.text : "",
+      preparationRevision: typeof data.preparation_revision === "string" ? data.preparation_revision : "unknown",
+      warnings: Array.isArray(data.warnings) ? data.warnings : [],
+    };
+  }
+
+  async prepareText(rawMarkdown, messageId, messageRevision = "1", signal, consumerId) {
+    const config = this.current();
+    const mode = config.prepareMode || "shadow";
+
+    if (mode === "off") {
+      return null;
+    }
+
+    const key = prepareKey(messageId, messageRevision, "markdown", config.language, "v1");
+
+    // 1. Check cached prepared text
+    const cached = this.preparedTextCache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    // 2. Schedule or join in-flight prepare job
+    try {
+      const result = await this.coordinator.schedulePrepareJob(key, consumerId, async (jobSignal) => {
+        const effectiveSignal = signal ? AbortSignal.any([signal, jobSignal]) : jobSignal;
+        const outcome = await this.prepareConfigured(rawMarkdown, effectiveSignal, config);
+        this.preparedTextCache.set(key, outcome);
+        return outcome;
+      });
+      return result;
+    } catch (err) {
+      console.warn(`[teratts] prepareText error:`, err);
+      return null;
+    }
   }
 
   async synthesize(text, signal) {
@@ -302,6 +402,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       russian_stress: config.stress === true,
       speech_front: config.speechFront !== false,
       duration_scale: 1,
+      input_format: "plain",
     });
 
     const headers = {
@@ -450,10 +551,54 @@ export function preparationListener(service, current) {
     if (event.data.reason?.kind !== "completed" || candidateData?.turn !== event.data.turn) return;
 
     try {
-      const firstChunk = messageFirstChunk(session, candidateData.messageId);
-      if (!firstChunk) return;
+      const rawText = messageRawText(session, candidateData.messageId);
+      if (!rawText) return;
+
+      const oldCleaned = cleanMarkdown(rawText);
+      if (!oldCleaned) return;
+      const oldChunks = splitSpeechText(oldCleaned);
+      if (oldChunks.length === 0) return;
+      const oldChunk0 = oldChunks[0];
 
       const config = { ...current() };
+      const mode = config.prepareMode || "shadow";
+
+      if (mode === "shadow") {
+        const t0 = Date.now();
+        service.prepareText(rawText, candidateData.messageId, "1", null, `shadow_${sessionId}`)
+          .then((prep) => {
+            if (prep && typeof prep.text === "string") {
+              const prepMs = Date.now() - t0;
+              const newChunks = splitSpeechText(prep.text);
+              const newChunk0 = newChunks[0] || "";
+              console.log("[teratts] shadow prepare:", {
+                messageId: candidateData.messageId,
+                old_clean_length: oldCleaned.length,
+                new_prepare_length: prep.text.length,
+                difference_detected: oldCleaned !== prep.text,
+                old_chunk_count: oldChunks.length,
+                new_chunk_count: newChunks.length,
+                first_chunk_match: oldChunk0 === newChunk0,
+                prepare_ms: prepMs,
+                preparation_revision: prep.preparationRevision,
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn("[teratts] shadow prepare failed:", err);
+          });
+      }
+
+      let firstChunk = oldChunk0;
+      if (mode === "on") {
+        const prepKey = prepareKey(candidateData.messageId, "1", "markdown", config.language, "v1");
+        const cachedPrep = service.preparedTextCache.get(prepKey);
+        if (cachedPrep?.text) {
+          const prepChunks = splitSpeechText(cachedPrep.text);
+          if (prepChunks.length > 0) firstChunk = prepChunks[0];
+        }
+      }
+
       const key = audioKey(firstChunk, config, service.synthesisRevision);
 
       // If already cached or lease is active, skip scheduling
@@ -497,6 +642,7 @@ export function apply(ctx, config = {}) {
     stress: config.stress ?? false,
     speechFront: config.speechFront ?? true,
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
+    prepareMode: config.prepareMode ?? "shadow",
   };
   let current = () => base;
   const service = new TeraTtsVoiceService(ctx, () => current());
@@ -505,9 +651,11 @@ export function apply(ctx, config = {}) {
     setSource(source) {
       current = source;
       service.cache.clear();
+      service.preparedTextCache.clear();
     },
     onChange() {
       service.cache.clear();
+      service.preparedTextCache.clear();
     },
   });
 

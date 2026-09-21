@@ -28,6 +28,84 @@ export function audioKey(text, config, synthesisRevision = "unknown") {
     .digest("hex");
 }
 
+export function prepareKey(
+  messageId,
+  messageRevision = "1",
+  inputFormat = "markdown",
+  language = "ru",
+  prepPolicyVersion = "v1"
+) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        String(messageId || ""),
+        String(messageRevision || "1"),
+        String(inputFormat || "markdown"),
+        String(language || "ru"),
+        String(prepPolicyVersion || "v1"),
+      ]),
+    )
+    .digest("hex");
+}
+
+export class PreparedTextCache {
+  constructor(options = {}) {
+    this.maxEntries = options.maxEntries ?? 128;
+    this.ttlMs = options.ttlMs ?? 15 * 60 * 1000; // 15 minutes
+    this.cache = new Map(); // key -> { text, preparationRevision, warnings, createdAt }
+  }
+
+  get entryCount() {
+    return this.cache.size;
+  }
+
+  get(key, expectedRevision) {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    if (Date.now() - entry.createdAt > this.ttlMs) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    if (expectedRevision && entry.preparationRevision !== expectedRevision) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    // Refresh LRU
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+
+    return {
+      text: entry.text,
+      preparationRevision: entry.preparationRevision,
+      warnings: entry.warnings,
+    };
+  }
+
+  set(key, value) {
+    if (!value || typeof value.text !== "string") return false;
+
+    if (this.cache.size >= this.maxEntries && !this.cache.has(key)) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+
+    this.cache.set(key, {
+      text: value.text,
+      preparationRevision: String(value.preparationRevision || "unknown"),
+      warnings: Array.isArray(value.warnings) ? value.warnings : [],
+      createdAt: Date.now(),
+    });
+    return true;
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
 export class ByteBoundedAudioCache {
   constructor(options = {}) {
     this.maxBytes = options.maxBytes ?? 32 * 1024 * 1024; // 32 MiB
@@ -165,6 +243,7 @@ export class PlaybackCoordinator {
     this.backgroundRunning = 0; // strictly <= 1
     this.currentJob = null; // InFlightJob | null
     this.inFlightJobs = new Map(); // key -> InFlightJob
+    this.inFlightPrepares = new Map(); // prepareKey -> { promise, consumers, abortController }
 
     // Network defensive state
     this.speculationSuspended = false;
@@ -258,6 +337,36 @@ export class PlaybackCoordinator {
   }
 
   // --- Job Registry and Atomic Promotion ---
+
+  getInFlightPrepare(key) {
+    return this.inFlightPrepares.get(key);
+  }
+
+  schedulePrepareJob(key, consumerId, runFn) {
+    const existing = this.inFlightPrepares.get(key);
+    if (existing) {
+      if (consumerId) existing.consumers.add(String(consumerId));
+      return existing.promise;
+    }
+
+    const abortController = new AbortController();
+    const consumers = new Set();
+    if (consumerId) consumers.add(String(consumerId));
+
+    const promise = (async () => {
+      try {
+        const result = await runFn(abortController.signal);
+        return result;
+      } finally {
+        if (this.inFlightPrepares.get(key)?.promise === promise) {
+          this.inFlightPrepares.delete(key);
+        }
+      }
+    })();
+
+    this.inFlightPrepares.set(key, { promise, consumers, abortController });
+    return promise;
+  }
 
   getInFlightJob(key) {
     return this.inFlightJobs.get(key);
@@ -385,6 +494,18 @@ export class PlaybackCoordinator {
 
     return this.revisionFetchPromise;
   }
+}
+
+export function messageRawText(session, messageId) {
+  if (!session || typeof session.deriveMessages !== "function") return null;
+  const message = session.deriveMessages().find((item) => item.id === messageId && item.role === "assistant");
+  if (!message) return null;
+  const text = message.content
+    ?.filter((block) => block.type === "text")
+    ?.map((block) => block.text)
+    ?.join("\n");
+  if (!text || text.length > 100_000) return null;
+  return text;
 }
 
 export function messageFirstChunk(session, messageId) {
