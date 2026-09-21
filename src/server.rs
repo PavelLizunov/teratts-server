@@ -16,6 +16,7 @@ use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use crate::chunk;
 use crate::lexicon_reload::LexiconReload;
 use crate::manifest::{self, Manifest};
+use crate::markdown_speech::{InputFormat, PreparationError, SpeechPrefixLanguage};
 use crate::remote_primary::{self, Failure, ForwardRequest, RemotePrimary};
 use crate::russian_only::{self, ConversionError, TextMode};
 use crate::speechfront;
@@ -26,7 +27,7 @@ pub(crate) const MAX_TEXT_CHARS: usize = 2_400;
 const DEFAULT_MAX_ADMITTED_REQUESTS: usize = 16;
 const QUEUE_TTL: Duration = Duration::from_secs(60);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(120);
-const BODY_LIMIT_BYTES: usize = 16 * 1024;
+const BODY_LIMIT_BYTES: usize = 128 * 1024;
 const APP_GIT_SHA: &str = match option_env!("TERATTS_APP_GIT_SHA") {
     Some(value) => value,
     None => "unknown",
@@ -50,6 +51,7 @@ struct AppState {
     manifest: Manifest,
     release: PathBuf,
     admission: Arc<Admission>,
+    markdown_admission: Arc<MarkdownAdmission>,
     bearer_token: Option<String>,
     ruaccent_mode: String,
     ruaccent_ready: bool,
@@ -162,6 +164,63 @@ struct ActiveRequest {
     _permit: OwnedSemaphorePermit,
 }
 
+#[derive(Debug)]
+struct MarkdownAdmission {
+    admitted: AtomicUsize,
+    active: Arc<Semaphore>,
+}
+
+#[derive(Debug)]
+struct MarkdownTicket {
+    admission: Arc<MarkdownAdmission>,
+}
+
+impl MarkdownAdmission {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            admitted: AtomicUsize::new(0),
+            active: Arc::new(Semaphore::new(1)),
+        })
+    }
+
+    fn try_reserve(self: &Arc<Self>) -> Result<MarkdownTicket, ApiError> {
+        const MAX_ADMITTED_MARKDOWN: usize = 9; // 1 active + up to 8 queued
+        self.admitted
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                (current < MAX_ADMITTED_MARKDOWN).then_some(current + 1)
+            })
+            .map_err(|_| ApiError::busy())?;
+        Ok(MarkdownTicket {
+            admission: Arc::clone(self),
+        })
+    }
+}
+
+impl MarkdownTicket {
+    async fn activate(self) -> Result<ActiveMarkdownRequest, ApiError> {
+        let active = Arc::clone(&self.admission.active);
+        let permit = tokio::time::timeout(Duration::from_secs(5), active.acquire_owned())
+            .await
+            .map_err(|_| ApiError::deadline())?
+            .map_err(|_| ApiError::internal("markdown preparation semaphore closed"))?;
+        Ok(ActiveMarkdownRequest {
+            _ticket: self,
+            _permit: permit,
+        })
+    }
+}
+
+impl Drop for MarkdownTicket {
+    fn drop(&mut self) {
+        self.admission.admitted.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+struct ActiveMarkdownRequest {
+    _ticket: MarkdownTicket,
+    _permit: OwnedSemaphorePermit,
+}
+
 /// Async-request-owned cancellation edge. Dropping the Axum request future
 /// (client disconnect) or returning after timeout sets the cooperative flag.
 /// The current native ORT `Session::run` remains non-interruptible; workers stop
@@ -201,6 +260,25 @@ pub struct TtsRequest {
     #[serde(default)]
     pub speech_front: Option<bool>,
     pub text_mode: Option<TextMode>,
+    #[serde(default)]
+    pub input_format: InputFormat,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PrepareRequest {
+    pub text: String,
+    #[serde(default)]
+    pub input_format: InputFormat,
+    #[serde(default)]
+    pub language: SpeechPrefixLanguage,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PrepareResponse {
+    pub text: String,
+    pub output_format: &'static str,
+    pub preparation_revision: String,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -224,6 +302,7 @@ fn current_synthesis_revision(state: &AppState) -> String {
     let mut hasher = Sha256::new();
     hasher.update(state.manifest.revision.as_bytes());
     hasher.update(&state.lexicon.revision());
+    hasher.update(crate::markdown_speech::PREPARATION_REVISION.as_bytes());
     hasher.update(APP_GIT_SHA.as_bytes());
     format!("{:x}", hasher.finalize())
 }
@@ -292,6 +371,7 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         manifest,
         release,
         admission: Admission::new(),
+        markdown_admission: MarkdownAdmission::new(),
         bearer_token,
         ruaccent_mode,
         ruaccent_ready,
@@ -303,6 +383,7 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/tts", post(tts))
+        .route("/prepare", post(prepare))
         .layer(DefaultBodyLimit::max(BODY_LIMIT_BYTES))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind((host, port)).await?;
@@ -346,6 +427,79 @@ async fn health(State(state): State<Arc<AppState>>) -> Response {
         .into_response()
 }
 
+async fn prepare(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    request: Result<Json<PrepareRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    authorize(&headers, state.bearer_token.as_deref())?;
+    let Json(request) = request.map_err(ApiError::from_json_rejection)?;
+
+    if request.text.len() > crate::markdown_speech::MAX_INPUT_BYTES {
+        return Err(ApiError::bad_request("input text exceeds 64 KiB limit"));
+    }
+
+    let ticket = state.markdown_admission.try_reserve()?;
+    let _permit = ticket.activate().await?;
+
+    let t0 = Instant::now();
+    let outcome = match request.input_format {
+        InputFormat::Plain => {
+            let trimmed = request.text.trim().to_string();
+            let mut warnings = Vec::new();
+            if trimmed.is_empty() {
+                warnings.push("no_speakable_content".to_string());
+            }
+            crate::markdown_speech::PrepareOutcome {
+                text: trimmed,
+                output_format: "plain",
+                preparation_revision: crate::markdown_speech::PREPARATION_REVISION.to_string(),
+                warnings,
+            }
+        }
+        InputFormat::Markdown => crate::markdown_speech::prepare_markdown_to_speech(
+            &request.text,
+            request.language,
+            crate::markdown_speech::MAX_OUTPUT_BYTES,
+        )
+        .map_err(|err| match err {
+            PreparationError::InputTooLarge { .. } => {
+                ApiError::bad_request("input text exceeds 64 KiB limit")
+            }
+            PreparationError::OutputTooLarge { .. } => {
+                ApiError::bad_request("output text exceeds 128 KiB limit")
+            }
+            PreparationError::UnsupportedHtmlBlock(tag) => {
+                ApiError::bad_request(format!("unsupported HTML block: {tag}"))
+            }
+        })?,
+    };
+    let compute_ms = t0.elapsed().as_millis();
+    eprintln!(
+        "[teratts-server] prepare input_format={:?} compute_ms={} in_len={} out_len={}",
+        request.input_format,
+        compute_ms,
+        request.text.len(),
+        outcome.text.len()
+    );
+
+    let synthesis_revision = current_synthesis_revision(&state);
+    let mut response = Json(PrepareResponse {
+        text: outcome.text,
+        output_format: outcome.output_format,
+        preparation_revision: outcome.preparation_revision,
+        warnings: outcome.warnings,
+    })
+    .into_response();
+
+    let header_val = HeaderValue::from_str(&synthesis_revision)
+        .map_err(|_| ApiError::internal("invalid revision header value"))?;
+    response
+        .headers_mut()
+        .insert("x-teratts-synthesis-revision", header_val);
+    Ok(response)
+}
+
 async fn tts(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -353,7 +507,37 @@ async fn tts(
 ) -> Result<Response, ApiError> {
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
-    let Json(request) = request.map_err(ApiError::from_json_rejection)?;
+    let Json(mut request) = request.map_err(ApiError::from_json_rejection)?;
+
+    if request.input_format == InputFormat::Markdown {
+        if request.text.len() > crate::markdown_speech::MAX_INPUT_BYTES {
+            return Err(ApiError::bad_request("markdown input exceeds 64 KiB limit"));
+        }
+        let prep_lang = match request.language {
+            Some(Language::En) => SpeechPrefixLanguage::En,
+            _ => SpeechPrefixLanguage::Ru,
+        };
+        let ticket = state.markdown_admission.try_reserve()?;
+        let _permit = ticket.activate().await?;
+        let outcome = crate::markdown_speech::prepare_markdown_to_speech(
+            &request.text,
+            prep_lang,
+            crate::markdown_speech::MAX_OUTPUT_BYTES,
+        )
+        .map_err(|err| match err {
+            PreparationError::InputTooLarge { .. } => {
+                ApiError::bad_request("markdown input exceeds 64 KiB limit")
+            }
+            PreparationError::OutputTooLarge { .. } => {
+                ApiError::bad_request("markdown output exceeds 128 KiB limit")
+            }
+            PreparationError::UnsupportedHtmlBlock(tag) => {
+                ApiError::bad_request(format!("unsupported HTML block: {tag}"))
+            }
+        })?;
+        request.text = outcome.text;
+    }
+
     let raw_text = request.text.clone();
     let prepared_request = prepare_request_with_mode(
         request,
@@ -1108,6 +1292,7 @@ mod tests {
             russian_stress: None,
             speech_front: None,
             text_mode: None,
+            input_format: InputFormat::Plain,
         }
     }
 
@@ -2017,5 +2202,93 @@ mod tests {
         assert!(total_processed < num_chunks);
         // At least one worker observed cancellation error or cleanly stopped
         assert!(worker_results.iter().any(|r| r.is_err()) || total_processed <= worker_count + 2);
+    }
+
+    #[tokio::test]
+    async fn markdown_limiter_enforces_capacity_and_releases() {
+        let admission = MarkdownAdmission::new();
+        let mut tickets = Vec::new();
+
+        // 1 active + 8 waiting = 9 slots
+        for _ in 0..9 {
+            let ticket = admission.try_reserve().expect("within capacity");
+            tickets.push(ticket);
+        }
+
+        // 10th must fail with busy (HTTP 429/503)
+        let overflow = admission.try_reserve();
+        assert!(overflow.is_err());
+        let err = overflow.unwrap_err();
+        assert_eq!(err.code, "busy");
+        assert_eq!(err.status, StatusCode::TOO_MANY_REQUESTS);
+
+        // Dropping one ticket allows a new one to be admitted
+        tickets.pop();
+        let retry = admission.try_reserve();
+        assert!(retry.is_ok());
+    }
+
+    #[test]
+    fn markdown_preparation_equivalence_with_plain_pipeline() {
+        let md = "# Тестирование\n\nЭто [ссылка](http://test.org) и `код[0] <= 10`.";
+        let outcome = crate::markdown_speech::prepare_markdown_to_speech(
+            md,
+            SpeechPrefixLanguage::Ru,
+            crate::markdown_speech::MAX_OUTPUT_BYTES,
+        )
+        .unwrap();
+
+        assert_eq!(
+            outcome.text,
+            "Тестирование. Это ссылка и код 0 меньше или равно 10."
+        );
+
+        // 1. Direct Markdown path in TtsRequest
+        let mut req_md = request(md);
+        req_md.input_format = InputFormat::Markdown;
+
+        // Apply markdown step as done in tts handler:
+        let prep_outcome = crate::markdown_speech::prepare_markdown_to_speech(
+            &req_md.text,
+            SpeechPrefixLanguage::Ru,
+            crate::markdown_speech::MAX_OUTPUT_BYTES,
+        )
+        .unwrap();
+        req_md.text = prep_outcome.text;
+
+        let voices = vec!["ru_f1".to_string()];
+        let prepared_from_md = prepare_request(req_md, &voices, true, false).unwrap();
+
+        // 2. Prepare path + Plain TtsRequest
+        let mut req_plain = request(&outcome.text);
+        req_plain.input_format = InputFormat::Plain;
+        let prepared_from_plain = prepare_request(req_plain, &voices, true, false).unwrap();
+
+        // Before entering linguistic frontend / sampler, both paths receive identical prepared text!
+        assert_eq!(prepared_from_md.text, prepared_from_plain.text);
+    }
+
+    #[test]
+    fn synthesis_revision_binds_preparation_revision() {
+        let manifest = Manifest::pinned().unwrap();
+        let release = tempfile::tempdir().unwrap();
+        let state = AppState {
+            pool: Arc::new(Vec::new()),
+            voices: vec!["ru_f1".into()],
+            manifest,
+            release: release.path().to_path_buf(),
+            admission: Admission::new(),
+            markdown_admission: MarkdownAdmission::new(),
+            bearer_token: Some("secret".into()),
+            ruaccent_mode: "disabled".into(),
+            ruaccent_ready: false,
+            speech_front_default: false,
+            lexicon: LexiconReload::new(None).unwrap(),
+            text_config: russian_only::Config::from_env().unwrap(),
+            primary: None,
+        };
+        let rev = current_synthesis_revision(&state);
+        assert!(!rev.is_empty());
+        assert_eq!(rev.len(), 64); // SHA-256 hex string
     }
 }

@@ -10,6 +10,14 @@ pub const PREPARATION_REVISION: &str = "prep-v1-cmark-0.13.4";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+pub enum InputFormat {
+    #[default]
+    Plain,
+    Markdown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum SpeechPrefixLanguage {
     #[default]
     Ru,
