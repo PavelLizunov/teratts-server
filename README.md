@@ -309,4 +309,17 @@ buffered speech. The client caps each synthesis RPC wait at 65 seconds, includin
 lost responses that outlive the Host timeout. Stop or expiry aborts the current
 RPC; a late result cannot restart playback. This is a client waiting bound, not
 a guarantee that a running native inference can be interrupted immediately.
-The first-fragment limit remains 240 characters; no GPU speedup is implied.
+The first-fragment limit is 140 characters, followed by 240 and 320 character segments; no GPU speedup is implied.
+
+## CPU Inference Configuration (Phase 2)
+
+Server inference on CPU supports runtime profile selection via environment variables:
+
+- `TERATTS_ORT_ALLOW_SPINNING`: `0` (off) or `1` (on, default). Disabling spinning significantly reduces CFS scheduler throttling and CPU time under cgroup limits without degrading latency.
+- `TERATTS_VOCODER_WINDOW_POLICY`: `fixed16` (default, 16-frame windows) or `first16_then32` (16-frame first window, 32-frame subsequent windows with identical 20-frame left context).
+
+Verification of window policy fidelity on identical latents:
+
+```sh
+teratts-server --vocoder-compare [--model-dir PATH]
+```

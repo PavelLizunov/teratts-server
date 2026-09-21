@@ -178,6 +178,37 @@ sudo /usr/local/libexec/teratts/acceptance.sh
 
 Without an argument, `rollback.sh` selects the newest other release by directory modification time; prefer the explicit SHA in production records. Rollback never deletes or modifies releases/models. Garbage collection is a separate reviewed operation and is not automated.
 
+### Verified Two-Level Rollback Runbook (Phase 2 & Phase 1)
+
+When rolling back from Profile D:
+
+**Level 1 — Revert window policy to Fixed16 while keeping spinning off:**
+In `/etc/systemd/system/teratts.service.d/30-profile-d.conf`, set `TERATTS_VOCODER_WINDOW_POLICY=fixed16` and reload:
+```sh
+sudo systemctl daemon-reload && sudo systemctl restart teratts.service
+curl -fsS http://127.0.0.1:8088/health
+```
+
+**Level 2 — Full rollback to Phase 1 release (e.g. 9d5f447d9c02ff3cfb7b80a1334c6792376e8284):**
+1. Pre-check binary existence and checksum before touching service state:
+```sh
+bin="/opt/teratts/releases/9d5f447d9c02ff3cfb7b80a1334c6792376e8284/teratts-server"
+expected="24cf86532b99b83a648a0a71254eda32c780e6236671f9b4d724c0a3cb93f708"
+
+test -f "$bin" && test -x "$bin"
+printf "%s  %s\n" "$expected" "$bin" | sha256sum --check --strict -
+```
+2. Activate the saved release:
+```sh
+sudo /usr/local/libexec/teratts/activate.sh 9d5f447d9c02ff3cfb7b80a1334c6792376e8284
+```
+3. Remove Phase 2 drop-in and perform final post-restart verification:
+```sh
+sudo rm -f /etc/systemd/system/teratts.service.d/30-profile-d.conf
+sudo systemctl daemon-reload && sudo systemctl restart teratts.service
+curl -fsS http://127.0.0.1:8088/health
+```
+
 ## DSH safety rule
 
 No artifact in this kit invokes, reloads, or restarts DSH. Do not restart DSH from any request/session served by that DSH process. Any later DSH integration change must use an external management channel and a fresh validation session.
