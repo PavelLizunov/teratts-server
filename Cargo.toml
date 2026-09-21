@@ -22,6 +22,7 @@ flate2 = "1"
 regex = "1"
 mimalloc = "0.1"
 chislo = "=0.3.1"
+pulldown-cmark = { version = "0.13.4", default-features = false }
 toml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "fs", "io-util"] }
 unicode-normalization = "0.1"
