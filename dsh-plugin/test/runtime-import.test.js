@@ -199,3 +199,185 @@ test("isolated Cordis composition mounts dsh-client-ui-teratts with SettingsProv
     await rm(stagingRoot, { recursive: true, force: true });
   }
 });
+
+test("lifecycle: mount, unmount (dispose), and remount without duplicate handlers or registration leaks", async () => {
+  const stagingRoot = `/tmp/dsh-plugin-lifecycle-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pluginStagingDir = `${stagingRoot}/node_modules/dsh-client-ui-teratts`;
+
+  try {
+    await mkdir(`${stagingRoot}/node_modules/@deepseek-ai`, { recursive: true });
+    for (const pkg of [
+      "cordis",
+      "schemastery",
+      "dsh-credentials",
+      "dsh-settings",
+      "dsh-typert-protocol",
+      "dsh-api-remotes",
+    ]) {
+      await symlink(
+        `${RUNTIME_NODE_MODULES}/@deepseek-ai/${pkg}`,
+        `${stagingRoot}/node_modules/@deepseek-ai/${pkg}`,
+        "dir",
+      );
+    }
+
+    const pluginSourceDir = fileURLToPath(new URL("..", import.meta.url));
+    await cp(pluginSourceDir, pluginStagingDir, {
+      recursive: true,
+      filter: (src) => !src.includes(".git") && !src.includes("test"),
+    });
+
+    const { Context } = await import(`${stagingRoot}/node_modules/@deepseek-ai/cordis/lib/index.js`);
+    const { default: SettingsProvider } = await import(
+      `${stagingRoot}/node_modules/@deepseek-ai/dsh-settings/lib/index.js`
+    );
+    const pluginModule = await import(`${pluginStagingDir}/lib/index.js`);
+
+    const ctx = new Context();
+    new SettingsProvider(ctx, "settings");
+
+    // 1. First mount
+    const fork1 = await ctx.plugin(pluginModule, {
+      endpoint: "https://teratts.tail9fd337.ts.net",
+      voice: "ru_f1",
+      prepareMode: "off",
+    });
+
+    assert.equal(ctx.settings.describe().filter((s) => s.ns === "teratts").length, 1);
+    assert.ok(ctx.get("terattsVoice") !== undefined, "terattsVoice service must exist on first mount");
+
+    // 2. Unmount (dispose)
+    fork1.dispose();
+
+    // 3. Remount
+    const fork2 = await ctx.plugin(pluginModule, {
+      endpoint: "https://teratts.tail9fd337.ts.net",
+      voice: "ru_f1",
+      prepareMode: "off",
+    });
+
+    assert.equal(
+      ctx.settings.describe().filter((s) => s.ns === "teratts").length,
+      1,
+      "only one teratts section must exist after remount",
+    );
+    assert.ok(ctx.get("terattsVoice") !== undefined, "terattsVoice service must exist on remount");
+
+    fork2.dispose();
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+});
+
+test("behavior when settings service is absent: plugin mounts cleanly with base config", async () => {
+  const stagingRoot = `/tmp/dsh-plugin-no-settings-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pluginStagingDir = `${stagingRoot}/node_modules/dsh-client-ui-teratts`;
+
+  try {
+    await mkdir(`${stagingRoot}/node_modules/@deepseek-ai`, { recursive: true });
+    for (const pkg of [
+      "cordis",
+      "schemastery",
+      "dsh-credentials",
+      "dsh-settings",
+      "dsh-typert-protocol",
+      "dsh-api-remotes",
+    ]) {
+      await symlink(
+        `${RUNTIME_NODE_MODULES}/@deepseek-ai/${pkg}`,
+        `${stagingRoot}/node_modules/@deepseek-ai/${pkg}`,
+        "dir",
+      );
+    }
+
+    const pluginSourceDir = fileURLToPath(new URL("..", import.meta.url));
+    await cp(pluginSourceDir, pluginStagingDir, {
+      recursive: true,
+      filter: (src) => !src.includes(".git") && !src.includes("test"),
+    });
+
+    const { Context } = await import(`${stagingRoot}/node_modules/@deepseek-ai/cordis/lib/index.js`);
+    const pluginModule = await import(`${pluginStagingDir}/lib/index.js`);
+
+    // Context without SettingsProvider
+    const ctx = new Context();
+
+    const fork = await ctx.plugin(pluginModule, {
+      endpoint: "https://teratts.tail9fd337.ts.net",
+      voice: "ru_f1",
+      prepareMode: "off",
+    });
+
+    assert.ok(ctx.get("terattsVoice") !== undefined, "voice service must mount even without settings");
+    const service = ctx.get("terattsVoice");
+    assert.equal(service.current().prepareMode, "off");
+    assert.equal(service.current().endpoint, "https://teratts.tail9fd337.ts.net");
+
+    fork.dispose();
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+});
+
+test("effective settings resolution with saved settings.yaml overlay resolves prepareMode to off", async () => {
+  const stagingRoot = `/tmp/dsh-plugin-overlay-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pluginStagingDir = `${stagingRoot}/node_modules/dsh-client-ui-teratts`;
+
+  try {
+    await mkdir(`${stagingRoot}/node_modules/@deepseek-ai`, { recursive: true });
+    for (const pkg of [
+      "cordis",
+      "schemastery",
+      "dsh-credentials",
+      "dsh-settings",
+      "dsh-typert-protocol",
+      "dsh-api-remotes",
+    ]) {
+      await symlink(
+        `${RUNTIME_NODE_MODULES}/@deepseek-ai/${pkg}`,
+        `${stagingRoot}/node_modules/@deepseek-ai/${pkg}`,
+        "dir",
+      );
+    }
+
+    const pluginSourceDir = fileURLToPath(new URL("..", import.meta.url));
+    await cp(pluginSourceDir, pluginStagingDir, {
+      recursive: true,
+      filter: (src) => !src.includes(".git") && !src.includes("test"),
+    });
+
+    const { Context } = await import(`${stagingRoot}/node_modules/@deepseek-ai/cordis/lib/index.js`);
+    const { default: SettingsProvider } = await import(
+      `${stagingRoot}/node_modules/@deepseek-ai/dsh-settings/lib/index.js`
+    );
+    const pluginModule = await import(`${pluginStagingDir}/lib/index.js`);
+
+    const ctx = new Context();
+    const sp = new SettingsProvider(ctx, "settings");
+    // Simulate real settings.yaml content
+    sp.document = {
+      teratts: {
+        endpoint: "https://teratts.tail9fd337.ts.net",
+        maxRetries: 0,
+        timeoutMs: 60000,
+      },
+    };
+
+    const fork = await ctx.plugin(pluginModule, {
+      endpoint: "https://teratts.tail9fd337.ts.net",
+      voice: "ru_f1",
+      prepareMode: "off",
+    });
+
+    const service = ctx.get("terattsVoice");
+    const effective = service.current();
+
+    assert.equal(effective.prepareMode, "off", "effective prepareMode must be off");
+    assert.equal(effective.maxRetries, 0, "maxRetries must come from overlay");
+    assert.equal(effective.endpoint, "https://teratts.tail9fd337.ts.net");
+
+    fork.dispose();
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+});
