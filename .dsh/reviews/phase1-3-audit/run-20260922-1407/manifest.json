@@ -1,0 +1,47 @@
+{
+  "runId": "run-20260922-1407",
+  "timestamp": "2026-09-22T11:44:00Z",
+  "baseSha": "6432ad33a423703e6bf9059b69f8787315decfce",
+  "headSha": "5e0490e27d5b1e0bc114c73e47f332fdc9c9b440",
+  "scope": {
+    "commitCount": 19,
+    "fileCount": 23,
+    "components": [
+      "src/server.rs",
+      "src/tera.rs",
+      "src/markdown_speech.rs",
+      "src/main.rs",
+      "src/lexicon_reload.rs",
+      "dsh-plugin/lib/coordinator.js",
+      "dsh-plugin/lib/index.js",
+      "dsh-plugin/lib/client.js",
+      "dsh-plugin/lib/speech-text.js",
+      "dsh-plugin/package.json",
+      "tools/*",
+      "docs/*"
+    ]
+  },
+  "swarms": {
+    "gemini": {
+      "model": "ninitux/gemini-flash-high-latest",
+      "tasks": ["G1", "G2", "G3", "G4", "G5", "G6"]
+    },
+    "opus": {
+      "model": "ninitux/claude-opus-latest",
+      "tasks": ["O1", "O2", "O3", "O4"]
+    },
+    "grok": {
+      "model": "ninitux/grok-latest",
+      "tasks": ["X1", "X2", "X3"]
+    },
+    "judge": {
+      "model": "ninitux/gpt-6-astra",
+      "role": "Stage 4 Architectural Evaluator"
+    }
+  },
+  "invariants": {
+    "productionCt221": "Release fd93361 running Profile D (uninterrupted)",
+    "dshWeb": "PID 3693502 running dsh-client-ui-teratts@0.8.7 in prepareMode=off (uninterrupted)",
+    "gitTree": "Working tree clean, no mutation of production code during audit"
+  }
+}

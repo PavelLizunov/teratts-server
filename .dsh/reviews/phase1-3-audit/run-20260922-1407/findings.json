@@ -1,0 +1,93 @@
+[
+  {
+    "id": "SEC-01",
+    "origin": "X1",
+    "severity": "High",
+    "status": "confirmed",
+    "component": "server",
+    "path": "src/markdown_speech.rs",
+    "lines": "241-244, 436-445",
+    "title": "Output limit bypass via tag balancer appending unclosed language tags",
+    "causal_explanation": "OutputSink enforces the 128 KiB limit during parsing events. However, balance_language_tags runs after parsing on sink.buffer and appends closing tags (e.g. </ru>) without size checks. An input with 14,564 unclosed <ru> tags produces 131,077 bytes, exceeding MAX_OUTPUT_BYTES (128 KiB).",
+    "impact": "POST /prepare can return responses larger than MAX_OUTPUT_BYTES.",
+    "remedy": "Add an explicit length check in balance_language_tags or check final string length against max_output_bytes before returning Ok."
+  },
+  {
+    "id": "CONC-01",
+    "origin": "O3",
+    "severity": "Medium",
+    "status": "confirmed",
+    "component": "plugin",
+    "path": "dsh-plugin/lib/coordinator.js",
+    "lines": "400-444",
+    "title": "Queue-dropped prepare job leaves ghost entry in inFlightPrepares",
+    "causal_explanation": "In schedulePrepareJob, when prepareQueue exceeds 8 items, the oldest waiter is rejected via dropped.reject. In the dropped job's IIFE, the rejection occurs at the queue wait `await new Promise(...)` (line 409) which is outside the `try { ... } finally { ... }` block (line 416). Consequently, inFlightPrepares.delete(key) is never called for the dropped job, leaving a permanently rejected Promise in the map.",
+    "impact": "Subsequent calls to schedulePrepareJob for the exact same message/revision return the cached rejected Promise via the deduplication check.",
+    "remedy": "Wrap the queue-wait await inside the try block or add a catch handler to delete the inFlightPrepares entry if the queue rejects."
+  },
+  {
+    "id": "CACHE-01",
+    "origin": "O4",
+    "severity": "Medium",
+    "status": "confirmed",
+    "component": "plugin",
+    "path": "dsh-plugin/lib/index.js",
+    "lines": "370, 376, 380",
+    "title": "Foreground synthesis rejects its own result from cache when discovering new server revision",
+    "causal_explanation": "In synthesize(), currentGeneration is captured before await synthesizeConfigured(). If the response carries a new synthesisRevision, line 376 calls cache.invalidateRevision() which increments this.generation. Line 380 then passes the stale currentGeneration to cache.set(), which rejects it because jobGeneration < this.generation.",
+    "impact": "Audio is returned to caller, but not cached on the first request discovering a new revision, forcing a redundant fetch on the next play.",
+    "remedy": "Re-capture this.cache.generation after calling invalidateRevision before passing it to cache.set()."
+  },
+  {
+    "id": "LEASE-01",
+    "origin": "O2",
+    "severity": "Low",
+    "status": "confirmed",
+    "component": "plugin",
+    "path": "dsh-plugin/lib/coordinator.js",
+    "lines": "302-304, 308-313",
+    "title": "Zombie foreground lease when tab disconnects without calling releaseForeground",
+    "causal_explanation": "acquireForeground sets `until: Date.now() + 15_000`, but isForegroundActive() checks only `this.activeLeases.size > 0` without evaluating lease.until. If a browser tab crashes or abruptly closes, the lease remains in the map until process restart.",
+    "impact": "Speculative background synthesis remains suspended because isForegroundActive() permanently returns true.",
+    "remedy": "In isForegroundActive(), lazily purge leases where Date.now() > lease.until before checking size."
+  },
+  {
+    "id": "CHUNK-01",
+    "origin": "G1",
+    "severity": "Low",
+    "status": "confirmed",
+    "component": "plugin",
+    "path": "dsh-plugin/lib/client.js",
+    "lines": "216-224",
+    "title": "Punctuation break divergence between client.js and speech-text.js on semicolons and newlines",
+    "causal_explanation": "In speech-text.js line 186, nextSpeechCut looks for semicolon (`; `) and newline (`\\n`). In client.js line 216, the embedded copy of nextSpeechCut omits `; ` and `\\n`. On text containing semicolons, the client creates different chunk cuts than coordinator.messageFirstChunk(), causing speculative cache misses.",
+    "impact": "Cache misses for speculative chunk 0 on messages containing semicolons.",
+    "remedy": "Synchronize the punctuation list in client.js nextSpeechCut to include `; ` and `\\n`."
+  },
+  {
+    "id": "UI-01",
+    "origin": "G1",
+    "severity": "Low",
+    "status": "confirmed",
+    "component": "plugin",
+    "path": "dsh-plugin/lib/client.js",
+    "lines": "1150-1250",
+    "title": "Volume slider not mounted in rendered player card DOM",
+    "causal_explanation": "setPlaybackVolume and playback.volume (0..1) exist in client.js, but the JSX/createElement tree in TeraTtsAction renders only play button, progress range slider, -10s, rate, +15s, and stop buttons. The volume input element was not added to the sub-row.",
+    "impact": "Volume is set to 1.0 by default, but no UI control is rendered to adjust it.",
+    "remedy": "Add an input[type=range] volume control to the player card sub-row or header."
+  },
+  {
+    "id": "PERF-01",
+    "origin": "X3",
+    "severity": "Low",
+    "status": "confirmed",
+    "component": "benchmarks",
+    "path": "README.md, tools/bench_profile.py",
+    "lines": "README.md:318, bench_profile.py:20-35",
+    "title": "Unconditional claim of latency-neutrality for spinning=0 and missing cgroup error check",
+    "causal_explanation": "README claims spinning=0 reduces CPU time 'without degrading latency'. On a lightly-loaded machine with a single serial client, wake-up latency may be masked. In tools/bench_profile.py, if the cgroup path is missing, read_cgroup_stats defaults to 0, which would report 0 throttled periods even if cgroup was unmonitored.",
+    "impact": "Documentation claim is broader than measured scope; benchmark tool should fail fast if cgroup file cannot be read.",
+    "remedy": "Clarify in README that spinning=0 benefits cgroup quota under concurrent loads; assert cgroup file presence in benchmark script."
+  }
+]
