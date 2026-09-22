@@ -381,3 +381,125 @@ test("effective settings resolution with saved settings.yaml overlay resolves pr
     await rm(stagingRoot, { recursive: true, force: true });
   }
 });
+
+test("preparationListener in shadow mode dispatches /prepare asynchronously without blocking audio candidate", async () => {
+  const stagingRoot = `/tmp/dsh-plugin-listener-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pluginStagingDir = `${stagingRoot}/node_modules/dsh-client-ui-teratts`;
+
+  try {
+    await mkdir(`${stagingRoot}/node_modules/@deepseek-ai`, { recursive: true });
+    for (const pkg of [
+      "cordis",
+      "schemastery",
+      "dsh-credentials",
+      "dsh-settings",
+      "dsh-typert-protocol",
+      "dsh-api-remotes",
+    ]) {
+      await symlink(
+        `${RUNTIME_NODE_MODULES}/@deepseek-ai/${pkg}`,
+        `${stagingRoot}/node_modules/@deepseek-ai/${pkg}`,
+        "dir",
+      );
+    }
+
+    const pluginSourceDir = fileURLToPath(new URL("..", import.meta.url));
+    await cp(pluginSourceDir, pluginStagingDir, {
+      recursive: true,
+      filter: (src) => !src.includes(".git") && !src.includes("test"),
+    });
+
+    const pluginModule = await import(`${pluginStagingDir}/lib/index.js`);
+    const coordinatorModule = await import(`${pluginStagingDir}/lib/coordinator.js`);
+
+    let audioScheduled = false;
+    let audioChunkText = "";
+    let prepareDispatched = false;
+    let finishPrepare;
+
+    const mockService = {
+      synthesisRevision: "rev_test",
+      preparationRevision: "prep_rev_test",
+      preparedTextCache: new coordinatorModule.PreparedTextCache(),
+      cache: {
+        get: () => undefined,
+        set: () => true,
+        generation: 1,
+      },
+      coordinator: {
+        isForegroundActive: () => false,
+        scheduleSessionCandidate: (_sessionId, cand) => {
+          audioScheduled = true;
+          audioChunkText = cand.text;
+          return true;
+        },
+      },
+      prepareText: async () => {
+        prepareDispatched = true;
+        return new Promise((resolve) => {
+          finishPrepare = () => resolve({
+            text: "Серверный подготовленный текст.",
+            preparationRevision: "prep_rev_test",
+          });
+        });
+      },
+      synthesizeConfigured: async () => ({
+        audioBuffer: Buffer.from("wav"),
+        mimeType: "audio/wav",
+      }),
+    };
+
+    const listener = pluginModule.preparationListener(mockService, () => ({
+      prepareMode: "shadow",
+      endpoint: "https://teratts.tail9fd337.ts.net",
+      language: "ru",
+      voice: "ru_f1",
+    }));
+
+    const mockSession = {
+      id: "session_shadow_check",
+      deriveMessages: () => [
+        {
+          id: "msg_turn_1",
+          role: "assistant",
+          content: [{ type: "text", text: "# Заголовок\n\nПараграф ответа" }],
+        },
+      ],
+    };
+
+    // 1. assistant/message event registers turn
+    listener(mockSession, {
+      type: "assistant/message",
+      data: {
+        turn: 1,
+        interrupted: false,
+        message: {
+          id: "msg_turn_1",
+          content: [{ type: "text", text: "# Заголовок\n\nПараграф ответа" }],
+        },
+      },
+    });
+
+    // 2. turn/end triggers scheduling
+    listener(mockSession, {
+      type: "turn/end",
+      data: {
+        turn: 1,
+        reason: { kind: "completed" },
+      },
+    });
+
+    // Verify invariants:
+    // a) Audio candidate was scheduled synchronously with legacy cleanMarkdown text
+    assert.equal(audioScheduled, true, "audio candidate must be scheduled immediately");
+    assert.equal(audioChunkText, "Заголовок. Параграф ответа", "audio must use legacy clean text in shadow mode");
+
+    // b) /prepare was dispatched asynchronously in background without blocking audio
+    assert.equal(prepareDispatched, true, "shadow /prepare must be dispatched in parallel");
+
+    // Complete background prepare
+    finishPrepare();
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+});

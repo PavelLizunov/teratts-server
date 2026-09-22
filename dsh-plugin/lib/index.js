@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import s from "@deepseek-ai/schemastery";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import { cleanMarkdown, splitSpeechText } from "./speech-text.js";
 import {
   ByteBoundedAudioCache,
   PlaybackCoordinator,
