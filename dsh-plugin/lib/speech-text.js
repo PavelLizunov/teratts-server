@@ -183,10 +183,8 @@ export function nextSpeechCut(text, maxChars) {
     window.lastIndexOf(". "),
     window.lastIndexOf("! "),
     window.lastIndexOf("? "),
-    window.lastIndexOf("; "),
-    window.lastIndexOf(": "),
     window.lastIndexOf("… "),
-    window.lastIndexOf("\n"),
+    window.lastIndexOf(": "),
   );
   if (cut >= Math.floor(maxChars / 2)) cut += 1;
   else cut = window.lastIndexOf(" ", maxChars);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { cleanMarkdown as hostCleanMarkdown, splitSpeechText as hostSplitSpeechText } from "../lib/speech-text.js";
 
 // Provide minimal environment for evaluating client bundle in Node
 let registeredEntry = null;
@@ -31,6 +32,14 @@ const technicalMarkdown = await readFile(
   new URL("./fixtures/technical-markdown.md", import.meta.url),
   "utf8",
 );
+
+test("Host prefetch and browser playback use identical punctuation cuts", () => {
+  for (const text of [technicalMarkdown.repeat(3), `${"слово ".repeat(14)}; ${"потом ".repeat(30)}`]) {
+    const cleaned = cleanMarkdown(text);
+    assert.equal(hostCleanMarkdown(text), cleaned);
+    assert.deepEqual(hostSplitSpeechText(cleaned), splitSpeechText(cleaned));
+  }
+});
 
 test("client helpers are exposed for tests", () => {
   assert.equal(typeof cleanMarkdown, "function");

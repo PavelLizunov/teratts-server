@@ -1,0 +1,21 @@
+{
+  "kind": "diagnostic_profile_not_comparison",
+  "commit": "4af0191e2a4e83e7e736a78b6af7cf3f3069d152",
+  "target": "current DSH Host, Linux x64, Node v22.23.2; not Steam Deck or native model inference",
+  "job": "bash-101",
+  "tool": "Node --cpu-prof",
+  "profile": ".dsh/task-artifacts/tts-latency-20260927/preprocessing-baseline.cpuprofile",
+  "profile_sha256": "4a47be9a979f6b6addb82b3d61d452ea062c9ed480c4a07202bb1f47dcd31aa8",
+  "workload": "cleanMarkdown then splitSpeechText, fixed nonprivate technical-markdown fixture; 30 warmups per case",
+  "checksum": 63480,
+  "records": [
+    {"name":"short","chars":45,"count":500,"p50_ms":0.005511,"p95_ms":0.010570,"max_ms":0.565267},
+    {"name":"technical","chars":2408,"count":500,"p50_ms":0.220809,"p95_ms":0.339128,"max_ms":0.519062},
+    {"name":"long-technical","chars":10000,"count":500,"p50_ms":0.897743,"p95_ms":1.120406,"max_ms":1.556935},
+    {"name":"max-input","chars":100000,"count":100,"p50_ms":8.987821,"p95_ms":10.725292,"max_ms":12.454396}
+  ],
+  "profile_samples": 1733,
+  "top_sample_counts": {"cleanLine":667,"cleanMarkdown":280,"whitespace_regexp":101,"arrow_regexp":71,"nextSpeechCut":59,"garbage_collector":51},
+  "interpretation": "Ordinary preprocessing cost is sub-millisecond for the measured 2.4k/10k-character cases. No speedup has been measured, no candidate change made. Profiler overhead and shared-host scheduling are included; these are not production latency percentiles.",
+  "native_limits": "Current native TTS runs in CT221 with 4 threads x 2 slots, spinning off and first16_then32. Steam Deck TTS routing unconfirmed. Native SDK/profiler tools missing in CT221; no production inference benchmark or model mutation performed. Existing legacy autoresearch directory was read only and not reused as v2 evidence."
+}
