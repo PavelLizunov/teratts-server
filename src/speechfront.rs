@@ -196,8 +196,19 @@ fn boundaries_match(text: &str, start: usize, end: usize, written: &str) -> bool
     let last = written.chars().next_back();
     let previous = text[..start].chars().next_back();
     let next = text[end..].chars().next();
-    !previous.is_some_and(is_identifier_char)
-        && (!last.is_some_and(is_identifier_char) || !next.is_some_and(is_identifier_char))
+    if previous.is_some_and(is_identifier_char) {
+        return false;
+    }
+    if last.is_some_and(is_identifier_char) && next.is_some_and(is_identifier_char) {
+        return false;
+    }
+    let first = written.chars().next();
+    if first == Some('.')
+        && previous.is_some_and(|c| is_identifier_char(c) || ".-/\\:@".contains(c))
+    {
+        return false;
+    }
+    true
 }
 
 fn normalize_segment(text: &str) -> String {
@@ -361,6 +372,7 @@ fn parse_numeric_date(text: &str, position: usize) -> Option<(usize, String)> {
         .parse::<u32>()
         .ok()?;
     let used = year_start + year_len;
+    let used = used + optional_year_suffix(&rest[used..]);
     if next_is_identifier(text, position + used) {
         return None;
     }
@@ -415,6 +427,7 @@ fn parse_iso_date(text: &str, position: usize) -> Option<(usize, String)> {
     if next_is_identifier(text, position + used) {
         return None;
     }
+    let used = used + optional_year_suffix(&rest[used..]);
     if !valid_date(year, month, day) {
         return Some((used, rest[..used].to_string()));
     }
@@ -1162,5 +1175,13 @@ match = "word"
             normalizer.normalize("Релиз вышел 6 августа 2026 года"),
             "Релиз вышел шестого августа две тысячи двадцать шестого года"
         );
+    }
+
+    #[test]
+    fn year_suffix_not_doubled_in_numeric_and_iso_dates() {
+        let normalizer = normalizer();
+        let normalize = |text| normalizer.normalize(text);
+        assert!(!normalize("12.08.2026 года").contains("года года"));
+        assert!(!normalize("2026-08-12 года").contains("года года"));
     }
 }

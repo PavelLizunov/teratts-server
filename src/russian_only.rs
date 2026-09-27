@@ -300,7 +300,7 @@ pub fn normalize_symbols(text: &str) -> Result<String> {
             // Exact decorative/list separators only, never an emoji/Unicode range.
             '⏵' | '✅' | '•' | '‣' | '▪' | '●' | '◦' | '·' | '│' | '─' => " ",
             _ => {
-                if plain_char(c) || c.is_ascii_alphabetic() || matches!(c, '<' | '>') {
+                if plain_char(c) || c.is_ascii_alphabetic() || latin_char(c) || matches!(c, '<' | '>') {
                     output.push(c);
                     count += 1;
                     if count > MAX_EXPANDED_CHARS {
@@ -332,7 +332,7 @@ pub fn validate_input(text: &str) -> Result<()> {
         || text.chars().count() > MAX_EXPANDED_CHARS
         || !text
             .chars()
-            .all(|c| plain_char(c) || c.is_ascii_alphabetic() || matches!(c, '<' | '>'))
+            .all(|c| plain_char(c) || c.is_ascii_alphabetic() || latin_char(c) || matches!(c, '<' | '>'))
     {
         Err(ConversionError::InvalidText)
     } else {
@@ -348,10 +348,17 @@ fn plain_char(c: char) -> bool {
         || ".,:;!?-—–…()[]{}«»“”„’\"'/\\_+#@%=&~$*|^".contains(c)
 }
 
+fn latin_char(c: char) -> bool {
+    matches!(c, '\u{00C0}'..='\u{024F}') && !matches!(c, '×' | '÷' | 'ß' | 'ø')
+        || matches!(c, '\u{1E00}'..='\u{1EFF}')
+        || matches!(c, '\u{FB00}'..='\u{FB06}')
+        || matches!(c, '\u{FF21}'..='\u{FF5A}')
+}
+
 fn valid_plaintext(text: &str) -> bool {
     !text.trim().is_empty()
         && text.chars().count() <= MAX_EXPANDED_CHARS
-        && text.chars().all(plain_char)
+        && text.chars().all(|c| plain_char(c) || latin_char(c))
 }
 
 fn decode(bytes: &[u8]) -> Result<Conversion> {
@@ -551,7 +558,7 @@ pub(crate) mod tests {
 
     #[test]
     fn rejects_bad_json_and_unsupported_plaintext() {
-        for text in ["", "abc", "тест <ru>", "тест😀", "тестé", "тест\u{0000}"] {
+        for text in ["", "abc", "тест <ru>", "тест😀", "тест\u{0000}"] {
             let bytes =
                 serde_json::to_vec(&serde_json::json!({"text":text,"readings":[],"warnings":[]}))
                     .unwrap();
@@ -568,7 +575,6 @@ pub(crate) mod tests {
         assert!(validate_input(&format!("{ordinary}AZaz<> ")).is_ok());
         for raw in [
             "тест😀",
-            "тестé",
             "тестΩ",
             "тесті",
             "тест中",
@@ -594,6 +600,8 @@ pub(crate) mod tests {
             normalize_symbols("⏵✅•│─").unwrap_err(),
             ConversionError::InvalidText
         );
+        assert_eq!(normalize_symbols("café").unwrap(), "café");
+        assert_eq!(normalize_symbols("\u{FB02}ow").unwrap(), "\u{FB02}ow");
         assert_eq!(
             normalize_symbols("в веб-интерфейсе отображается как «梁神模式» / «Liangshen mode»")
                 .unwrap(),
