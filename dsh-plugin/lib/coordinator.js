@@ -1,6 +1,20 @@
 import { createHash } from "node:crypto";
 import { cleanMarkdown, splitSpeechText } from "./speech-text.js";
 
+// Cancel one waiter without aborting shared work needed by other consumers.
+export function waitForSharedJob(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => { signal.removeEventListener("abort", abort); resolve(value); },
+      (error) => { signal.removeEventListener("abort", abort); reject(error); },
+    );
+  });
+}
+
 export function normalizeEndpointWithoutAuth(endpointStr) {
   try {
     const u = new URL(typeof endpointStr === "string" ? endpointStr : "http://127.0.0.1:8088");
@@ -264,6 +278,9 @@ export class PlaybackCoordinator {
 
     // Multi-lease registry for tabs: ownerKey -> { ownerId, epoch, until }
     this.activeLeases = new Map();
+    this.foregroundRequests = 0;
+    this.leaseTimer = null;
+    this.disposed = false;
 
     // Session candidate registry: sessionId -> candidate object
     this.sessionCandidates = new Map();
@@ -294,40 +311,89 @@ export class PlaybackCoordinator {
     this.metadataFreshnessMs = options.metadataFreshnessMs ?? 30_000;
     this.cachedRevision = null;
     this.cachedRevisionTimestamp = 0;
-    this.revisionFetchPromise = null;
+    this.cachedRevisionEndpoint = null;
+    this.revisionFetchJob = null;
   }
 
   // --- Foreground Lease Management (per tab / owner) ---
 
   isForegroundActive() {
-    return this.activeLeases.size > 0;
+    const now = Date.now();
+    for (const [key, lease] of this.activeLeases) {
+      if (lease.until <= now) this.activeLeases.delete(key);
+    }
+    return this.foregroundRequests > 0 || this.activeLeases.size > 0;
+  }
+
+  holdForegroundRequest() {
+    if (this.disposed) throw new Error("speech coordinator disposed");
+    this.foregroundRequests++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.foregroundRequests--;
+      this.pump();
+    };
   }
 
   acquireForeground(ownerId, epoch) {
-    const key = String(ownerId);
-    this.activeLeases.set(key, {
-      ownerId: key,
-      epoch: Number(epoch),
-      until: Date.now() + 15_000,
-    });
+    if (this.disposed || typeof ownerId !== "string" || !ownerId || ownerId.length > 256 ||
+        !Number.isSafeInteger(epoch) || epoch < 0) return { ok: false };
+    this.isForegroundActive();
+    const previous = this.activeLeases.get(ownerId);
+    if ((previous && epoch < previous.epoch) || (!previous && this.activeLeases.size >= 32)) {
+      return { ok: false };
+    }
+    this.activeLeases.set(ownerId, { ownerId, epoch, until: Date.now() + 15_000 });
+    this.scheduleLeaseExpiry();
     return { ok: true };
   }
 
   renewForeground(ownerId, epoch) {
-    const key = String(ownerId);
-    const lease = this.activeLeases.get(key);
-    if (lease && lease.epoch === Number(epoch)) {
+    this.isForegroundActive();
+    const lease = this.activeLeases.get(ownerId);
+    if (!this.disposed && lease && lease.epoch === epoch) {
       lease.until = Date.now() + 15_000;
+      this.scheduleLeaseExpiry();
       return { ok: true };
     }
     return { ok: false };
   }
 
+  scheduleLeaseExpiry() {
+    clearTimeout(this.leaseTimer);
+    this.leaseTimer = null;
+    this.isForegroundActive();
+    if (this.disposed || this.activeLeases.size === 0) return;
+    const until = Math.min(...Array.from(this.activeLeases.values(), (lease) => lease.until));
+    this.leaseTimer = setTimeout(() => {
+      this.leaseTimer = null;
+      this.isForegroundActive();
+      this.scheduleLeaseExpiry();
+      this.pump();
+    }, Math.max(1, until - Date.now()));
+    this.leaseTimer.unref?.();
+  }
+
+  dispose() {
+    this.disposed = true;
+    clearTimeout(this.leaseTimer);
+    this.leaseTimer = null;
+    this.activeLeases.clear();
+    this.dropPendingSpeculation();
+    for (const waiter of this.prepareQueue.values()) waiter.reject(new Error("speech coordinator disposed"));
+    this.prepareQueue.clear();
+    for (const job of this.inFlightPrepares.values()) job.abortController.abort();
+    // Transport abort is not proof that native backend computation has stopped.
+    this.currentJob?.abortController.abort();
+  }
+
   releaseForeground(ownerId, epoch) {
-    const key = String(ownerId);
-    const lease = this.activeLeases.get(key);
-    if (lease && lease.epoch === Number(epoch)) {
-      this.activeLeases.delete(key);
+    const lease = this.activeLeases.get(ownerId);
+    if (lease && lease.epoch === epoch) {
+      this.activeLeases.delete(ownerId);
+      this.scheduleLeaseExpiry();
       if (!this.isForegroundActive()) {
         this.pump();
       }
@@ -356,7 +422,7 @@ export class PlaybackCoordinator {
   // --- Candidate Queue Management (Round-Robin up to 8 sessions) ---
 
   scheduleSessionCandidate(sessionId, candidate) {
-    if (typeof sessionId !== "string" || !sessionId) return false;
+    if (this.disposed || typeof sessionId !== "string" || !sessionId) return false;
 
     // Reject 9th session if pool is full and this session is not already registered
     if (!this.sessionCandidates.has(sessionId) && this.sessionCandidates.size >= this.maxSessions) {
@@ -384,6 +450,7 @@ export class PlaybackCoordinator {
   }
 
   schedulePrepareJob(key, consumerId, runFn) {
+    if (this.disposed) return Promise.reject(new Error("speech coordinator disposed"));
     this.prepareStats.requests += 1;
 
     const existing = this.inFlightPrepares.get(key);
@@ -406,15 +473,26 @@ export class PlaybackCoordinator {
           this.prepareStats.queueDrops += 1;
           dropped?.reject?.(new Error("prepare queue capacity exceeded"));
         }
-        await new Promise((resolve, reject) => {
-          this.prepareQueue.set(key, { resolve, reject });
-        });
+        try {
+          await new Promise((resolve, reject) => {
+            this.prepareQueue.set(key, { resolve, reject });
+          });
+        } catch (error) {
+          // This waiter never owned the execution slot; clean its registry only.
+          if (this.inFlightPrepares.get(key)?.promise === promise) {
+            this.inFlightPrepares.delete(key);
+          }
+          throw error;
+        }
       }
 
       this.prepareRunning = 1;
       const t0 = Date.now();
       try {
-        const result = await runFn(abortController.signal);
+        if (this.disposed) throw new Error("speech coordinator disposed");
+        // Convert a synchronous callback throw to a rejected promise, so registry
+        // initialization completes before the finally block observes `promise`.
+        const result = await (async () => runFn(abortController.signal))();
         const latency = Date.now() - t0;
         this.prepareStats.latencies.push(latency);
         if (this.prepareStats.latencies.length > 200) {
@@ -431,12 +509,14 @@ export class PlaybackCoordinator {
         if (this.inFlightPrepares.get(key)?.promise === promise) {
           this.inFlightPrepares.delete(key);
         }
-        this.prepareRunning = 0;
         if (this.prepareQueue.size > 0) {
+          // Transfer the slot without opening an admission gap before the waiter resumes.
           const nextKey = this.prepareQueue.keys().next().value;
           const nextItem = this.prepareQueue.get(nextKey);
           this.prepareQueue.delete(nextKey);
           nextItem?.resolve?.();
+        } else {
+          this.prepareRunning = 0;
         }
       }
     })();
@@ -449,9 +529,9 @@ export class PlaybackCoordinator {
     return this.inFlightJobs.get(key);
   }
 
-  promoteJob(key, consumerId) {
+  promoteJob(key, consumerId, cacheGeneration) {
     const job = this.inFlightJobs.get(key);
-    if (!job) return null;
+    if (!job || (cacheGeneration !== undefined && job.cacheGeneration !== cacheGeneration)) return null;
 
     job.foregroundConsumers.add(String(consumerId));
     return job.promise;
@@ -460,7 +540,7 @@ export class PlaybackCoordinator {
   // --- Dispatcher / Pump ---
 
   pump() {
-    if (this.backgroundRunning >= 1) return;
+    if (this.disposed || this.backgroundRunning >= 1) return;
     if (this.isForegroundActive()) return;
     if (this.isSpeculationSuspended()) return;
     if (this.sessionCandidates.size === 0) return;
@@ -483,6 +563,7 @@ export class PlaybackCoordinator {
     const job = {
       id: jobId,
       key: candidate.key,
+      cacheGeneration: candidate.cacheGeneration,
       abortController,
       foregroundConsumers: new Set(),
       promise: null,
@@ -497,19 +578,11 @@ export class PlaybackCoordinator {
         if (this.isForegroundActive()) return null;
         const result = await candidate.run(abortController.signal);
 
-        // Remove session candidate ONLY if generation matches
-        const currentCand = this.sessionCandidates.get(selectedSessionId);
-        if (currentCand && currentCand.candidateGeneration === candidate.candidateGeneration) {
-          this.sessionCandidates.delete(selectedSessionId);
-        } else {
-          // If candidate was replaced, advance cursor
-          this.roundRobinCursor = (this.roundRobinCursor + 1) % Math.max(1, this.sessionCandidates.size);
-        }
-
         return result;
       } catch (error) {
         // Classify network failure / timeout as BACKEND_OUTCOME_UNKNOWN
         const isNetworkErr =
+          error?.backendOutcomeUnknown === true ||
           error?.name === "TimeoutError" ||
           error?.code === "ECONNRESET" ||
           error?.code === "ETIMEDOUT" ||
@@ -528,6 +601,14 @@ export class PlaybackCoordinator {
         // Otherwise, background speculative errors are quietly absorbed
         return null;
       } finally {
+        // Each candidate gets one dispatch, including on rejection. Retrying an
+        // unchanged HTTP failure here would otherwise create an unbounded loop.
+        const currentCand = this.sessionCandidates.get(selectedSessionId);
+        if (currentCand === candidate) {
+          this.sessionCandidates.delete(selectedSessionId);
+        } else {
+          this.roundRobinCursor = (this.roundRobinCursor + 1) % Math.max(1, this.sessionCandidates.size);
+        }
         if (this.currentJob === job) {
           this.currentJob = null;
         }
@@ -543,33 +624,41 @@ export class PlaybackCoordinator {
   // --- Metadata Freshness (30s Bounded Staleness) ---
 
   async getOrFetchSynthesisRevision(endpoint) {
+    const healthUrl = new URL(endpoint);
+    healthUrl.pathname = `${healthUrl.pathname.replace(/\/+$/, "").replace(/\/tts$/, "")}/health`;
+    healthUrl.hash = "";
+    const endpointKey = healthUrl.toString();
     const now = Date.now();
-    if (this.cachedRevision && now - this.cachedRevisionTimestamp < this.metadataFreshnessMs) {
+    if (this.cachedRevisionEndpoint === endpointKey && this.cachedRevision &&
+        now - this.cachedRevisionTimestamp < this.metadataFreshnessMs) {
       return this.cachedRevision;
     }
+    if (this.revisionFetchJob?.endpoint === endpointKey) return this.revisionFetchJob.promise;
 
-    if (!this.revisionFetchPromise) {
-      this.revisionFetchPromise = (async () => {
-        try {
-          const healthUrl = `${endpoint.replace(/\/+$/, "").replace(/\/tts$/, "")}/health`;
-          const res = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
-          if (!res.ok) return null;
-          const data = await res.json();
-          if (data && typeof data.synthesis_revision === "string" && data.synthesis_revision) {
+    const job = { endpoint: endpointKey, promise: null };
+    this.revisionFetchJob = job;
+    job.promise = (async () => {
+      try {
+        const res = await fetch(endpointKey, { redirect: "error", signal: AbortSignal.timeout(3000) });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && typeof data.synthesis_revision === "string" && data.synthesis_revision.length > 0 &&
+            data.synthesis_revision.length <= 256) {
+          if (this.revisionFetchJob === job) {
             this.cachedRevision = data.synthesis_revision;
             this.cachedRevisionTimestamp = Date.now();
-            return this.cachedRevision;
+            this.cachedRevisionEndpoint = endpointKey;
           }
-          return null;
-        } catch {
-          return null;
-        } finally {
-          this.revisionFetchPromise = null;
+          return data.synthesis_revision;
         }
-      })();
-    }
-
-    return this.revisionFetchPromise;
+        return null;
+      } catch {
+        return null;
+      } finally {
+        if (this.revisionFetchJob === job) this.revisionFetchJob = null;
+      }
+    })();
+    return job.promise;
   }
 }
 

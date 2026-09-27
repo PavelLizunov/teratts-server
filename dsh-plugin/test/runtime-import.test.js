@@ -137,6 +137,11 @@ test("dsh-client-ui-teratts imports cleanly against exact DSH 0.1.5-rc.2 runtime
     assert.equal(typeof installedSection.hooks.setSource, "function");
     assert.equal(typeof installedSection.hooks.onChange, "function");
     assert.equal(typeof eventHandler, "function", "session/event handler must be registered");
+    const { remoteMethods } = await import(`${stagingRoot}/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js`);
+    const exportedMethods = remoteMethods(cordisCtx.get("terattsVoice")).map((marker) => marker.method);
+    for (const method of ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"]) {
+      assert.ok(exportedMethods.includes(method), `${method} must be registered with the real Remote protocol`);
+    }
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
   }
@@ -427,6 +432,7 @@ test("preparationListener in shadow mode dispatches /prepare asynchronously with
         generation: 1,
       },
       coordinator: {
+        getOrFetchSynthesisRevision: async () => "rev_test",
         isForegroundActive: () => false,
         scheduleSessionCandidate: (_sessionId, cand) => {
           audioScheduled = true;
@@ -480,8 +486,8 @@ test("preparationListener in shadow mode dispatches /prepare asynchronously with
       },
     });
 
-    // 2. turn/end triggers scheduling
-    listener(mockSession, {
+    // 2. turn/end checks revision before scheduling; it never awaits shadow preparation.
+    await listener(mockSession, {
       type: "turn/end",
       data: {
         turn: 1,
@@ -490,8 +496,8 @@ test("preparationListener in shadow mode dispatches /prepare asynchronously with
     });
 
     // Verify invariants:
-    // a) Audio candidate was scheduled synchronously with legacy cleanMarkdown text
-    assert.equal(audioScheduled, true, "audio candidate must be scheduled immediately");
+    // a) Audio candidate is scheduled after revision lookup with legacy cleanMarkdown text.
+    assert.equal(audioScheduled, true, "audio candidate must not wait for shadow preparation");
     assert.equal(audioChunkText, "Заголовок. Параграф ответа", "audio must use legacy clean text in shadow mode");
 
     // b) /prepare was dispatched asynchronously in background without blocking audio

@@ -12,6 +12,7 @@ import {
   messageFirstChunk,
   messageRawText,
   normalizeEndpointWithoutAuth,
+  waitForSharedJob,
 } from "./coordinator.js";
 
 const SETTINGS_NAMESPACE = "teratts";
@@ -102,8 +103,32 @@ function parseRetryAfter(response, errorBody) {
   return retryAfterMs;
 }
 
+async function readErrorResponse(response) {
+  if (!response.body?.getReader) return null;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 4096) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock?.();
+  }
+}
+
 function isRetryableStatus(status) {
-  return status === 429 || status === 503 || status === 502 || status === 504;
+  return status === 429 || status === 503;
 }
 
 function isRetryableNetworkError(error) {
@@ -207,6 +232,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     this.cache = new ByteBoundedAudioCache();
     this.preparedTextCache = new PreparedTextCache();
     this.coordinator = new PlaybackCoordinator();
+    this.foregroundJobs = new Map();
     this.synthesisRevision = "unknown";
     this.preparationRevision = "unknown";
 
@@ -325,14 +351,26 @@ export class TeraTtsVoiceService extends TypertRemoteService {
   }
 
   async synthesize(text, signal) {
+    signal?.throwIfAborted();
+    const release = this.coordinator.holdForegroundRequest();
+    try {
+      return await this.synthesizeForeground(text, signal);
+    } finally {
+      release();
+    }
+  }
+
+  async synthesizeForeground(text, signal) {
     if (typeof text !== "string" || text.trim().length === 0) {
       throw new TypeError("TeraTTS text must not be empty");
     }
 
-    const config = this.current();
+    const config = { ...this.current() };
 
     // Validate/refresh revision with 30s bounded staleness
-    const freshRevision = await this.coordinator.getOrFetchSynthesisRevision(config.endpoint);
+    validateAndResolveEndpoint(config.endpoint);
+    const freshRevision = await waitForSharedJob(this.coordinator.getOrFetchSynthesisRevision(config.endpoint), signal);
+    signal?.throwIfAborted();
     if (freshRevision && freshRevision !== this.synthesisRevision) {
       this.synthesisRevision = freshRevision;
       this.cache.invalidateRevision(freshRevision);
@@ -342,18 +380,17 @@ export class TeraTtsVoiceService extends TypertRemoteService {
 
     // 1. Check if matching job is currently in flight -> promote it to foreground
     const consumerId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const promotedPromise = this.coordinator.promoteJob(key, consumerId);
+    const promotedPromise = this.coordinator.promoteJob(key, consumerId, this.cache.generation);
     if (promotedPromise) {
-      try {
-        const audioResult = await promotedPromise;
-        if (audioResult && audioResult.audioBuffer) {
-          return {
-            audioBase64: audioResult.audioBuffer.toString("base64"),
-            mimeType: audioResult.mimeType || "audio/wav",
-          };
-        }
-      } catch {
-        // If background job threw, fall through to direct fetch
+      // A failed shared request is not permission to submit another synthesis:
+      // a transport failure may leave native backend computation running.
+      const audioResult = await waitForSharedJob(promotedPromise, signal);
+      signal?.throwIfAborted();
+      if (audioResult && audioResult.audioBuffer) {
+        return {
+          audioBase64: audioResult.audioBuffer.toString("base64"),
+          mimeType: audioResult.mimeType || "audio/wav",
+        };
       }
     }
 
@@ -366,23 +403,50 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       };
     }
 
-    // 3. Perform direct configured fetch
-    const currentGeneration = this.cache.generation;
-    const audioResult = await this.synthesizeConfigured(text, signal, config, key);
-
-    // Update revision if server response header advertised newer revision
-    if (audioResult.synthesisRevision && audioResult.synthesisRevision !== this.synthesisRevision) {
-      this.synthesisRevision = audioResult.synthesisRevision;
-      this.cache.invalidateRevision(audioResult.synthesisRevision);
-    }
-
-    // Cache the raw binary buffer (max 4 MiB)
-    this.cache.set(key, audioResult, currentGeneration);
-
+    // 3. Share foreground work too, not just speculative work. A cancelled
+    // consumer stops waiting; the bounded in-flight fragment drains safely.
+    const audioResult = await waitForSharedJob(this.foregroundAudio(text, config, key), signal);
+    signal?.throwIfAborted();
     return {
       audioBase64: audioResult.audioBuffer.toString("base64"),
       mimeType: audioResult.mimeType,
     };
+  }
+
+  storeAudio(text, config, result, generation) {
+    if (generation !== this.cache.generation) return;
+    if (result.synthesisRevision && result.synthesisRevision !== this.synthesisRevision) {
+      this.synthesisRevision = result.synthesisRevision;
+      this.cache.invalidateRevision(result.synthesisRevision);
+    }
+    this.cache.set(audioKey(text, config, this.synthesisRevision), result, this.cache.generation);
+  }
+
+  foregroundAudio(text, config, key) {
+    // A settings reset is a new admission generation even when text/voice match.
+    const jobKey = `${this.cache.generation}:${key}`;
+    const existing = this.foregroundJobs.get(jobKey);
+    if (existing) return existing.promise;
+    if (this.foregroundJobs.size >= 16) throw new Error("TeraTTS foreground capacity exceeded");
+    const currentGeneration = this.cache.generation;
+    const release = this.coordinator.holdForegroundRequest();
+    const controller = new AbortController();
+    const job = { controller, promise: null };
+    this.foregroundJobs.set(jobKey, job);
+    job.promise = Promise.resolve().then(async () => {
+      const result = await this.synthesizeConfigured(text, controller.signal, config, key);
+      this.storeAudio(text, config, result, currentGeneration);
+      return result;
+    }).catch((error) => {
+      if (error?.backendOutcomeUnknown || error?.name === "TimeoutError") {
+        this.coordinator.suspendSpeculation("foreground_backend_outcome_unknown");
+      }
+      throw error;
+    }).finally(() => {
+      if (this.foregroundJobs.get(jobKey) === job) this.foregroundJobs.delete(jobKey);
+      release();
+    });
+    return job.promise;
   }
 
   async synthesizeConfigured(text, signal, config, key) {
@@ -439,42 +503,22 @@ export class TeraTtsVoiceService extends TypertRemoteService {
           signal: requestSignal,
         });
       } catch (error) {
-        console.error(`[teratts] fetch to ${endpoint} failed:`, error);
+        console.error("[teratts] synthesis transport failed");
         if (signal?.aborted) throw signal.reason;
         if (timeout.aborted || error?.name === "TimeoutError") throw error;
         if (error?.name === "AbortError") throw error;
-
-        if (attempt < maxRetries && isRetryableNetworkError(error)) {
-          lastError = error;
-          const delayMs = computeBackoffDelay(attempt, undefined);
-          await sleepWithSignal(delayMs, requestSignal);
-          continue;
-        }
-
-        throw new Error("TeraTTS request failed");
+        const failure = new Error("TeraTTS request failed");
+        failure.backendOutcomeUnknown = isRetryableNetworkError(error);
+        throw failure;
       }
 
       if (!response.ok) {
-        let errorBody = null;
-        try {
-          const rawText = await response.text();
-          if (rawText) {
-            try {
-              errorBody = JSON.parse(rawText);
-            } catch {
-              errorBody = rawText;
-            }
-          }
-        } catch {
-          // Non-fatal if body cannot be read
-        }
+        const errorBody = await readErrorResponse(response);
 
         const retryAfterMs = parseRetryAfter(response, errorBody);
         console.error(`[teratts] request failed with HTTP ${response.status}:`, {
-          endpoint,
           status: response.status,
           retryAfterMs,
-          body: errorBody,
         });
 
         const retrySuffix =
@@ -487,9 +531,14 @@ export class TeraTtsVoiceService extends TypertRemoteService {
           httpError.retry_after_ms = retryAfterMs;
         }
         httpError.status = response.status;
+        httpError.backendOutcomeUnknown = response.status === 502 || response.status === 504;
         lastError = httpError;
 
-        if (attempt < maxRetries && isRetryableStatus(response.status)) {
+        // Retry only explicit admission rejection, never an ambiguous proxy or
+        // inference failure that may still own the native backend slot.
+        const rejectedBeforeInference = response.status === 429 ||
+          (response.status === 503 && errorBody?.code === "queue_timeout");
+        if (attempt < maxRetries && isRetryableStatus(response.status) && rejectedBeforeInference) {
           const delayMs = computeBackoffDelay(attempt, retryAfterMs);
           await sleepWithSignal(delayMs, requestSignal);
           continue;
@@ -511,36 +560,40 @@ export class TeraTtsVoiceService extends TypertRemoteService {
   }
 }
 
-Remote("synthesize")(TeraTtsVoiceService.prototype.synthesize, {
-  kind: "method",
-  name: "synthesize",
-  static: false,
-  private: false,
-  addInitializer(initializer) {
-    remoteInitializers.push(initializer);
-  },
-});
+for (const method of ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"]) {
+  Remote(method)(TeraTtsVoiceService.prototype[method], {
+    kind: "method",
+    name: method,
+    static: false,
+    private: false,
+    addInitializer(initializer) {
+      remoteInitializers.push(initializer);
+    },
+  });
+}
 
 export const inject = [];
 
 export function preparationListener(service, current) {
-  const sessionGenerations = new Map(); // sessionId -> number
+  const sessionGenerations = new WeakMap(); // session object -> generation
   const candidateTurns = new WeakMap();
 
-  return (session, event) => {
+  return async (session, event) => {
     if (session.header?.origin === "subagent") return;
     const sessionId = session.id;
     if (!sessionId) return;
 
     if (event.type === "session/remove") {
       service.coordinator.removeSession(sessionId);
-      sessionGenerations.delete(sessionId);
+      sessionGenerations.delete(session);
       candidateTurns.delete(session);
       return;
     }
 
     if (event.type === "turn/start") {
       candidateTurns.delete(session);
+      service.coordinator.removeSession(sessionId);
+      sessionGenerations.set(session, (sessionGenerations.get(session) ?? 0) + 1);
       return;
     }
 
@@ -601,6 +654,18 @@ export function preparationListener(service, current) {
           });
       }
 
+      if (service.coordinator.isForegroundActive()) return;
+      const nextGen = (sessionGenerations.get(session) ?? 0) + 1;
+      sessionGenerations.set(session, nextGen);
+      const preparationGeneration = service.cache.generation;
+      validateAndResolveEndpoint(config.endpoint);
+      const revision = await service.coordinator.getOrFetchSynthesisRevision(config.endpoint);
+      if (sessionGenerations.get(session) !== nextGen || service.coordinator.isForegroundActive() ||
+          preparationGeneration !== service.cache.generation) return;
+      if (revision && revision !== service.synthesisRevision) {
+        service.synthesisRevision = revision;
+        service.cache.invalidateRevision(revision);
+      }
       const firstChunk = oldChunk0;
       const key = audioKey(firstChunk, config, service.synthesisRevision);
 
@@ -609,23 +674,22 @@ export function preparationListener(service, current) {
         return;
       }
 
-      const nextGen = (sessionGenerations.get(sessionId) ?? 0) + 1;
-      sessionGenerations.set(sessionId, nextGen);
-
+      const candidateCacheGeneration = service.cache.generation;
       service.coordinator.scheduleSessionCandidate(sessionId, {
         sessionId,
         messageId: candidateData.messageId,
         candidateGeneration: nextGen,
+        cacheGeneration: candidateCacheGeneration,
         key,
         text: firstChunk,
         config,
         run: async (signal) => {
-          if (service.coordinator.isForegroundActive() || service.cache.get(key, service.synthesisRevision)) {
+          if (candidateCacheGeneration !== service.cache.generation ||
+              service.coordinator.isForegroundActive() || service.cache.get(key, service.synthesisRevision)) {
             return null;
           }
-          const cacheGen = service.cache.generation;
-          const result = await service.synthesizeConfigured(firstChunk, signal, config, key);
-          service.cache.set(key, result, cacheGen);
+          const result = await service.synthesizeConfigured(firstChunk, signal, { ...config, maxRetries: 0 }, key);
+          service.storeAudio(firstChunk, config, result, candidateCacheGeneration);
           return result;
         },
       });
@@ -649,6 +713,10 @@ export function apply(ctx, config = {}) {
   };
   let current = () => base;
   const service = new TeraTtsVoiceService(ctx, () => current());
+  ctx.on("dispose", () => {
+    service.coordinator.dispose();
+    for (const job of service.foregroundJobs.values()) job.controller.abort();
+  });
 
   const installSection = (settingsService) => {
     settingsService.installSection(ctx, SETTINGS_NAMESPACE, Config, base, {
@@ -677,5 +745,9 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  ctx.on("session/event", preparationListener(service, () => current()));
+  const onSessionEvent = preparationListener(service, () => current());
+  ctx.on("session/event", (session, event) => {
+    // Speculative metadata must not delay the Host's session-event pipeline.
+    void onSessionEvent(session, event).catch(() => {});
+  });
 }

@@ -570,6 +570,9 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // A message id is shared across tabs; lease ownership must be client-local.
+    const foregroundOwnerId = globalThis.crypto?.randomUUID?.() ||
+      `tts-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const playback = {
       epoch: 0,
       owner: null,
@@ -745,7 +748,7 @@ window.__ModuleLoader__.load({
         playback.heartbeatTimer = null;
       }
       if (playback.owner && playback.voice) {
-        const ownerId = String(playback.owner.description || playback.owner);
+        const ownerId = foregroundOwnerId;
         playback.voice.releaseForeground?.(ownerId, playback.epoch)?.catch?.(() => {});
       }
       playback.epoch += 1;
@@ -763,7 +766,7 @@ window.__ModuleLoader__.load({
         playback.heartbeatTimer = null;
       }
       if (playback.owner && playback.voice) {
-        const ownerId = String(playback.owner.description || playback.owner);
+        const ownerId = foregroundOwnerId;
         playback.voice.releaseForeground?.(ownerId, epoch)?.catch?.(() => {});
       }
       const errorOwner = playback.owner;
@@ -930,7 +933,7 @@ window.__ModuleLoader__.load({
       stopPlayback();
       const epoch = playback.epoch;
       const abort = new AbortController();
-      const ownerId = String(owner.description || owner);
+      const ownerId = foregroundOwnerId;
       playback.owner = owner;
       playback.voice = voice;
       playback.state = "loading";
@@ -941,8 +944,13 @@ window.__ModuleLoader__.load({
 
       voice?.acquireForeground?.(ownerId, epoch)?.catch?.(() => {});
       playback.heartbeatTimer = setInterval(() => {
-        if (playback.epoch === epoch && (playback.state === "loading" || playback.state === "playing")) {
-          voice?.renewForeground?.(ownerId, epoch)?.catch?.(() => {});
+        if (playback.epoch === epoch && (playback.state === "loading" || playback.state === "playing" || playback.state === "paused")) {
+          voice?.renewForeground?.(ownerId, epoch)?.then?.((result) => {
+            // Background-tab timer throttling can outlive the Host lease.
+            if (result?.ok === false && playback.epoch === epoch && playback.owner !== null) {
+              return voice?.acquireForeground?.(ownerId, epoch);
+            }
+          })?.catch?.(() => {});
         } else if (playback.heartbeatTimer) {
           clearInterval(playback.heartbeatTimer);
           playback.heartbeatTimer = null;

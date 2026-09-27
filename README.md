@@ -311,6 +311,36 @@ RPC; a late result cannot restart playback. This is a client waiting bound, not
 a guarantee that a running native inference can be interrupted immediately.
 The first-fragment limit is 140 characters, followed by 240 and 320 character segments; no GPU speedup is implied.
 
+After a completed assistant turn, the Host may pre-synthesize its first fragment.
+It checks the server revision before scheduling and caches audio in memory (32 MiB
+and 64 entries total, 4 MiB per entry, ten-minute TTL). The speculative queue holds
+up to eight sessions and runs one job at a time. A new turn removes that session's
+pending candidate; changed cache/settings generations prevent stale candidates
+from running. This does not synthesize a growing token stream or an entire answer
+in advance, and each `/tts` response still buffers a complete WAV.
+
+Foreground requests block new speculation even before the browser lease arrives.
+Tab-local leases renew every five seconds, including while paused, and expire after
+15 seconds without renewal. Expiry wakes queued work; resumed clients can reacquire
+an expired lease. Identical in-flight foreground requests share one synthesis
+(up to 16 distinct jobs). Stopping one listener ends its wait, but the already
+admitted fragment drains under the transport deadline and may populate the cache;
+it is not forcefully interrupted or duplicated. An unrelated running speculative
+fragment can still delay a click. These priorities apply within this Host instance,
+not to independent clients using the TTS server directly.
+
+Speculation never retries. Foreground retries, bounded by `maxRetries` and the
+request deadline, apply only to HTTP 429 or HTTP 503 with `code: queue_timeout`.
+Network failures and HTTP 502/504 do not resubmit synthesis because the backend
+may still be computing. Unknown-outcome failures suspend speculation in that Host
+coordinator until an explicit administrative reset or a fresh plugin instance;
+manual synthesis remains available. Error-body reads are limited to 4 KiB.
+
+Run the plugin checks with `node --test dsh-plugin/test/*.test.js` from this
+repository. Runtime integration tests additionally require the pinned local DSH
+installation referenced by their fixtures. Source edits do not activate a new Host
+plugin; deployment and any session-disrupting reload require a separate operation.
+
 ## CPU Inference Configuration (Phase 2)
 
 Server inference on CPU supports runtime profile selection via environment variables:
