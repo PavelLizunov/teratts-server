@@ -1,0 +1,170 @@
+{
+  "commits": {
+    "control": "ec09c25d5f042ea6512c531208abae95ca45b7cf",
+    "candidate": "cc7e37ea6bc2d1365fa54eb5c14c48b509642d8e"
+  },
+  "order": [
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ],
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ],
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ]
+  ],
+  "rows": {
+    "control": [
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.17051176199999998,
+        "peak_rss_bytes": 52297728
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.16887664100000005,
+        "peak_rss_bytes": 52289536
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.1735629160000001,
+        "peak_rss_bytes": 52289536
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.169561823,
+        "peak_rss_bytes": 52289536
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.16919523200000003,
+        "peak_rss_bytes": 52289536
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.16870325200000003,
+        "peak_rss_bytes": 52289536
+      }
+    ],
+    "candidate": [
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006293070000000043,
+        "peak_rss_bytes": 52154368
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006129159999999985,
+        "peak_rss_bytes": 52154368
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006289459999999992,
+        "peak_rss_bytes": 52158464
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006395049999999997,
+        "peak_rss_bytes": 52158464
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006167729999999949,
+        "peak_rss_bytes": 52158464
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "search-v1",
+        "checksum": 83,
+        "seconds": 0.0006192679999999981,
+        "peak_rss_bytes": 52154368
+      }
+    ]
+  }
+}

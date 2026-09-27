@@ -1,0 +1,170 @@
+{
+  "commits": {
+    "control": "ec09c25d5f042ea6512c531208abae95ca45b7cf",
+    "candidate": "cc7e37ea6bc2d1365fa54eb5c14c48b509642d8e"
+  },
+  "order": [
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ],
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ],
+    [
+      "control",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "control"
+    ]
+  ],
+  "rows": {
+    "control": [
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.321227312,
+        "peak_rss_bytes": 52551680
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.33222934099999996,
+        "peak_rss_bytes": 52547584
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.3213072219999999,
+        "peak_rss_bytes": 52551680
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.32203007,
+        "peak_rss_bytes": 52678656
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.32105703800000013,
+        "peak_rss_bytes": 52551680
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.32020498899999983,
+        "peak_rss_bytes": 52551680
+      }
+    ],
+    "candidate": [
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.0013044980000000025,
+        "peak_rss_bytes": 52678656
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.0009952940000000012,
+        "peak_rss_bytes": 52551680
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.0010194290000000025,
+        "peak_rss_bytes": 52682752
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.001033414999999998,
+        "peak_rss_bytes": 52678656
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.0009906949999999952,
+        "peak_rss_bytes": 52682752
+      },
+      {
+        "quality": true,
+        "negative_controls": {
+          "empty_output": true,
+          "corrupted_chunks": true
+        },
+        "workload": "full-v1",
+        "checksum": 122,
+        "seconds": 0.0011066410000000033,
+        "peak_rss_bytes": 52678656
+      }
+    ]
+  }
+}

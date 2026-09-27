@@ -1,0 +1,15 @@
+{
+  "kind": "quality",
+  "commit": "cc7e37ea6bc2d1365fa54eb5c14c48b509642d8e",
+  "workload": "search-v1",
+  "target_id": "dsh-host-node22-linux-x64",
+  "status": "passed",
+  "checks": {
+    "exact_output": true,
+    "client_host_parity": true
+  },
+  "negative_controls": {
+    "empty_output": true,
+    "corrupted_chunks": true
+  }
+}

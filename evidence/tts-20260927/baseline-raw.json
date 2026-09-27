@@ -1,0 +1,57 @@
+[
+  {
+    "quality": true,
+    "negative_controls": {
+      "empty_output": true,
+      "corrupted_chunks": true
+    },
+    "workload": "search-v1",
+    "checksum": 83,
+    "seconds": 0.16957026199999994,
+    "peak_rss_bytes": 52285440
+  },
+  {
+    "quality": true,
+    "negative_controls": {
+      "empty_output": true,
+      "corrupted_chunks": true
+    },
+    "workload": "search-v1",
+    "checksum": 83,
+    "seconds": 0.168859054,
+    "peak_rss_bytes": 52289536
+  },
+  {
+    "quality": true,
+    "negative_controls": {
+      "empty_output": true,
+      "corrupted_chunks": true
+    },
+    "workload": "search-v1",
+    "checksum": 83,
+    "seconds": 0.168934795,
+    "peak_rss_bytes": 52289536
+  },
+  {
+    "quality": true,
+    "negative_controls": {
+      "empty_output": true,
+      "corrupted_chunks": true
+    },
+    "workload": "search-v1",
+    "checksum": 83,
+    "seconds": 0.18157978600000002,
+    "peak_rss_bytes": 52285440
+  },
+  {
+    "quality": true,
+    "negative_controls": {
+      "empty_output": true,
+      "corrupted_chunks": true
+    },
+    "workload": "search-v1",
+    "checksum": 83,
+    "seconds": 0.16854398100000004,
+    "peak_rss_bytes": 52289536
+  }
+]

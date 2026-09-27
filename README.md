@@ -340,6 +340,9 @@ Run the plugin checks with `node --test dsh-plugin/test/*.test.js` from this
 repository. Runtime integration tests additionally require the pinned local DSH
 installation referenced by their fixtures. Source edits do not activate a new Host
 plugin; deployment and any session-disrupting reload require a separate operation.
+See the [scheduling security review](docs/audits/tts-scheduling-security-2026-09-27.md)
+and [bounded preprocessing experiment](docs/audits/tts-preprocessing-performance-2026-09-27.md)
+for verification evidence and limits; the latter does not measure neural inference speed.
 
 ## CPU Inference Configuration (Phase 2)
 

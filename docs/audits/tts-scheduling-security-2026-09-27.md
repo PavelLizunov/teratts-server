@@ -30,3 +30,17 @@ No unresolved high-severity regression was found in the reviewed paths. This is 
 - Existing metadata JSON response decoding is timeout-bounded but not byte-capped; only trusted allowlisted endpoints are supported. This preexisting resource-hardening limit is not claimed fixed.
 - Foreground leases are advisory, not owner authorization between mutually hostile users. A trusted client could intentionally renew its own lease and suppress speculation. Manual requests remain available.
 - Already-running unrelated speculation is not preempted. Unknown-outcome suspension needs an administrative reset/new coordinator. Cross-Host/external-client scheduling is outside this coordinator's scope.
+
+## Final scoped supplement
+Reviewed implementation range: a3bdbf29a840a30928cf6be03394943853a99530..cc7e37ea6bc2d1365fa54eb5c14c48b509642d8e. The additional Host punctuation alignment (7e64b0f) preserves the existing browser's cuts, fixing a prefetch-key mismatch. History for the removed semicolon cut points to 9d5f447. Its new parity test failed before the fix and passed afterwards.
+
+The cleanLine guard in client.js:4 and speech-text.js:9 is reached from browser playback and Host preparationListener (index.js:622). It skips two replacement patterns only when their necessary literal delimiter is absent, after inline-code cleanup. It neither admits new HTML nor removes a sanitizer, and keeps the existing replacement order. Locked production-output hashes, client/Host parity, injected-output negatives and fresh held-out comparisons passed. This mitigates a confirmed availability hotspot for unclosed labels, not all hostile Markdown patterns; the residual regex worst-case limitation is explicit in the performance report.
+
+The new paired runner is a local trusted-CLI tool, not a network entry point. It invokes subprocesses with argument arrays (no shell interpolation), bounds each benchmark to 30 seconds, rejects dirty tracked snapshots, checks commit identity after measurement and writes receipts exclusively (no overwrite). Profile/receipts contain fixture timings and source paths, not user chat text or credentials.
+
+Final verification: 121 plugin tests pass; evaluator manifest verification reports four protected files and zero violations; Python runner AST parses. Independent review and live consumer activation remain NOT VERIFIED. Final implementation hashes (SHA-256):
+- client.js: 14a6134723a962beca1c180ed08f29924fe0abe5996a56f39309553b4ad6368b
+- coordinator.js: 89a79d0acba2724d8846299fa6cf36bd1f5e6822d185bea9415942fc72e921dc
+- index.js: bb9fd0715117effc8d6cac0a13c857f0c3ec231a4ca35c6d8a2d1ee2bfcf9234
+- speech-text.js: db885acb5db33ddb93631e348c6639c3ed61852854c5c7239e6d7f5a78833624
+- tools/paired_preprocessing_bench.py (uncommitted at review): ce599969094017d6dd83b9c60447ccc24d99d44e9f025ce2b900393055e39b1a
