@@ -51,19 +51,32 @@ impl LexiconReload {
     }
 
     pub(crate) fn refresh(&self) -> Refresh {
-        // Serialize reads and publication so concurrent requests cannot publish
-        // older snapshots out of order. Normalization holds only an Arc, not this lock.
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        // File I/O and parsing happen outside the lock; the lock protects only
+        // the revision check and the final snapshot swap.
         let result = self.path.as_ref().map_or(Ok(()), |path| {
             let bytes = read_regular_file(path)?;
-            let revision = Sha256::digest(&bytes).into();
-            if revision != state.revision {
-                let normalizer = Arc::new(parse(&bytes)?);
-                state.normalizer = normalizer;
-                state.revision = revision;
+            let revision: [u8; 32] = Sha256::digest(&bytes).into();
+            // Check revision under lock before expensive parse
+            {
+                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                if revision == state.revision {
+                    return Ok(());
+                }
+            }
+            // Parse outside lock
+            let normalizer = Arc::new(parse(&bytes)?);
+            // Swap under lock; re-check in case another thread updated
+            {
+                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                if revision != state.revision {
+                    state.normalizer = normalizer;
+                    state.revision = revision;
+                }
             }
             Ok(())
         });
+        // Diagnostic throttling and snapshot read under a brief lock
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let diagnostic = result.err().filter(|_| {
             let now = Instant::now();
             if state

@@ -894,6 +894,15 @@ fn speech_front_enabled() -> bool {
         .unwrap_or(false)
 }
 
+/// Returns `true` when `text` contains characters that require the phonetic
+/// conversion subprocess — ASCII letters or XML-style angle brackets that
+/// signal language tags.  Pure Cyrillic text (digits, punctuation, whitespace)
+/// can go straight to the model.
+fn needs_phonetic_conversion(text: &str) -> bool {
+    text.chars()
+        .any(|c| c.is_ascii_alphabetic() || matches!(c, '<' | '>'))
+}
+
 /// Runs after admission on the blocking worker: approved lexicon first, residual Latin second.
 fn apply_text_mode(
     request: PreparedRequest,
@@ -905,10 +914,12 @@ fn apply_text_mode(
         // Number ranges can introduce typographic dashes after input preparation.
         // Normalize converter input only; never rewrite its validated output/trace.
         request.text = russian_only::normalize_symbols(&request.text)?;
-        let converter = converter.ok_or(ConversionError::Configuration)?;
-        // Trace shape and all readings/warnings were validated by the adapter. Never log
-        // or return user text/trace in HTTP headers; the preparation CLI exposes the trace.
-        request.text = converter.convert(&request.text)?.text;
+        if needs_phonetic_conversion(&request.text) {
+            let converter = converter.ok_or(ConversionError::Configuration)?;
+            // Trace shape and all readings/warnings were validated by the adapter. Never log
+            // or return user text/trace in HTTP headers; the preparation CLI exposes the trace.
+            request.text = converter.convert(&request.text)?.text;
+        }
         request.language = Language::Ru;
     }
     Ok(request)
@@ -1782,26 +1793,31 @@ mod tests {
         let path = dir.path().join("lexicon.toml");
         approve(&path, APPROVED);
         let loader = LexiconReload::new(Some(path)).unwrap();
-        for (raw, flag, expected) in [
+        // (raw, flag, expected_normalized, converter_runs)
+        // Pure Cyrillic after normalization skips the converter subprocess.
+        for (raw, flag, expected, converter_runs) in [
             (
                 "<en>Widget</en>→тест — ⏵✅",
                 None,
                 "первый переход к тест -",
+                false, // speech-front replaces Widget→первый; pure Cyrillic → skip
             ),
             (
                 "<en>Widget</en>→тест — ⏵✅",
                 Some(false),
                 "Widget  переход к тест -",
+                true, // ASCII "Widget" remains → converter required
             ),
             (
                 "−5 и 2−3 и 2+2 молок+о",
                 None,
                 "минус пять и два минус три и два плюс два молок+о",
+                false,
             ),
-            ("3–5", None, "три - пять"),
-            ("3-5", None, "три - пять"),
-            ("$−5", None, "минус пять долларов"),
-            ("$-5", None, "минус пять долларов"),
+            ("3–5", None, "три - пять", false),
+            ("3-5", None, "три - пять", false),
+            ("$−5", None, "минус пять долларов", false),
+            ("$-5", None, "минус пять долларов", false),
         ] {
             let body = format!("read -r input; [ \"$input\" = '{expected}' ] || exit 1; printf '%s' '{{\"text\":\"тест\",\"readings\":[{{\"written\":\"API\",\"text\":\"эй пи ай\",\"source\":\"structural\",\"warnings\":[]}}],\"warnings\":[\"automatic_not_approved\"]}}'");
             let (_dir, converter) = fixture(&body);
@@ -1816,12 +1832,13 @@ mod tests {
                 true,
             )
             .unwrap();
-            assert_eq!(
-                apply_text_mode(prepared, &loader, Some(&converter))
-                    .unwrap_or_else(|error| panic!("{raw}, {flag:?}: {error}"))
-                    .text,
-                "тест"
-            );
+            let output = apply_text_mode(prepared, &loader, Some(&converter))
+                .unwrap_or_else(|error| panic!("{raw}, {flag:?}: {error}"));
+            if converter_runs {
+                assert_eq!(output.text, "тест", "converter output for {raw}");
+            } else {
+                assert_eq!(output.text, expected, "pure Cyrillic passthrough for {raw}");
+            }
         }
     }
 
@@ -1899,6 +1916,45 @@ mod tests {
         assert_eq!(
             ApiError::conversion(ConversionError::Timeout).status,
             StatusCode::GATEWAY_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn russian_only_pure_cyrillic_skips_converter() {
+        let loader = LexiconReload::new(None).unwrap();
+        let voices = vec!["ru_f1".into()];
+        // Pure Cyrillic text: no converter needed — passing None must succeed.
+        for text in ["Привет мир", "тест 123", "один, два — три!"] {
+            let prepared = prepare_request_with_mode(
+                request(text),
+                &voices,
+                true,
+                false,
+                TextMode::RussianOnly,
+                true,
+            )
+            .unwrap();
+            let output = apply_text_mode(prepared, &loader, None).unwrap();
+            assert!(matches!(output.language, Language::Ru));
+            assert!(
+                !output.text.is_empty(),
+                "pure Cyrillic text should pass through: {text}"
+            );
+        }
+        // Text with ASCII letters: converter IS required — None must fail.
+        let prepared = prepare_request_with_mode(
+            request("Hello мир"),
+            &voices,
+            true,
+            false,
+            TextMode::RussianOnly,
+            true,
+        )
+        .unwrap();
+        let error = apply_text_mode(prepared, &loader, None).err().unwrap();
+        assert_eq!(
+            error.downcast_ref::<ConversionError>(),
+            Some(&ConversionError::Configuration)
         );
     }
 

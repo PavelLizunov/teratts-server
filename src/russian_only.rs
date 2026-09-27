@@ -424,7 +424,7 @@ pub fn flatten_tags(text: &str) -> Result<String> {
                     if name.len() == 2 && !matches!(name, "ru" | "en") {
                         return Err(ConversionError::InvalidText);
                     }
-                    append(&mut output, name, &mut boundary);
+                    // Strip unknown tags silently — preserve content, drop tag name.
                     boundary = true;
                     cursor = start + end_rel + 1;
                     continue;
@@ -657,6 +657,10 @@ pub(crate) mod tests {
         assert_eq!(flatten_tags("1<2>0").unwrap(), "1<2>0");
         assert_eq!(flatten_tags("1 < 2 > 0").unwrap(), "1 < 2 > 0");
         assert_eq!(flatten_tags(" <ru>тест</ru>  !").unwrap(), " тест  !");
+        // Unknown tags are silently stripped — content preserved, tag name dropped.
+        assert_eq!(flatten_tags("<div>test</div>").unwrap(), "test");
+        assert_eq!(flatten_tags("<path>/opt/teratts</path>").unwrap(), "/opt/teratts");
+        assert_eq!(flatten_tags("before<b>bold</b>after").unwrap(), "before bold after");
         for text in [
             "<en>x",
             "<de>x</de>",
