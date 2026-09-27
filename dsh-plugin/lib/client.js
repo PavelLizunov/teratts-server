@@ -2,10 +2,15 @@ const STRUCTURAL = /^\s{0,3}#{1,6}\s|^\s*>|^\s*[-*+]\s|^\s*\d+[.)]\s/;
 const ALLOWED_CHARS = /[^\p{Script=Cyrillic}a-zA-Z0-9\s.,:;!?\-\u2014\u2013…()\[\]{}«»“”„’"\/\\_+#@%=&~$*|^<>→⇒←⇐↔⇔↑↓≈≤≥≠×÷±−₽€£¥]/gu;
 
 function cleanLine(line) {
+  line = line.replace(/`([^`]+)`/g, "$1");
+  // Neither link pattern can match without this delimiter. Avoid quadratic
+  // rescans of unclosed labels, after inline code has exposed any delimiters.
+  if (line.includes("](")) {
+    line = line
+      .replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
+  }
   return line
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
     .replace(/^\s{0,3}#{1,6}\s+/g, "")
     .replace(/^\s*>\s?/g, "")
     .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/g, "")
