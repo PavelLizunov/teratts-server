@@ -470,7 +470,8 @@ async fn prepare(
                 ApiError::bad_request("output text exceeds 128 KiB limit")
             }
             PreparationError::UnsupportedHtmlBlock(tag) => {
-                ApiError::bad_request(format!("unsupported HTML block: {tag}"))
+                let truncated: String = tag.chars().take(60).collect();
+                ApiError::bad_request(format!("unsupported HTML block: {truncated}"))
             }
         })?,
     };
@@ -532,7 +533,8 @@ async fn tts(
                 ApiError::bad_request("markdown output exceeds 128 KiB limit")
             }
             PreparationError::UnsupportedHtmlBlock(tag) => {
-                ApiError::bad_request(format!("unsupported HTML block: {tag}"))
+                let truncated: String = tag.chars().take(60).collect();
+                ApiError::bad_request(format!("unsupported HTML block: {truncated}"))
             }
         })?;
         request.text = outcome.text;
@@ -895,12 +897,11 @@ fn speech_front_enabled() -> bool {
 }
 
 /// Returns `true` when `text` contains characters that require the phonetic
-/// conversion subprocess — ASCII letters or XML-style angle brackets that
-/// signal language tags.  Pure Cyrillic text (digits, punctuation, whitespace)
-/// can go straight to the model.
+/// conversion subprocess — Latin letters (ASCII or extended), angle brackets,
+/// technical symbols, or non-stress `+`. Pure Cyrillic text (digits, ordinary
+/// punctuation, whitespace, stress `+`) can go straight to the model.
 fn needs_phonetic_conversion(text: &str) -> bool {
-    text.chars()
-        .any(|c| c.is_ascii_alphabetic() || matches!(c, '<' | '>'))
+    russian_only::needs_conversion(text)
 }
 
 /// Runs after admission on the blocking worker: approved lexicon first, residual Latin second.

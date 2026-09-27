@@ -150,7 +150,7 @@ impl Converter {
     fn convert_with_deadline(&self, text: &str, deadline: Duration) -> Result<Conversion> {
         validate_input(text)?;
         // Paths are trusted local operator configuration, never request parameters.
-        // ponytail: kill only this process; binaries spawning descendants are unsupported.
+        // ponytail: kill only this process; binaries spawning descendants are unsupported. Upgrade: use process group / setsid termination if speech-front or wrappers spawn child workers.
         let started = Instant::now();
         let mut child = Command::new(&self.binary)
             .arg("russian-only")
@@ -158,10 +158,12 @@ impl Converter {
             .arg(&self.db)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|_| ConversionError::Failed)?;
-        let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        let (Some(mut stdin), Some(stdout), Some(stderr)) =
+            (child.stdin.take(), child.stdout.take(), child.stderr.take())
+        else {
             let _ = child.kill();
             let _ = child.wait();
             return Err(ConversionError::Failed);
@@ -192,10 +194,16 @@ impl Converter {
             .spawn(move || {
                 let mut bytes = Vec::new();
                 let result = stdout
-                    .take((MAX_JSON_BYTES + 1) as u64)
+                    .take((MAX_JSON_BYTES + 2) as u64)
                     .read_to_end(&mut bytes)
                     .map_err(|_| ConversionError::Failed)
-                    .and({
+                    .and_then(|_| {
+                        if bytes.last() == Some(&b'\n') {
+                            bytes.pop();
+                            if bytes.last() == Some(&b'\r') {
+                                bytes.pop();
+                            }
+                        }
                         if bytes.len() > MAX_JSON_BYTES {
                             Err(ConversionError::InvalidOutput)
                         } else {
@@ -215,8 +223,12 @@ impl Converter {
         let mut written = false;
         let mut output = None;
         let mut exited = false;
+        let mut stderr = Some(stderr);
         let result = (|| loop {
-            if started.elapsed() >= deadline {
+            let Some(remaining) = deadline.checked_sub(started.elapsed()) else {
+                return Err(ConversionError::Timeout);
+            };
+            if remaining.is_zero() {
                 return Err(ConversionError::Timeout);
             }
             while let Ok(event) = rx.try_recv() {
@@ -231,6 +243,26 @@ impl Converter {
             if !exited {
                 if let Some(status) = child.try_wait().map_err(|_| ConversionError::Failed)? {
                     if !status.success() {
+                        let mut err_bytes = Vec::new();
+                        if let Some(err_pipe) = stderr.take() {
+                            let _ = err_pipe.take(1024).read_to_end(&mut err_bytes);
+                        }
+                        let err_text = String::from_utf8_lossy(&err_bytes);
+                        if [
+                            "reading_limit_exceeded",
+                            "output_limit_exceeded",
+                            "serialization_limit_exceeded",
+                            "unsupported_character",
+                            "invalid_language_tags",
+                            "input_limit_exceeded",
+                            "empty_input",
+                            "warning_limit_exceeded",
+                        ]
+                        .iter()
+                        .any(|marker| err_text.contains(marker))
+                        {
+                            return Err(ConversionError::InvalidText);
+                        }
                         return Err(ConversionError::Failed);
                     }
                     exited = true;
@@ -241,7 +273,15 @@ impl Converter {
                     return decode(&bytes);
                 }
             }
-            std::thread::sleep(Duration::from_millis(5));
+            if let Ok(event) = rx.recv_timeout(remaining.min(Duration::from_millis(5))) {
+                match event {
+                    Event::Written(result) => {
+                        result.map_err(|_| ConversionError::Failed)?;
+                        written = true;
+                    }
+                    Event::Output(result) => output = Some(result?),
+                }
+            }
         })();
         if result.is_err() {
             let _ = child.kill();
@@ -348,20 +388,58 @@ fn plain_char(c: char) -> bool {
         || ".,:;!?-—–…()[]{}«»“”„’\"'/\\_+#@%=&~$*|^".contains(c)
 }
 
-fn latin_char(c: char) -> bool {
+pub fn latin_char(c: char) -> bool {
     matches!(c, '\u{00C0}'..='\u{024F}') && !matches!(c, '×' | '÷' | 'ß' | 'ø')
         || matches!(c, '\u{1E00}'..='\u{1EFF}')
         || matches!(c, '\u{FB00}'..='\u{FB06}')
         || matches!(c, '\u{FF21}'..='\u{FF5A}')
 }
 
+pub fn needs_conversion(text: &str) -> bool {
+    let russian = |c| matches!(c, 'А'..='я' | 'Ё' | 'ё');
+    for (index, c) in text.char_indices() {
+        if c.is_ascii_alphabetic()
+            || latin_char(c)
+            || matches!(
+                c,
+                '<' | '>'
+                    | '/'
+                    | '\\'
+                    | '@'
+                    | '_'
+                    | '='
+                    | '#'
+                    | '%'
+                    | '&'
+                    | '~'
+                    | '$'
+                    | '*'
+                    | '|'
+                    | '^'
+            )
+        {
+            return true;
+        }
+        if c == '+' {
+            let before = text[..index].chars().next_back();
+            let after = text[index + 1..].chars().next();
+            if !before.is_some_and(russian) && !after.is_some_and(russian) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn valid_plaintext(text: &str) -> bool {
     !text.trim().is_empty()
         && text.chars().count() <= MAX_EXPANDED_CHARS
-        && text.chars().all(|c| plain_char(c) || latin_char(c))
+        && text.chars().all(plain_char)
 }
 
 fn decode(bytes: &[u8]) -> Result<Conversion> {
+    let bytes = bytes.strip_suffix(b"\n").unwrap_or(bytes);
+    let bytes = bytes.strip_suffix(b"\r").unwrap_or(bytes);
     if bytes.len() > MAX_JSON_BYTES {
         return Err(ConversionError::InvalidOutput);
     }
@@ -554,11 +632,21 @@ pub(crate) mod tests {
             converter.convert("тест").unwrap_err(),
             ConversionError::InvalidOutput
         );
+        let (_dir, converter) = fixture("echo 'speech-front: reading_limit_exceeded: maximum 1024 readings' >&2; exit 1");
+        assert_eq!(
+            converter.convert("тест").unwrap_err(),
+            ConversionError::InvalidText
+        );
+        let (_dir, converter) = fixture("exit 1");
+        assert_eq!(
+            converter.convert("тест").unwrap_err(),
+            ConversionError::Failed
+        );
     }
 
     #[test]
     fn rejects_bad_json_and_unsupported_plaintext() {
-        for text in ["", "abc", "тест <ru>", "тест😀", "тест\u{0000}"] {
+        for text in ["", "abc", "тест <ru>", "тест😀", "тестé", "тест\u{0000}"] {
             let bytes =
                 serde_json::to_vec(&serde_json::json!({"text":text,"readings":[],"warnings":[]}))
                     .unwrap();

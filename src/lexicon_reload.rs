@@ -18,6 +18,7 @@ pub(crate) struct LexiconReload {
 struct Snapshot {
     normalizer: Arc<Normalizer>,
     revision: [u8; 32],
+    last_failed_revision: [u8; 32],
     last_diagnostic: Option<Instant>,
 }
 
@@ -45,6 +46,7 @@ impl LexiconReload {
             state: Mutex::new(Snapshot {
                 normalizer: Arc::new(normalizer),
                 revision,
+                last_failed_revision: [0; 32],
                 last_diagnostic: None,
             }),
         })
@@ -62,9 +64,19 @@ impl LexiconReload {
                 if revision == state.revision {
                     return Ok(());
                 }
+                if revision == state.last_failed_revision {
+                    return Err("lexicon validation failed");
+                }
             }
             // Parse outside lock
-            let normalizer = Arc::new(parse(&bytes)?);
+            let normalizer = match parse(&bytes) {
+                Ok(n) => Arc::new(n),
+                Err(err) => {
+                    let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                    state.last_failed_revision = revision;
+                    return Err(err);
+                }
+            };
             // Swap under lock; re-check in case another thread updated
             {
                 let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
