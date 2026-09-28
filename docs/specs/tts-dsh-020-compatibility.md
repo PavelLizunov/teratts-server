@@ -47,7 +47,12 @@ Restore the existing TeraTTS assistant-message action on the active DSH Web prof
 - Packed 0.9.2 installed from durable workspace artifacts/tts-dsh-020 path. First attempt failed because prior /tmp/0.9.1 archive disappeared across restart; recreated the exact old archive from commit 16d0dc2 (same package hash), then installation succeeded.
 - install_bundle still reports restart-required for the package update; because Host source is unchanged, supported set_plugin disable/enable was attempted and BOTH report applied with no warnings. Host Config active, installed bytes match tested 0.9.2, MainPID remains 1227817. This proves Host activation, not browser artifact synchronization. User asked to retry playback/refresh if stale. Await actual browser confirmation.
 
-## Installation and remaining acceptance
+## Final acceptance
+- User explicitly confirmed after the 0.9.2 repair and refresh prompt: «Да, звук есть». Actual browser speech is user-verified; the original unavailable-service symptom is resolved.
+- Final delivered version: 0.9.2, active Host, 126 passing tests, byte-matched installed files, one approved DSH restart total. The final Client fix applied without a second restart. Code and evidence backed up to origin/fix/tts-dsh-020-compatibility.
+- Limits: no independent visual light/dark audit or exhaustive live seek/rate/pause control testing. Browser playback confirmation comes from the user, not the agent's inaccessible browser tool.
+
+## Installation history (superseded by final acceptance)
 - Directory installation created a source symlink whose peers did not resolve. Installing an archive over the same link retained the link; removed only this inactive bundle through Plugin Manager and reinstalled packed 0.9.1. The installed path is now profile-local and imports successfully in a fresh process.
 - Plugin Manager first returned restart-required. Live import remains failed after reinstall in the existing process; cached old module resolution is suspected, not proven. No DSH restart performed. Row selection is enabled, but the Host entry is not active.
 - User subsequently approved continuing and one DSH restart if necessary, asking to check hot activation first. A supported disable/enable cycle returned applied for disable and failed-to-import for enable. Installed Plugin Manager README explicitly requires restart for package replacements; implementation returns restart-required when the dependency existed before installation.
