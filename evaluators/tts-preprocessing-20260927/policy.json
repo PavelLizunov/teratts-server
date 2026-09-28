@@ -1,0 +1,13 @@
+{
+  "goal": "Reduce malformed-link preprocessing latency without changing cleaned text or chunks",
+  "scope": "One part: speech-preprocessing; cleanLine in Host speech-text.js and browser client.js only",
+  "target": {"id":"dsh-host-node22-linux-x64","description":"Existing DSH Host, Node v22.23.2, Linux x64; isolated process, no native inference or production requests"},
+  "metric": {"name":"preprocessing_wall_seconds","unit":"s","direction":"lower"},
+  "workloads": {"search":"search-v1","confirmation":"full-v1"},
+  "protected_roots": ["evaluators/tts-preprocessing-20260927", "dsh-plugin/test/fixtures"],
+  "quality_checks": ["exact_output", "client_host_parity"],
+  "negative_controls": ["empty_output", "corrupted_chunks"],
+  "resource_limits": {"peak_rss_bytes":0.10},
+  "thresholds": {"min_relative_effect":0.01,"min_absolute_effect":0.001,"noise_multiplier":2.0,"noise_floor":0.0001,"min_pairs":5,"max_pairs":15},
+  "budget": {"max_experiments":10,"lane_failure_limit":3,"global_failure_limit":3}
+}

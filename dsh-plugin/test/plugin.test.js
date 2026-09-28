@@ -374,16 +374,16 @@ test("host sanitizes client errors and avoids leaking endpoint or cause details"
   // Client errors should not include template literal variables for endpoint or internal cause
   assert.doesNotMatch(host, /throw new Error\([^)]*\$\{endpoint\}/);
   assert.doesNotMatch(host, /throw new Error\([^)]*cause \$\{cause/);
-  // Host logger records details for diagnostics
-  assert.match(host, /console\.error\(`\[teratts\] fetch to \$\{endpoint\} failed:`, error\)/);
+  // Transport diagnostics must not echo URLs or low-level credential-bearing causes.
+  assert.match(host, /console\.error\("\[teratts\] synthesis transport failed"\)/);
   assert.match(host, /console\.error\(`\[teratts\] request failed with HTTP \$\{response\.status\}:`/);
 });
 
 test("host retry helpers classify status codes and compute jittered backoff", () => {
   assert.equal(isRetryableStatus(429), true);
   assert.equal(isRetryableStatus(503), true);
-  assert.equal(isRetryableStatus(502), true);
-  assert.equal(isRetryableStatus(504), true);
+  assert.equal(isRetryableStatus(502), false);
+  assert.equal(isRetryableStatus(504), false);
   assert.equal(isRetryableStatus(400), false);
   assert.equal(isRetryableStatus(401), false);
   assert.equal(isRetryableStatus(404), false);

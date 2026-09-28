@@ -4,6 +4,7 @@ mod execution_provider;
 mod indexer;
 mod lexicon_reload;
 mod manifest;
+mod markdown_speech;
 mod npy;
 mod num2words;
 mod remote_primary;

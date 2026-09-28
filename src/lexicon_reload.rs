@@ -18,6 +18,7 @@ pub(crate) struct LexiconReload {
 struct Snapshot {
     normalizer: Arc<Normalizer>,
     revision: [u8; 32],
+    last_failed_revision: [u8; 32],
     last_diagnostic: Option<Instant>,
 }
 
@@ -45,25 +46,49 @@ impl LexiconReload {
             state: Mutex::new(Snapshot {
                 normalizer: Arc::new(normalizer),
                 revision,
+                last_failed_revision: [0; 32],
                 last_diagnostic: None,
             }),
         })
     }
 
     pub(crate) fn refresh(&self) -> Refresh {
-        // Serialize reads and publication so concurrent requests cannot publish
-        // older snapshots out of order. Normalization holds only an Arc, not this lock.
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        // File I/O and parsing happen outside the lock; the lock protects only
+        // the revision check and the final snapshot swap.
         let result = self.path.as_ref().map_or(Ok(()), |path| {
             let bytes = read_regular_file(path)?;
-            let revision = Sha256::digest(&bytes).into();
-            if revision != state.revision {
-                let normalizer = Arc::new(parse(&bytes)?);
-                state.normalizer = normalizer;
-                state.revision = revision;
+            let revision: [u8; 32] = Sha256::digest(&bytes).into();
+            // Check revision under lock before expensive parse
+            {
+                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                if revision == state.revision {
+                    return Ok(());
+                }
+                if revision == state.last_failed_revision {
+                    return Err("lexicon validation failed");
+                }
+            }
+            // Parse outside lock
+            let normalizer = match parse(&bytes) {
+                Ok(n) => Arc::new(n),
+                Err(err) => {
+                    let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                    state.last_failed_revision = revision;
+                    return Err(err);
+                }
+            };
+            // Swap under lock; re-check in case another thread updated
+            {
+                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                if revision != state.revision {
+                    state.normalizer = normalizer;
+                    state.revision = revision;
+                }
             }
             Ok(())
         });
+        // Diagnostic throttling and snapshot read under a brief lock
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let diagnostic = result.err().filter(|_| {
             let now = Instant::now();
             if state

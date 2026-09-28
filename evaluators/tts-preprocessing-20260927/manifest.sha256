@@ -1,0 +1,4 @@
+2afc1d993039b1741694b29643d78ce6e3a76ef3fcbf51cd2d093ad2b64e3325  evaluators/tts-preprocessing-20260927/evaluate.mjs
+ec9da95aee8e990e2f162ca2acd289e285ec414969217bca5091f530758e0146  evaluators/tts-preprocessing-20260927/policy.json
+6ae371ff87e3ed376816200c45f8eec3aeaaabdad1d2a1d28ec010449b6e25b4  evaluators/tts-preprocessing-20260927/reference.json
+51c4407a5f620d9c614706be7048f2b6a8ce067ec722387f262b910ed9faa6ab  dsh-plugin/test/fixtures/technical-markdown.md

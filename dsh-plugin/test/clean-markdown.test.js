@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { cleanMarkdown as hostCleanMarkdown, splitSpeechText as hostSplitSpeechText } from "../lib/speech-text.js";
 
 // Provide minimal environment for evaluating client bundle in Node
 let registeredEntry = null;
@@ -31,6 +32,14 @@ const technicalMarkdown = await readFile(
   new URL("./fixtures/technical-markdown.md", import.meta.url),
   "utf8",
 );
+
+test("Host prefetch and browser playback use identical punctuation cuts", () => {
+  for (const text of [technicalMarkdown.repeat(3), `${"слово ".repeat(14)}; ${"потом ".repeat(30)}`]) {
+    const cleaned = cleanMarkdown(text);
+    assert.equal(hostCleanMarkdown(text), cleaned);
+    assert.deepEqual(hostSplitSpeechText(cleaned), splitSpeechText(cleaned));
+  }
+});
 
 test("client helpers are exposed for tests", () => {
   assert.equal(typeof cleanMarkdown, "function");
@@ -471,6 +480,70 @@ const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
 const playbackWav = (sampleRate = 10) => ({
   audioBase64: Buffer.from(pcmWav(new Uint8Array(200), sampleRate)).toString("base64"),
   mimeType: "audio/wav",
+});
+
+test("same message in different client instances uses distinct foreground owners", async () => {
+  const first = setupPlaybackHarness();
+  const second = setupPlaybackHarness();
+  const owners = [];
+  first.voice.acquireForeground = async (owner) => { owners.push(owner); return { ok: true }; };
+  second.voice.acquireForeground = first.voice.acquireForeground;
+  try {
+    const a = first.api.startPlayback(Symbol("same-message"), "hello", first.voice);
+    const b = second.api.startPlayback(Symbol("same-message"), "hello", second.voice);
+    assert.equal(owners.length, 2);
+    assert.notEqual(owners[0], owners[1]);
+    first.api.stopPlayback();
+    second.api.stopPlayback();
+    await Promise.all([a, b]);
+  } finally { second.cleanup(); first.cleanup(); }
+});
+
+test("foreground heartbeat survives pause and resumes without losing priority", async (t) => {
+  const harness = setupPlaybackHarness();
+  let heartbeat;
+  t.mock.method(globalThis, "setInterval", (fn) => { heartbeat = fn; return 123; });
+  t.mock.method(globalThis, "clearInterval", () => {});
+  let renewals = 0;
+  harness.voice.acquireForeground = async () => ({ ok: true });
+  harness.voice.renewForeground = async () => { renewals++; return { ok: true }; };
+  try {
+    const producer = harness.api.startPlayback(Symbol("paused"), "hello", harness.voice);
+    harness.api.getPlayback().state = "paused";
+    heartbeat();
+    assert.equal(renewals, 1);
+    assert.notEqual(harness.api.getPlayback().heartbeatTimer, null);
+    harness.api.getPlayback().state = "playing";
+    heartbeat();
+    assert.equal(renewals, 2);
+    harness.api.stopPlayback();
+    await producer;
+  } finally { harness.cleanup(); }
+});
+
+test("expired lease renewal reacquires only while its playback is current", async (t) => {
+  const harness = setupPlaybackHarness();
+  let heartbeat;
+  t.mock.method(globalThis, "setInterval", (fn) => { heartbeat = fn; return 123; });
+  t.mock.method(globalThis, "clearInterval", () => {});
+  let acquisitions = 0;
+  let renewal = createDeferred();
+  harness.voice.acquireForeground = async () => { acquisitions++; return { ok: true }; };
+  harness.voice.renewForeground = () => renewal.promise;
+  try {
+    const producer = harness.api.startPlayback(Symbol("owner"), "hello", harness.voice);
+    heartbeat();
+    renewal.resolve({ ok: false });
+    await flushPromises();
+    assert.equal(acquisitions, 2);
+    renewal = createDeferred();
+    heartbeat();
+    harness.api.stopPlayback();
+    renewal.resolve({ ok: false });
+    await producer;
+    await flushPromises();
+    assert.equal(acquisitions, 2, "late renewal must not resurrect a stopped owner");
+  } finally { harness.cleanup(); }
 });
 
 test("first segment plays while later synthesis remains sequential", async () => {

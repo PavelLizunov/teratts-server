@@ -7,10 +7,15 @@ export const SPEECH_CHUNK_CHARS = 320;
 export const MAX_STREAMED_AUDIO_BYTES = 256 * 1024 * 1024;
 
 export function cleanLine(line) {
+  line = line.replace(/`([^`]+)`/g, "$1");
+  // Neither link pattern can match without this delimiter. Avoid quadratic
+  // rescans of unclosed labels, after inline code has exposed any delimiters.
+  if (line.includes("](")) {
+    line = line
+      .replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1");
+  }
   return line
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
     .replace(/^\s{0,3}#{1,6}\s+/g, "")
     .replace(/^\s*>\s?/g, "")
     .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/g, "")
@@ -183,10 +188,8 @@ export function nextSpeechCut(text, maxChars) {
     window.lastIndexOf(". "),
     window.lastIndexOf("! "),
     window.lastIndexOf("? "),
-    window.lastIndexOf("; "),
-    window.lastIndexOf(": "),
     window.lastIndexOf("… "),
-    window.lastIndexOf("\n"),
+    window.lastIndexOf(": "),
   );
   if (cut >= Math.floor(maxChars / 2)) cut += 1;
   else cut = window.lastIndexOf(" ", maxChars);

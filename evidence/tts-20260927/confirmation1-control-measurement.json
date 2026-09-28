@@ -1,0 +1,25 @@
+{
+  "kind": "measurement",
+  "commit": "ec09c25d5f042ea6512c531208abae95ca45b7cf",
+  "workload": "full-v1",
+  "target_id": "dsh-host-node22-linux-x64",
+  "metric": {
+    "name": "preprocessing_wall_seconds",
+    "unit": "s"
+  },
+  "samples": [
+    0.321227312,
+    0.33222934099999996,
+    0.3213072219999999,
+    0.32203007,
+    0.32105703800000013,
+    0.32020498899999983
+  ],
+  "quality": {
+    "path": "evidence/tts-20260927/confirmation1-control-quality.json",
+    "sha256": "a6e74f3d1c75e6e0117e80b810b03434a16c56a06b9fb9f30a77ea0799c14c5e"
+  },
+  "resources": {
+    "peak_rss_bytes": 52678656
+  }
+}
