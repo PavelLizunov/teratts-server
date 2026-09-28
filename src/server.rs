@@ -260,8 +260,12 @@ pub struct TtsRequest {
     #[serde(default)]
     pub speech_front: Option<bool>,
     pub text_mode: Option<TextMode>,
-    #[serde(default)]
+    #[serde(default = "default_tts_input_format")]
     pub input_format: InputFormat,
+}
+
+fn default_tts_input_format() -> InputFormat {
+    InputFormat::Markdown
 }
 
 #[derive(Debug, Deserialize)]
@@ -822,6 +826,8 @@ async fn primary_audio(
     }
     let forward = ForwardRequest {
         text: raw_text,
+        // The gateway already prepared Markdown, or the caller explicitly opted out.
+        input_format: InputFormat::Plain,
         voice: &prepared.voice,
         language: prepared.language.as_str(),
         duration_scale: prepared.scale,

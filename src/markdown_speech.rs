@@ -6,7 +6,7 @@ pub const MAX_INPUT_BYTES: usize = 64 * 1024;    // 64 KiB
 pub const MAX_OUTPUT_BYTES: usize = 128 * 1024;  // 128 KiB
 
 /// Stable revision identifying the Markdown preparation rules, parser, and options.
-pub const PREPARATION_REVISION: &str = "prep-v1-cmark-0.13.4";
+pub const PREPARATION_REVISION: &str = "prep-v2-cmark-0.13.4";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -270,7 +270,7 @@ pub fn prepare_markdown_to_speech(
     let mut sink = OutputSink::new(effective_max_output);
     let mut warnings = Vec::new();
 
-    let options = Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS;
+    let options = Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
     let parser = Parser::new_ext(raw, options);
 
     let mut in_code_block = false;

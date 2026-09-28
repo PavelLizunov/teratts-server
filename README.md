@@ -79,6 +79,37 @@ curl -o hello.wav http://127.0.0.1:8088/tts \
 `POST /tts` returns mono 16-bit PCM WAV at 44.1 kHz. The server serializes
 inference because one engine owns the four mutable ONNX Runtime sessions.
 
+### Markdown input
+
+`POST /tts` treats omitted `input_format` as `"markdown"`. Cleanup happens on the
+server for every client, before text-mode processing and synthesis. Headings,
+lists, emphasis, strikethrough, links, images, tables, and code are converted to
+speech text; link/image destinations are omitted while labels are retained.
+Code content is spoken rather than discarded. Task-list prefixes use Russian by
+default or English with `language: "en"`.
+
+```json
+{"text":"## Новости\n\nЭто **важно**: [подробности](https://example.com).","voice":"ru_f1"}
+```
+
+Use `"input_format":"plain"` for text that is already prepared or must not be
+interpreted as Markdown. This bypasses Markdown cleanup, not the subsequent
+language/text-mode validation. The DSH plugin already sends explicit `plain`
+for its prepared synthesis chunks. Explicit `"input_format":"markdown"` also
+remains supported. The CLI `--speak` path is unchanged.
+
+Markdown preparation accepts at most 64 KiB of input and 128 KiB of generated
+text. `/tts` still limits the resulting text to 2,400 characters and rejects
+empty speech text. Inline HTML tags are stripped except supported `<ru>`/`<en>`
+language tags; unsupported block HTML returns HTTP 400 rather than being read.
+Literal Markdown syntax and paragraph punctuation may change during preparation;
+select `plain` when that is undesirable.
+
+`POST /prepare` returns prepared text as JSON without synthesis. Unlike `/tts`,
+its omitted `input_format` remains `"plain"`; send `"markdown"` to request cleanup.
+Its response includes `text`, `output_format`, `preparation_revision`, and
+`warnings`. Empty prepared text is returned with a `no_speakable_content` warning.
+
 ## Optional remote primary with retained local fallback
 
 CPU-only serving is unchanged when `TERATTS_PRIMARY_URL` and
@@ -109,13 +140,15 @@ primary request, and any CPU fallback, replaces the CPU-only 120-second deadline
 Both paths share one admission ticket and active permit. If less than the configured
 primary timeout plus a five-second CPU reserve remains, the primary is skipped;
 this reserve is not a guarantee that every CPU input finishes within five seconds.
-After local authorization
-and request validation, the primary receives the **original raw text** and explicit
-effective voice, language, duration scale, `speech_front`, and `text_mode`.
+After local authorization, Markdown preparation (unless `input_format: "plain"`),
+and request validation, the primary receives the **Markdown-prepared text** (or
+original text for explicit `plain`) and explicit effective voice, language,
+duration scale, `speech_front`, and `text_mode`. Forwarded requests always specify
+`input_format: "plain"` to prevent a second Markdown pass.
 `russian_stress` is forwarded only for Russian; English rejects any explicit
-stress field, even `false`. No lexicon/normalization/conversion is applied locally
-before forwarding. Fallback uses the original local prepared request, not primary
-output, and runs the existing preprocessing exactly once.
+stress field, even `false`. No lexicon/linguistic normalization/conversion is
+applied locally before forwarding. Fallback uses the same local prepared request,
+not primary output, and runs the existing preprocessing exactly once.
 
 At most one primary attempt and one local CPU attempt occur. Primary timeout or
 transport failure can fall back; known backend JSON codes qualify only as
