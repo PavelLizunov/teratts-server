@@ -294,9 +294,15 @@ cargo test --offline --bin teratts-server installed_converter_cross_project -- -
 ## DSH client plugin
 
 `dsh-plugin/` contributes a button to `conversation.chat.assistant-actions`.
-Install it into the DSH Web profile, add the `ui-teratts` row from
-`dsh-plugin/cordis.patch.yml`, rebuild the Web artifacts, and refresh the
-existing DSH URL. Host-owned settings configure the endpoint (default
+Plugin 0.9.1 targets DSH **0.2.0-rc.1**. Pack it with
+`npm pack ./dsh-plugin --ignore-scripts` and install the resulting archive through
+the Harness Plugin Manager (`install_bundle`); the bundle supplies the `ui-teratts`
+row. Use the archive, not a directory link: Host dependencies resolve from the
+profile installation, not from the source checkout. Enable that row if an existing profile override disables it. Check the
+installation's `application` result: replacing an installed package can require
+an operator-approved DSH restart, followed by refreshing the existing DSH URL.
+A successful package installation alone does not mean the plugin is active.
+Host-owned row configuration sets the endpoint (default
 `http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
 `https://teratts.tail9fd337.ts.net`). The browser keeps no credentials;
 synthesis routes through the Host plugin. Active playback exposes
@@ -337,9 +343,14 @@ coordinator until an explicit administrative reset or a fresh plugin instance;
 manual synthesis remains available. Error-body reads are limited to 4 KiB.
 
 Run the plugin checks with `node --test dsh-plugin/test/*.test.js` from this
-repository. Runtime integration tests additionally require the pinned local DSH
-installation referenced by their fixtures. Source edits do not activate a new Host
-plugin; deployment and any session-disrupting reload require a separate operation.
+repository. Runtime integration tests use `$DSH_PROFILE_DIR/node_modules`, or
+`DSH_TEST_NODE_MODULES=/absolute/path/to/node_modules` outside a DSH session, and
+verify the declared peers against the actual runtime. DSH 0.2 configuration comes
+from the Loader's `ui-teratts` Config, not the removed `settings.installSection`
+API; changing ordinary configuration remounts the plugin and clears its caches.
+The client unwraps the DSH 0.2 RemoteResult envelope and has no private Harness
+UI-module imports. Source edits do not activate a new Host plugin; deployment and
+any session-disrupting reload require a separate operation.
 See the [scheduling security review](docs/audits/tts-scheduling-security-2026-09-27.md)
 and [bounded preprocessing experiment](docs/audits/tts-preprocessing-performance-2026-09-27.md)
 for verification evidence and limits; the latter does not measure neural inference speed.

@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-// Match the installed runtime used by runtime-import.test.js; never mount live services.
-const runtime = "/var/lib/dsh/.dsh-releases/v015-rc2-t4x7mz4n/profile/node_modules";
+// Explicit override for CI; otherwise use this session's actual profile dependencies.
+export const runtime = process.env.DSH_TEST_NODE_MODULES ||
+  (process.env.DSH_PROFILE_DIR && join(process.env.DSH_PROFILE_DIR, "node_modules"));
+if (!runtime) throw new Error("Set DSH_TEST_NODE_MODULES to the DSH 0.2.0-rc.1 node_modules directory");
 export async function isolatedService(t, overrides = {}) {
   const root = await mkdtemp(join(tmpdir(), "teratts-service-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
