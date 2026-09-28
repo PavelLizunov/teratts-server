@@ -36,7 +36,8 @@ Restore the existing TeraTTS assistant-message action on the active DSH Web prof
 - New client regression cases: 3 failed before the fix (unavailable private UI import).
 - `node --test dsh-plugin/test/*.test.js`: 123 passed, 0 failed.
 - `node --check dsh-plugin/lib/client.js`, `node --check dsh-plugin/lib/index.js`, `git diff --check`: passed.
-- Installed archive Host import succeeds in a fresh Node process. No version exemption used.
+- Installed archive Host import succeeds in a fresh Node process. A further isolated check imports the profile-installed archive, mounts it with real Cordis, verifies effective Config and then disposes it, confirming removal of terattsVoice (exit 0; no synthesis/network request). No version exemption used.
+- Read-only live check still reports ui-teratts inactive while dsh-web.service is active/running. journalctl cannot open the service journal under current permissions (exit 1); no privilege escalation attempted.
 
 ## Installation and remaining acceptance
 - Directory installation created a source symlink whose peers did not resolve. Installing an archive over the same link retained the link; removed only this inactive bundle through Plugin Manager and reinstalled packed 0.9.1. The installed path is now profile-local and imports successfully in a fresh process.
