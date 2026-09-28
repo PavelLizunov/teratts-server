@@ -425,7 +425,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
           ],
@@ -433,7 +433,7 @@ window.__ModuleLoader__.load({
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
-            schema: audioSchema,
+            create: () => audioSchema,
           },
         },
         {
@@ -450,7 +450,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -460,14 +460,14 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
         {
@@ -484,7 +484,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -494,14 +494,14 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
         {
@@ -518,7 +518,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -528,14 +528,14 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
       ],
@@ -1279,12 +1279,8 @@ window.__ModuleLoader__.load({
 
     const inject = ["remote", "slots"];
     async function apply(ctx) {
-      let disposeRemote = null;
-      try {
-        disposeRemote = await ctx.remote.$mount(REMOTE);
-      } catch (error) {
-        console.error("[dsh-client-ui-teratts] remote mount failed:", error);
-      }
+      // Do not register a dead action when the runtime rejects our descriptors.
+      const disposeRemote = await ctx.remote.$mount(REMOTE);
       const remoteVoice = ctx.get("remote.terattsVoice");
       const voice = remoteVoice && Object.fromEntries(
         ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"].map((method) => [

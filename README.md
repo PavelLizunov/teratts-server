@@ -294,10 +294,11 @@ cargo test --offline --bin teratts-server installed_converter_cross_project -- -
 ## DSH client plugin
 
 `dsh-plugin/` contributes a button to `conversation.chat.assistant-actions`.
-Plugin 0.9.1 targets DSH **0.2.0-rc.1**. Pack it with
+Plugin 0.9.2 targets DSH **0.2.0-rc.1**. Pack it with
 `npm pack ./dsh-plugin --ignore-scripts` and install the resulting archive through
 the Harness Plugin Manager (`install_bundle`); the bundle supplies the `ui-teratts`
-row. Use the archive, not a directory link: Host dependencies resolve from the
+row. Keep the archive at a durable path: package-manager updates may need to read
+that local file again. Use the archive, not a directory link: Host dependencies resolve from the
 profile installation, not from the source checkout. Enable that row if an existing profile override disables it. Check the
 installation's `application` result: replacing an installed package can require
 an operator-approved DSH restart, followed by refreshing the existing DSH URL.
@@ -348,8 +349,10 @@ repository. Runtime integration tests use `$DSH_PROFILE_DIR/node_modules`, or
 verify the declared peers against the actual runtime. DSH 0.2 configuration comes
 from the Loader's `ui-teratts` Config, not the removed `settings.installSection`
 API; changing ordinary configuration remounts the plugin and clears its caches.
-The client unwraps the DSH 0.2 RemoteResult envelope and has no private Harness
-UI-module imports. Source edits do not activate a new Host plugin; deployment and
+The client supplies strict codec `create()` factories, unwraps the DSH 0.2
+RemoteResult envelope, and has no private Harness UI-module imports. Integration
+tests mount its descriptors through the real Typert Registry and Client Gateway;
+the transport is stubbed, so these tests do not establish live audio playback. Source edits do not activate a new Host plugin; deployment and
 any session-disrupting reload require a separate operation.
 See the [scheduling security review](docs/audits/tts-scheduling-security-2026-09-27.md)
 and [bounded preprocessing experiment](docs/audits/tts-preprocessing-performance-2026-09-27.md)

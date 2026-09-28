@@ -22,6 +22,87 @@ function loadClient() {
   return { context, plugin, requested };
 }
 
+test("Remote descriptors register with the real current Typert Registry", async () => {
+  const { runtime } = await import("./helpers/runtime.js");
+  const { Context } = await import(`${runtime}/@deepseek-ai/cordis/lib/index.js`);
+  const { default: Registry } = await import(`${runtime}/@deepseek-ai/dsh-typert-registry/lib/index.js`);
+  const ctx = new Context();
+  const registry = new Registry(ctx);
+  const { plugin } = loadClient();
+  let contribution;
+  const dispose = await plugin.apply({
+    remote: { async $mount(value) { contribution = value; return () => {}; } },
+    get: () => ({}),
+    slots: { inject: () => () => {} },
+  });
+  try {
+    const unregister = registry.remotes.register(contribution);
+    assert.equal(registry.remotes.list().length, 4);
+    await unregister();
+  } finally {
+    await dispose();
+    await ctx.fiber.dispose();
+  }
+});
+
+test("real Client Gateway mounts descriptors, calls synthesis and withdraws the namespace", async () => {
+  const { runtime } = await import("./helpers/runtime.js");
+  const cordis = await import(`${runtime}/@deepseek-ai/cordis/lib/index.js`);
+  const { default: Registry } = await import(`${runtime}/@deepseek-ai/dsh-typert-registry/lib/index.js`);
+  let gatewayRegistration;
+  vm.runInNewContext(await readFile(`${runtime}/@deepseek-ai/dsh-api-gateway/lib/client.js`, "utf8"), {
+    window: { __ModuleLoader__: { load(value) { gatewayRegistration = value; } } },
+    console, crypto: globalThis.crypto, AbortController, AbortSignal, setTimeout, clearTimeout, setInterval, clearInterval,
+  });
+  const gateway = gatewayRegistration.factory((name) => {
+    assert.equal(name, "@deepseek-ai/cordis");
+    return cordis;
+  });
+  const ctx = new cordis.Context();
+  new Registry(ctx);
+  const calls = [];
+  ctx.provide("connection", {
+    start: () => ({ stop() {} }),
+    registerGenerationSource: () => () => {},
+    rpc: {
+      open() { throw new Error("Unexpected stream"); },
+      async call(path, endpoint, payload) {
+        calls.push({ path, endpoint, payload });
+        return { ok: true, value: { audioBase64: "wav", mimeType: "audio/wav" } };
+      },
+    },
+  });
+  ctx.provide("slots", { inject: () => () => {} });
+  const gatewayFiber = await ctx.plugin(gateway);
+  let ttsFiber;
+  try {
+    ttsFiber = await ctx.plugin(loadClient().plugin);
+    const voice = ctx.get("remote.terattsVoice");
+    assert.ok(voice, "real Gateway creates the voice namespace");
+    const result = await voice.synthesize("Проверка", new AbortController().signal);
+    assert.equal(result.ok, true);
+    assert.equal(result.value.audioBase64, "wav");
+    assert.equal(calls[0].endpoint, "terattsVoice/synthesize");
+    assert.equal(calls[0].payload.args.text, "Проверка");
+    await ttsFiber.dispose();
+    assert.equal(ctx.get("remote.terattsVoice"), undefined);
+  } finally {
+    await ttsFiber?.dispose();
+    await gatewayFiber.dispose();
+    await ctx.fiber.dispose();
+  }
+});
+
+test("mount failures propagate before registering any action", async () => {
+  const { plugin } = loadClient();
+  let registered = false;
+  await assert.rejects(plugin.apply({
+    remote: { $mount() { throw new Error("Invalid descriptor"); } },
+    slots: { inject() { registered = true; } },
+  }), /Invalid descriptor/);
+  assert.equal(registered, false);
+});
+
 test("client factory loads without private DSH modules or DOM side effects", () => {
   const { plugin, requested } = loadClient();
   assert.equal(typeof plugin.apply, "function");
