@@ -464,6 +464,16 @@ mod tests {
     }
 
     #[test]
+    fn emphasis_and_strikethrough_keep_only_spoken_text() {
+        let res = prepare_markdown_to_speech(
+            "**Важно**, *курсив* и ~~устарело~~.",
+            SpeechPrefixLanguage::Ru,
+            MAX_OUTPUT_BYTES,
+        ).unwrap();
+        assert_eq!(res.text, "Важно, курсив и устарело.");
+    }
+
+    #[test]
     fn links_and_images_keep_text() {
         let md = "Посетите [наш сайт](https://example.com/docs) и посмотрите ![логотип системы](https://example.com/img.png).";
         let res = prepare_markdown_to_speech(md, SpeechPrefixLanguage::Ru, MAX_OUTPUT_BYTES).unwrap();
