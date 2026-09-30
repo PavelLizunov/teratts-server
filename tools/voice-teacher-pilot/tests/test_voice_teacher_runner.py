@@ -9,6 +9,18 @@ runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
 
 
 class Tests(unittest.TestCase):
+    def test_hints_are_optional_and_not_forced_occurrences(self):
+        self.assertEqual(runner.build_prompt(), runner.PROMPT)
+        prompt = runner.build_prompt(["Omarchy", "Steam Deck", "Bonsai"])
+        self.assertIn('"Omarchy"', prompt)
+        self.assertIn("may or may not occur", prompt)
+        self.assertIn("Do NOT insert", prompt)
+        self.assertNotIn("primary_text", prompt)
+
+    def test_invalid_vocabulary_rejected(self):
+        for terms in ["Omarchy", [""], ["bad\nterm"], [1], ["x"] * 31, ["x" * 81]]:
+            with self.assertRaises(ValueError): runner.build_prompt(terms)
+
     def test_normalized_agreement(self):
         result = runner.compare("Ёлка, привет!", "елка привет")
         self.assertEqual(result["category"], "normalized_agreement")

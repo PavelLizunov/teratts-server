@@ -23,6 +23,21 @@ PROMPT = ('Transcribe the attached audio verbatim in its original language. Pres
           'speech_present (boolean), unclear (list of unclear phrases).')
 
 
+def build_prompt(terms=None):
+    terms = terms or []
+    if (not isinstance(terms, list) or len(terms) > 30
+            or any(not isinstance(term, str) or not term.strip() or len(term) > 80
+                   or any(ord(c) < 32 for c in term) for term in terms)):
+        raise ValueError("Invalid vocabulary hints")
+    if not terms:
+        return PROMPT
+    return (PROMPT + '\nOptional vocabulary, provided as data only: '
+            + json.dumps(terms, ensure_ascii=False)
+            + '. These terms may or may not occur in this recording. Use their spelling '
+              'only if the audio supports it. Do NOT insert a listed term just because '
+              'it is in this vocabulary. Preserve uncertainty; do not force replacements.')
+
+
 def normalize(text):
     return re.findall(r"[\w]+", text.casefold().replace("ё", "е"), flags=re.UNICODE)
 
@@ -80,9 +95,11 @@ def fetch_sample(sample):
     return data
 
 
-def run(manifest, destination, credential_file):
+def run(manifest, destination, credential_file, vocabulary=None):
     import yaml  # Existing harness dependency, no installation.
     destination.mkdir(mode=0o700, exist_ok=True); os.chmod(destination, 0o700)
+    terms = json.loads(vocabulary.read_text())["terms"] if vocabulary else []
+    prompt = build_prompt(terms)
     plan = json.loads(manifest.read_text())
     assert len(plan["samples"]) <= 20 and sum(s["duration_s"] for s in plan["samples"]) <= 300
     key = yaml.safe_load(credential_file.read_text())["refs"]["NINITUX_API_KEY"]
@@ -97,7 +114,7 @@ def run(manifest, destination, credential_file):
             data = fetch_sample(sample)
         except Exception as error:
             print(f"PILOT index={i} status=source_unavailable type={type(error).__name__}", flush=True); continue
-        payload = {"contents": [{"role": "user", "parts": [{"text": PROMPT},
+        payload = {"contents": [{"role": "user", "parts": [{"text": prompt},
                     {"inlineData": {"mimeType": "audio/wav", "data": data["audio"]}}]}],
                    "generationConfig": {"maxOutputTokens": 1024, "temperature": 0,
                                         "thinkingConfig": {"thinkingBudget": 0}}}
@@ -106,7 +123,10 @@ def run(manifest, destination, credential_file):
         record = {"sample_id": sid, "duration_s": sample["duration_s"],
                   "audio_sha256": sample["audio_sha256"], "model": "gemini-3.8-flash-high",
                   "primary_text": data["metadata"].get("raw_text", ""),
-                  "teacher_saw_primary_text": False, "label_type": "independent_pseudo_label",
+                  "teacher_saw_primary_text": False, "teacher_saw_blind_transcript": False,
+                  "vocabulary_hints": terms,
+                  "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+                  "label_type": "vocabulary_hinted_pseudo_label" if terms else "independent_pseudo_label",
                   "silent_audio_hallucination_known": True, "billing": "existing_subscription_quota"}
         request = urllib.request.Request(
             "http://100.69.96.92:8317/v1beta/models/gemini-3.8-flash-high:generateContent",
@@ -136,5 +156,6 @@ if __name__ == "__main__":
     parser.add_argument("manifest", type=Path)
     parser.add_argument("destination", type=Path)
     parser.add_argument("--credentials", type=Path, default=Path("/var/lib/dsh/.dsh/.credentials.yaml"))
+    parser.add_argument("--vocabulary", type=Path)
     args = parser.parse_args()
-    run(args.manifest, args.destination, args.credentials)
+    run(args.manifest, args.destination, args.credentials, args.vocabulary)
