@@ -1,0 +1,15 @@
+[Unit]
+Description=Low-priority personal speech vocabulary candidates
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/deck/homelab/voice-telemetry
+ExecStart=/usr/bin/python3 /home/deck/homelab/voice-telemetry/vocabulary_bank.py /home/deck/homelab/voice-corpus --batch 25 --idle-seconds 30
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=1
+MemoryMax=128M
+TimeoutStartSec=30
+UMask=0077
+NoNewPrivileges=true
