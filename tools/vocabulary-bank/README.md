@@ -26,4 +26,8 @@ Security boundary: trusted Tailnet peers, exact Host and same-origin Origin/per-
 
 Live acceptance: 975 terms/1601 observations/39 disputes. Sixteen Python tests passed; isolated Chromium live search/tab/audio and synthetic-only persistent save/reload passed, original WAV metadata loaded; mobile 390 px no horizontal overflow and text escaping/pageerror checks passed. Rapid-query race found/fixed. Synthetic term/feedback removed, actual candidates not approved by tests. No independent model-family review, user-device reachability or million-query UI soak; documented limits. Working link/report remain in private Model Forge docs/vocabulary-review.md.
 
+### Conservative dispute alignment
+
+After a user report of different sentence positions paired as words, review now displays full paired sentences and exact code-point highlights. Fragment choice requires a unique ordered diff block with nearby matching anchors and no obvious moved-word evidence. Repetition/large divergence/missing context falls back to sentence choice or skip. This is textual heuristic correspondence, NOT acoustic timestamps. Server rejects fragment decisions on uncertain pairs. New decisions retain scope/text/alignment snapshot; previous feedback is preserved, not reinterpreted. Live 39 cards: 31 contextual fragment / 8 sentence fallback; 18 tests and live Chromium highlight/fallback/mobile checks passed. Only review service redeployed, inference unchanged.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

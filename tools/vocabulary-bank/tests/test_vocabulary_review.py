@@ -31,6 +31,33 @@ class Tests(unittest.TestCase):
     def payload(self,kind="term",decision="confirm"):
         row=review.term_list(self.root,"hello")["items"][0] if kind=="term" else review.dispute_list(self.root)["items"][0]
         return {"kind":kind,"key":row["key"],"decision":decision,"revision":row["revision"],"value":"","request_id":"synthetic_feedback_id_0001"}
+    def test_conservative_alignment_and_character_ranges(self):
+        result=review.dispute_alignment("Я говорю об Умрчи сейчас.","Я говорю об Omarchy сейчас.","Умрчи","Omarchy")
+        self.assertTrue(result["reliable"])
+        a,b=result["primary_range"];self.assertEqual("Я говорю об Умрчи сейчас."[a:b],"Умрчи")
+        for primary,teacher,left,right in [
+            ("слово тут слово там","слово здесь слово там","слово","слово"),
+            ("сначала альфа потом бета","сначала бета потом альфа","альфа","бета"),
+            ("Но есть проблемы","no hay problema","Но есть проблемы","no hay problema"),
+            ("","текст","","текст")]:
+            self.assertFalse(review.dispute_alignment(primary,teacher,left,right)["reliable"])
+        insert=review.dispute_alignment("я хочу продолжить поиск","я хочу ну продолжить поиск","","ну")
+        self.assertTrue(insert["reliable"]);self.assertEqual(insert["primary_range"][0],insert["primary_range"][1])
+
+    def test_unreliable_pair_rejects_fragment_choice(self):
+        self.corpus.save_record({"kind":"vocabulary_teacher_record","primary_text":"Но есть проблемы?","teacher_text":"no hay problema.","original_sample_id":self.sid})
+        bank.collect(self.root,idle_seconds=0)
+        row=next(r for r in review.dispute_list(self.root)["items"] if r["primary"]=="Но есть проблемы")
+        self.assertFalse(row["alignment"]["reliable"])
+        payload={"kind":"dispute","key":row["key"],"decision":"teacher","revision":row["revision"],"value":"","request_id":"synthetic_unaligned_001"}
+        with self.assertRaises(review.ReviewError) as e:review.save_feedback(self.root,payload)
+        self.assertEqual(e.exception.status,409)
+        payload["decision"]="sentence_teacher"
+        self.assertTrue(review.save_feedback(self.root,payload)["saved"])
+        c=sqlite3.connect(self.root/bank.DB_NAME)
+        try:self.assertEqual(json.loads(c.execute("SELECT context_json FROM feedback_context WHERE request_id=?",(payload["request_id"],)).fetchone()[0])["scope"],"sentence")
+        finally:c.close()
+
     def test_live_data_search_audio(self):
         self.assertGreater(review.summary(self.root)["unique_terms"],3)
         data=review.dispute_list(self.root)
@@ -61,7 +88,7 @@ class Tests(unittest.TestCase):
 
     def test_dispute_choice_not_global_confirmation(self):
         before=review.summary(self.root)["confirmed_terms"]
-        result=review.save_feedback(self.root,self.payload("dispute","teacher"))
+        result=review.save_feedback(self.root,self.payload("dispute","sentence_teacher"))
         self.assertFalse(result["autocorrection"])
         self.assertEqual(review.summary(self.root)["confirmed_terms"],before)
         self.assertEqual(review.dispute_list(self.root)["total"],0)

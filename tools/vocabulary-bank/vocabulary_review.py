@@ -98,6 +98,53 @@ def term_list(root, query="", page=0, only="all"):
     return {"items":items,"total":total,"page":page,"page_size":40}
 
 
+def dispute_alignment(primary, teacher, left, right):
+    """Conservative textual correspondence, never acoustic word alignment."""
+    fallback={"reliable":False,"mode":"sentence","reason":"Нельзя надёжно сопоставить отдельные слова. Сравни целые фразы.",
+              "primary_range":None,"teacher_range":None,"audio_timestamps":False}
+    if not all(isinstance(x,str) for x in [primary,teacher,left,right]) or not primary or not teacher:
+        return {**fallback,"reason":"Не сохранился полный контекст; отдельные слова не сопоставлены."}
+    a=list(bank.TOKEN.finditer(primary[:bank.MAX_TEXT]));b=list(bank.TOKEN.finditer(teacher[:bank.MAX_TEXT]))
+    if max(len(a),len(b))>1000:return fallback
+    av=[bank.normalize(x.group()) for x in a];bv=[bank.normalize(x.group()) for x in b]
+    lv=[bank.normalize(x) for x in bank.TOKEN.findall(left)];rv=[bank.normalize(x) for x in bank.TOKEN.findall(right)]
+    matcher=bank.SequenceMatcher(None,av,bv,autojunk=False)
+    if matcher.ratio()<0.55:return fallback
+    operations=matcher.get_opcodes()
+    found=[]
+    for index,(operation,i,j,x,y) in enumerate(operations):
+        if operation=='equal' or av[i:j]!=lv or bv[x:y]!=rv:continue
+        # Only unique stored spans; repeated words can match a different occurrence.
+        if lv and sum(av[k:k+len(lv)]==lv for k in range(len(av)-len(lv)+1))!=1:continue
+        if rv and sum(bv[k:k+len(rv)]==rv for k in range(len(bv)-len(rv)+1))!=1:continue
+        prefix=index>0 and operations[index-1][0]=='equal'
+        suffix=index+1<len(operations) and operations[index+1][0]=='equal'
+        if not (prefix or suffix) or max(j-i,y-x)>6:continue
+        # Text moved elsewhere is not a replacement at this position.
+        if set(lv)&set(bv[:x]+bv[y:]) or set(rv)&set(av[:i]+av[j:]):continue
+        def char_range(matches,start,end,text):
+            if start==end:
+                point=matches[start].start() if start<len(matches) else len(text)
+                return [point,point]
+            return [matches[start].start(),matches[end-1].end()]
+        found.append({"reliable":True,"mode":"fragment","reason":"Сопоставлено по соседним словам; это не временная разметка аудио.",
+                      "operation":operation,"primary_range":char_range(a,i,j,primary),
+                      "teacher_range":char_range(b,x,y,teacher),"audio_timestamps":False})
+    return found[0] if len(found)==1 else fallback
+
+
+def dispute_context(root,row):
+    metadata={}
+    try:metadata=bank.read_metadata(Path(root)/row[1])
+    except (OSError,ValueError,tarfile.TarError,KeyError):pass
+    primary=metadata.get("primary_text","");teacher=metadata.get("teacher_text","")
+    return primary,teacher,dispute_alignment(primary,teacher,row[2],row[3])
+
+
+def dispute_revision(row,primary,teacher,alignment):
+    return fingerprint("dispute-v2",[row,primary,teacher,alignment])
+
+
 def get_dispute(connection, key):
     row=connection.execute("SELECT rowid,source,primary_span,teacher_span,hinted,sample_ref FROM disputes WHERE rowid=?",(key,)).fetchone()
     if not row:raise ReviewError(404,"Фрагмент не найден")
@@ -116,17 +163,15 @@ def dispute_list(root, query="", page=0, pending=True):
         items=[]
         for row in rows:
             identity,source,left,right,hinted,sample=row
-            metadata={}
-            try:metadata=bank.read_metadata(Path(root)/source)
-            except (OSError,ValueError,tarfile.TarError,KeyError):pass
+            context_primary,context_teacher,alignment=dispute_context(root,row)
             audio=bool(isinstance(sample,str) and SAMPLE_ID.fullmatch(sample) and (Path(root)/(sample+".tar")).is_file())
             decision=None
             if has_feedback(connection):
                 last=connection.execute("SELECT decision,value FROM feedback WHERE target_kind='dispute' AND target_key=? ORDER BY created_ns DESC LIMIT 1",(str(identity),)).fetchone()
                 if last:decision={"decision":last[0],"value":last[1]}
             items.append({"key":str(identity),"primary":left,"teacher":right,"hinted":bool(hinted),
-                          "context_primary":metadata.get("primary_text",""),"context_teacher":metadata.get("teacher_text",""),
-                          "sample_id":sample,"audio_available":audio,"decision":decision,"revision":fingerprint("dispute",row)})
+                          "context_primary":context_primary,"context_teacher":context_teacher,"alignment":alignment,
+                          "sample_id":sample,"audio_available":audio,"decision":decision,"revision":dispute_revision(row,context_primary,context_teacher,alignment)})
     return {"items":items,"total":total,"page":page,"page_size":20}
 
 
@@ -137,10 +182,10 @@ def save_feedback(root, payload):
     if kind not in ["term","dispute"] or not isinstance(key,str) or len(key)>200:
         raise ReviewError(400,"Неверная запись")
     if not isinstance(rid,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,80}",rid):raise ReviewError(400,"Неверный ID")
-    allowed={"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom"}}
+    allowed={"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom","sentence_primary","sentence_teacher","sentence_custom"}}
     if decision not in allowed[kind]:raise ReviewError(400,"Неверное решение")
     value=payload.get("value","")
-    if not isinstance(value,str) or len(value)>160 or (decision=="custom" and not value.strip()) or any(ord(c)<32 for c in value):
+    if not isinstance(value,str) or len(value)>(2048 if decision=="sentence_custom" else 160) or (decision in {"custom","sentence_custom"} and not value.strip()) or any(ord(c)<32 for c in value):
         raise ReviewError(400,"Неверное написание")
     root=Path(root);fd=os.open(root/".lock",os.O_RDWR|os.O_NOFOLLOW)
     connection=None;old=os.umask(0o077)
@@ -161,7 +206,15 @@ def save_feedback(root, payload):
         else:
             if not key.isdigit():raise ReviewError(400,"Неверный фрагмент")
             row=get_dispute(connection,key)
-        if revision!=fingerprint(kind,row):raise ReviewError(409,"Запись изменилась. Обновите список")
+        expected=fingerprint(kind,row)
+        if kind=="dispute":
+            primary,teacher,alignment=dispute_context(root,row)
+            expected=dispute_revision(row,primary,teacher,alignment)
+            if not alignment["reliable"] and decision in {"primary","teacher","custom"}:
+                raise ReviewError(409,"Слова не сопоставлены. Выбери целую фразу или пропусти.")
+            if decision in {"sentence_primary","sentence_teacher","sentence_custom"} and not (primary and teacher):
+                raise ReviewError(409,"Полного контекста нет; можно только пропустить")
+        if revision!=expected:raise ReviewError(409,"Запись изменилась. Обновите список")
         total=0
         for entry in root.iterdir():
             info=entry.lstat()
@@ -175,9 +228,12 @@ def save_feedback(root, payload):
         connection.execute(f"PRAGMA max_page_count={min(bank.DB_LIMIT,db_size+bank.RESERVE//4)//page_size}")
         connection.execute("PRAGMA synchronous=FULL")
         with connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS feedback_context(request_id TEXT PRIMARY KEY,context_json TEXT NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS feedback(request_id TEXT PRIMARY KEY,target_kind TEXT NOT NULL,target_key TEXT NOT NULL,decision TEXT NOT NULL,value TEXT NOT NULL,created_ns INTEGER NOT NULL)")
             connection.execute("CREATE INDEX IF NOT EXISTS feedback_target ON feedback(target_kind,target_key,created_ns)")
             connection.execute("INSERT INTO feedback VALUES(?,?,?,?,?,?)",(rid,kind,key,decision,value.strip(),time.time_ns()))
+            if kind=="dispute":
+                connection.execute("INSERT INTO feedback_context VALUES(?,?)",(rid,json.dumps({"scope":"sentence" if decision.startswith("sentence_") else "fragment", "primary":primary,"teacher":teacher,"alignment":alignment},ensure_ascii=False)))
             # A term click approves vocabulary existence, not utterance correctness.
             if kind=="term" and decision=="confirm":connection.execute("UPDATE terms SET confirmed=1 WHERE normalized=?",(key,))
             if kind=="term" and decision=="reject":connection.execute("UPDATE terms SET confirmed=0 WHERE normalized=?",(key,))
