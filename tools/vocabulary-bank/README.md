@@ -18,4 +18,12 @@ Observed live acceptance: 490 terms / 810 observation rows / 29 disputes, 360,44
 
 Separate synthetic worker capacity smoke: 1,000,003 terms, 1,000,000 observations, 321,970,176-byte DB, 12.43 s construction, one indexed lookup 0.181 ms, integrity_check ok. Synthetic test NEVER fed into production dictionary. This checks storage capacity, not complex aggregate query performance, long soak or real-word quality.
 
+## Private feedback page
+
+`vocabulary_review.py` + `review-ui/` implement a real plain HTML review page using the existing vocabulary DB. A separate deploy/vocabulary-review.service binds only to a configured Tailnet address. Live search/pages/filters, paired disputed spans, full context and original WAV when retained. Explicit confirm/reject/skip/custom decisions persist in append-only feedback, same quota/lock; dispute choice does not approve a vocabulary term or training. Seed insertion no longer overrides a user's rejection.
+
+Security boundary: trusted Tailnet peers, exact Host and same-origin Origin/per-start CSRF, no CORS/public wildcard/Funnel/per-user login. Eight concurrent handlers, capped request body, strict source sample IDs, DB/journal/symlink/hardlink checks and shared storage headroom. Original audio is fetched, not synthesized. Private browser/DB content excluded from repo.
+
+Live acceptance: 975 terms/1601 observations/39 disputes. Sixteen Python tests passed; isolated Chromium live search/tab/audio and synthetic-only persistent save/reload passed, original WAV metadata loaded; mobile 390 px no horizontal overflow and text escaping/pageerror checks passed. Rapid-query race found/fixed. Synthetic term/feedback removed, actual candidates not approved by tests. No independent model-family review, user-device reachability or million-query UI soak; documented limits. Working link/report remain in private Model Forge docs/vocabulary-review.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

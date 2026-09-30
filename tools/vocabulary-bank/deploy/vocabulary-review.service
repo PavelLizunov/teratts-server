@@ -1,0 +1,17 @@
+[Unit]
+Description=Private vocabulary and disputed speech feedback page
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/deck/homelab/voice-telemetry
+ExecStart=/usr/bin/python3 /home/deck/homelab/voice-telemetry/vocabulary_review.py --root /home/deck/homelab/voice-corpus --assets /home/deck/homelab/voice-telemetry/review-ui --host 100.110.84.30 --port 3219
+Restart=on-failure
+RestartSec=10
+Nice=10
+MemoryMax=256M
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

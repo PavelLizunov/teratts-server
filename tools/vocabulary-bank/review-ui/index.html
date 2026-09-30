@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Слова и спорные названия</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="kicker">Личный словарь · Model Forge</p>
+      <h1>Что мы услышали</h1>
+      <p class="intro">Найденные слова и спорные названия. Твои решения сохраняются здесь — без автозамены и без обучения моделей.</p>
+      <div id="stats" class="stats" aria-live="polite">Загружаем текущие данные…</div>
+    </header>
+    <nav aria-label="Разделы">
+      <button id="disputes-tab" type="button" aria-pressed="true">Спорные фрагменты</button>
+      <button id="terms-tab" type="button" aria-pressed="false">Все слова</button>
+    </nav>
+    <form id="search-form" class="toolbar">
+      <label for="search">Найти слово или название</label>
+      <div class="search-row">
+        <input id="search" name="q" type="search" placeholder="Например, Omarchy" maxlength="100">
+        <button type="submit">Найти</button>
+        <button id="refresh" type="button" class="secondary">Обновить</button>
+      </div>
+      <div class="filters">
+        <label id="pending-control"><input id="pending" type="checkbox" checked> Только без решения</label>
+        <label id="term-filter-control" hidden>Показывать
+          <select id="term-filter"><option value="all">Все слова</option><option value="candidates">Кандидаты</option><option value="confirmed">Подтверждённые названия</option></select>
+        </label>
+      </div>
+    </form>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section id="results" aria-label="Результаты"></section>
+    <div class="pagination"><button id="previous" type="button" class="secondary">Назад</button><span id="page-label"></span><button id="next" type="button" class="secondary">Дальше</button></div>
+    <footer>«Подтвердить название» означает только, что ты используешь такое слово. Выбор варианта записи не включает исправления STT. Аудио доступно, пока запись не удалена ротацией.</footer>
+  </main>
+</body>
+</html>

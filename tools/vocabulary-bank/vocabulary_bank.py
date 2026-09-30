@@ -140,7 +140,7 @@ def open_database(root, limit=DB_LIMIT):
       );
     ''')
     for term in CONFIRMED:
-        connection.execute("INSERT INTO terms VALUES(?,?,1) ON CONFLICT(normalized) DO UPDATE SET confirmed=1",
+        connection.execute("INSERT INTO terms VALUES(?,?,1) ON CONFLICT(normalized) DO NOTHING",
                            (normalize(term), term))
     connection.commit()
     return connection
