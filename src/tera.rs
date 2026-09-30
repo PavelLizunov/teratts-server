@@ -77,6 +77,7 @@ pub struct SynthOutput {
     pub chunks: Vec<Vec<f32>>,
 }
 
+#[derive(serde::Serialize)]
 pub struct PreprocessedText {
     text: String,
     manual_language_spans: Vec<usize>,

@@ -13,6 +13,7 @@ mod russian_only;
 mod server;
 mod speechfront;
 mod tera;
+mod telemetry;
 mod textnorm;
 mod wav;
 

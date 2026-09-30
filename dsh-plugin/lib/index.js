@@ -1,4 +1,6 @@
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
+import { PrivateTelemetry } from "./private-telemetry.js";
 import s from "@deepseek-ai/schemastery";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
@@ -20,6 +22,7 @@ export const MAX_RESPONSE_BYTES = 16 * 1024 * 1024; // 16 MiB
 
 export const Config = s.object({
   endpoint: s.string().default("http://127.0.0.1:8088"),
+  telemetryIngest: s.string().default(""),
   timeoutMs: s.number().step(1).min(1).default(60_000),
   maxRetries: s.number().step(1).min(0).max(10).default(3),
   voice: s.string().default("ru_f1"),
@@ -228,6 +231,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
   constructor(ctx, current) {
     super(ctx, "terattsVoice");
     this.current = current;
+    this.telemetry = new PrivateTelemetry(current().telemetryIngest);
     this.cache = new ByteBoundedAudioCache();
     this.preparedTextCache = new PreparedTextCache();
     this.coordinator = new PlaybackCoordinator();
@@ -349,6 +353,34 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     }
   }
 
+  async recordTelemetry(event) {
+    const data = event && typeof event === "object" ? event : {};
+    return this.telemetry.record({ ...data, kind: "voice_client_event", host_received_at_ms: Date.now() });
+  }
+
+  async synthesizeObserved(text, context, signal) {
+    const requestId = randomUUID();
+    const trace = { ...context, requestId };
+    void this.recordTelemetry({ event: "synthesis_requested", ...trace, submittedText: text });
+    signal?.throwIfAborted();
+    const release = this.coordinator.holdForegroundRequest();
+    try {
+      const result = await this.synthesizeForeground(text, signal, trace);
+      void this.telemetry.record({ kind: "tts_client_result", ...trace,
+        submittedText: text, synthesisRevision: result.synthesisRevision,
+        cacheHit: result.telemetryCacheHit === true, origin: result.telemetryOrigin ?? "foreground_or_shared",
+        syntheticAudio: true },
+        { "synthesized.wav": Buffer.from(result.audioBase64, "base64") });
+      return result;
+    } catch (error) {
+      void this.recordTelemetry({ event: "synthesis_failed", ...trace,
+        error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    } finally {
+      release();
+    }
+  }
+
   async synthesize(text, signal) {
     signal?.throwIfAborted();
     const release = this.coordinator.holdForegroundRequest();
@@ -359,7 +391,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     }
   }
 
-  async synthesizeForeground(text, signal) {
+  async synthesizeForeground(text, signal, telemetryContext) {
     if (typeof text !== "string" || text.trim().length === 0) {
       throw new TypeError("TeraTTS text must not be empty");
     }
@@ -388,6 +420,8 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       if (audioResult && audioResult.audioBuffer) {
         return {
           audioBase64: audioResult.audioBuffer.toString("base64"),
+          telemetryCacheHit: true,
+          telemetryOrigin: "promoted_prefetch",
           mimeType: audioResult.mimeType || "audio/wav",
         };
       }
@@ -398,13 +432,14 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     if (cached && cached.audioBuffer) {
       return {
         audioBase64: cached.audioBuffer.toString("base64"),
+        telemetryCacheHit: true,
         mimeType: cached.mimeType || "audio/wav",
       };
     }
 
     // 3. Share foreground work too, not just speculative work. A cancelled
     // consumer stops waiting; the bounded in-flight fragment drains safely.
-    const audioResult = await waitForSharedJob(this.foregroundAudio(text, config, key), signal);
+    const audioResult = await waitForSharedJob(this.foregroundAudio(text, config, key, telemetryContext), signal);
     signal?.throwIfAborted();
     return {
       audioBase64: audioResult.audioBuffer.toString("base64"),
@@ -421,7 +456,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     this.cache.set(audioKey(text, config, this.synthesisRevision), result, this.cache.generation);
   }
 
-  foregroundAudio(text, config, key) {
+  foregroundAudio(text, config, key, telemetryContext) {
     // A settings reset is a new admission generation even when text/voice match.
     const jobKey = `${this.cache.generation}:${key}`;
     const existing = this.foregroundJobs.get(jobKey);
@@ -433,7 +468,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     const job = { controller, promise: null };
     this.foregroundJobs.set(jobKey, job);
     job.promise = Promise.resolve().then(async () => {
-      const result = await this.synthesizeConfigured(text, controller.signal, config, key);
+      const result = await this.synthesizeConfigured(text, controller.signal, config, key, telemetryContext);
       this.storeAudio(text, config, result, currentGeneration);
       return result;
     }).catch((error) => {
@@ -448,7 +483,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
     return job.promise;
   }
 
-  async synthesizeConfigured(text, signal, config, key) {
+  async synthesizeConfigured(text, signal, config, key, telemetryContext) {
     const language = config.language === "en" ? "en" : "ru";
     const endpoint = validateAndResolveEndpoint(config.endpoint);
     const maxRetries = config.maxRetries ?? 3;
@@ -485,6 +520,10 @@ export class TeraTtsVoiceService extends TypertRemoteService {
       ...(tokenValue ? { authorization: `Bearer ${tokenValue}` } : {}),
     };
 
+    if (telemetryContext?.requestId) headers["x-request-id"] = telemetryContext.requestId;
+    for (const [field, name] of [["sessionId", "x-session-id"], ["messageId", "x-message-id"]]) {
+      if (typeof telemetryContext?.[field] === "string") headers[name] = telemetryContext[field];
+    }
     let lastError = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -559,7 +598,7 @@ export class TeraTtsVoiceService extends TypertRemoteService {
   }
 }
 
-for (const method of ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"]) {
+for (const method of ["synthesize", "synthesizeObserved", "recordTelemetry", "acquireForeground", "renewForeground", "releaseForeground"]) {
   Remote(method)(TeraTtsVoiceService.prototype[method], {
     kind: "method",
     name: method,
@@ -709,6 +748,7 @@ export function apply(ctx, config = {}) {
     speechFront: config.speechFront ?? true,
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
     prepareMode: config.prepareMode ?? "off",
+    telemetryIngest: config.telemetryIngest ?? "",
   };
   // DSH 0.2 reads ordinary Config from the Loader; configuration changes remount
   // this instance, disposing its caches and in-flight work with the old config.

@@ -327,6 +327,7 @@ struct ErrorResponse {
 }
 
 pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
+    crate::telemetry::initialize();
     let primary = RemotePrimary::from_env(port)?;
     // Validate the installed converter and dictionary before any model access.
     let text_config = russian_only::Config::from_env()?;
@@ -513,6 +514,12 @@ async fn tts(
     authorize(&headers, state.bearer_token.as_deref())?;
     let started = Instant::now();
     let Json(mut request) = request.map_err(ApiError::from_json_rejection)?;
+    let telemetry_original_text = request.text.clone();
+    let telemetry_context = serde_json::json!({
+        "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok()),
+        "session_id": headers.get("x-session-id").and_then(|v| v.to_str().ok()),
+        "message_id": headers.get("x-message-id").and_then(|v| v.to_str().ok()),
+    });
 
     if request.input_format == InputFormat::Markdown {
         if request.text.len() > crate::markdown_speech::MAX_INPUT_BYTES {
@@ -617,6 +624,15 @@ async fn tts(
             req_id, queue_wait_ms, preprocess_ms
         );
         let parts = TeraEngine::chunk_preprocessed(&prepared, chunk::MAX_CHUNK_CHARS)?;
+        crate::telemetry::record(serde_json::json!({
+            "kind": "tts_internal_stages", "correlation": telemetry_context,
+            "server_request_id": req_id,
+            "input_text": telemetry_original_text, "post_markdown_text": raw_text,
+            "post_text_mode_text": text, "preprocessed_text": prepared,
+            "chunks": parts, "voice": voice, "language": language.as_str(),
+            "russian_stress": russian_stress, "duration_scale": scale,
+            "synthetic_audio": true,
+        }));
         if parts.is_empty() {
             return wav::encode_mono_i16(&[]);
         }

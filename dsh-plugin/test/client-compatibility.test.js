@@ -37,7 +37,7 @@ test("Remote descriptors register with the real current Typert Registry", async 
   });
   try {
     const unregister = registry.remotes.register(contribution);
-    assert.equal(registry.remotes.list().length, 4);
+    assert.equal(registry.remotes.list().length, 6);
     await unregister();
   } finally {
     await dispose();

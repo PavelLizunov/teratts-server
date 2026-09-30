@@ -1,6 +1,6 @@
 {
   "name": "dsh-client-ui-teratts",
-  "version": "0.9.2",
+  "version": "0.9.3-private-telemetry.1",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -41,6 +41,7 @@
     "lib/index.js",
     "lib/client.js",
     "lib/speech-text.js",
-    "lib/coordinator.js"
+    "lib/coordinator.js",
+    "lib/private-telemetry.js"
   ]
 }

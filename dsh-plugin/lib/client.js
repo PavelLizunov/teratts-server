@@ -412,6 +412,25 @@ window.__ModuleLoader__.load({
       package: "dsh-client-ui-teratts",
       descriptors: [
         {
+          id: "dsh-client-ui-teratts#terattsVoice/recordTelemetry",
+          service: "terattsVoice", namespace: "terattsVoice", method: "recordTelemetry",
+          invocation: { kind: "direct" },
+          parameters: [{ name: "event", wire: "event", source: "json",
+            codec: { mode: "strict", typeSymbol: "dsh-client-ui-teratts#terattsVoice/recordTelemetry:event", create: () => anySchema } }],
+          result: { mode: "strict", typeSymbol: "dsh-client-ui-teratts#terattsVoice/recordTelemetry:result", create: () => anySchema },
+        },
+        {
+          id: "dsh-client-ui-teratts#terattsVoice/synthesizeObserved",
+          service: "terattsVoice", namespace: "terattsVoice", method: "synthesizeObserved",
+          invocation: { kind: "direct" },
+          parameters: [
+            { name: "text", wire: "text", source: "json", codec: { mode: "strict", typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text", create: () => textSchema } },
+            { name: "context", wire: "context", source: "json", codec: { mode: "strict", typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesizeObserved:context", create: () => anySchema } },
+          ],
+          cancellation: { parameter: "signal" },
+          result: { mode: "strict", typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result", create: () => audioSchema },
+        },
+        {
           id: "dsh-client-ui-teratts#terattsVoice/synthesize",
           service: "terattsVoice",
           namespace: "terattsVoice",
@@ -646,6 +665,16 @@ window.__ModuleLoader__.load({
     }
 
     function publish() {
+      if (playback.telemetryContext && playback.voice?.recordTelemetry) {
+        const marker = JSON.stringify([playback.state, playback.index, playback.rate, playback.error]);
+        if (marker !== playback.telemetryMarker) {
+          playback.telemetryMarker = marker;
+          void playback.voice.recordTelemetry({ event: "playback_state", ...playback.telemetryContext,
+            state: playback.state, segmentIndex: playback.index, playbackRate: playback.rate,
+            audioTime: playback.audio?.currentTime ?? null, error: playback.error,
+            browserObservedAtMs: Date.now() }).catch?.(() => {});
+        }
+      }
       const next = snapshot();
       playback.duration = next.duration;
       playback.position = next.position;
@@ -774,6 +803,9 @@ window.__ModuleLoader__.load({
       }
       playback.epoch += 1;
       releaseMedia();
+      void playback.voice?.recordTelemetry?.({ event: "playback_stopped", ...playback.telemetryContext,
+        segmentIndex: playback.index, browserObservedAtMs: Date.now() })?.catch?.(() => {});
+      playback.telemetryContext = null;
       playback.owner = null;
       playback.voice = null;
       playback.state = "idle";
@@ -793,6 +825,9 @@ window.__ModuleLoader__.load({
       const errorOwner = playback.owner;
       playback.epoch += 1;
       releaseMedia();
+      void playback.voice?.recordTelemetry?.({ event: "playback_stopped", ...playback.telemetryContext,
+        segmentIndex: playback.index, browserObservedAtMs: Date.now() })?.catch?.(() => {});
+      playback.telemetryContext = null;
       playback.owner = null;
       playback.voice = null;
       playback.state = "idle";
@@ -950,13 +985,17 @@ window.__ModuleLoader__.load({
       });
     }
 
-    async function startPlayback(owner, text, voice) {
+    async function startPlayback(owner, text, voice, context = {}) {
       stopPlayback();
       const epoch = playback.epoch;
       const abort = new AbortController();
       const ownerId = foregroundOwnerId;
       playback.owner = owner;
       playback.voice = voice;
+      playback.telemetryContext = { ...context, playbackId: `${foregroundOwnerId}-${epoch}` };
+      playback.telemetryMarker = null;
+      void voice?.recordTelemetry?.({ event: "playback_requested", ...playback.telemetryContext,
+        originalAssistantText: text, browserObservedAtMs: Date.now() })?.catch?.(() => {});
       playback.state = "loading";
       playback.error = null;
       playback.errorOwner = null;
@@ -988,7 +1027,7 @@ window.__ModuleLoader__.load({
         for (let index = 0; index < textChunks.length; index += 1) {
           let result;
           try {
-            result = await synthesizeWithDeadline(voice, textChunks[index], abort.signal);
+            result = await synthesizeWithDeadline(voice?.synthesizeObserved ? { synthesize: (chunk, signal) => voice.synthesizeObserved(chunk, { ...playback.telemetryContext, chunkIndex: index }, signal) } : voice, textChunks[index], abort.signal);
           } catch (chunkError) {
             if (epoch !== playback.epoch) return;
             // If audio is actively playing buffered segments, let them finish playing smoothly
@@ -1071,6 +1110,7 @@ window.__ModuleLoader__.load({
     function TeraTtsAction({ messageId, useChat, useSession, voice }) {
       const useTextSnapshot = useChat ?? useSession;
       const text = useTextSnapshot ? useTextSnapshot((session) => messageText(session, messageId)) : "";
+      const sessionId = useSession ? useSession((session) => session?.id ?? session?.sessionId ?? null) : null;
       const current = usePlayback();
       const owner = React.useRef(Symbol(messageId));
       const buttonRef = React.useRef(null);
@@ -1092,9 +1132,9 @@ window.__ModuleLoader__.load({
             e.stopPropagation();
           }
           if (active) stopPlayback();
-          else if (text) startPlayback(owner.current, text, voice);
+          else if (text) startPlayback(owner.current, text, voice, { sessionId, messageId });
         },
-        [active, voice, text],
+        [active, voice, text, sessionId, messageId],
       );
 
       const handleSeek = React.useCallback(
@@ -1184,7 +1224,7 @@ window.__ModuleLoader__.load({
               onClick: (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (state === "ended") void startPlayback(owner.current, text, voice);
+                if (state === "ended") void startPlayback(owner.current, text, voice, { sessionId, messageId });
                 else togglePause();
               },
             },
@@ -1277,13 +1317,25 @@ window.__ModuleLoader__.load({
       return React.createElement(React.Fragment, null, actionButton, playerCard);
     }
 
+    function DraftTelemetry({ useInput, useSession, voice }) {
+      const input = useInput ? useInput((value) => value) : null;
+      const sessionId = useSession ? useSession((session) => session?.id ?? session?.sessionId ?? null) : null;
+      const draft = input?.draft ?? input?.text ?? null;
+      React.useEffect(() => {
+        if (typeof draft !== "string" || !voice?.recordTelemetry) return;
+        void voice.recordTelemetry({ event: "composer_draft", sessionId, draft,
+          inputState: input, browserObservedAtMs: Date.now() }).catch?.(() => {});
+      }, [draft, sessionId]);
+      return null;
+    }
+
     const inject = ["remote", "slots"];
     async function apply(ctx) {
       // Do not register a dead action when the runtime rejects our descriptors.
       const disposeRemote = await ctx.remote.$mount(REMOTE);
       const remoteVoice = ctx.get("remote.terattsVoice");
       const voice = remoteVoice && Object.fromEntries(
-        ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"].map((method) => [
+        ["synthesize", "synthesizeObserved", "recordTelemetry", "acquireForeground", "renewForeground", "releaseForeground"].map((method) => [
           method, async (...args) => unwrapRemoteResult(await remoteVoice[method](...args)),
         ]),
       );
@@ -1301,7 +1353,11 @@ window.__ModuleLoader__.load({
             ),
         ),
       );
+      const disposeDraft = ctx.slots.inject("conversation.input.above", () =>
+        ctx.slots.register({ name: "conversation.input.above", id: "teratts-private-draft-telemetry", order: 99 },
+          (props) => React.createElement(DraftTelemetry, { ...props, voice })));
       return async () => {
+        disposeDraft();
         disposeSlot();
         stopPlayback();
         if (disposeRemote) await disposeRemote();

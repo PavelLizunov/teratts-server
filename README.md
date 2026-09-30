@@ -14,6 +14,27 @@ cargo run --release -- --speak "Привет" --voice ru_f1 --output hello.wav
 
 Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache.
 
+## Optional private voice telemetry
+
+Telemetry is off by default. Set `VOICE_TELEMETRY_INGEST` to a private HTTP
+`/record` endpoint on loopback or a Tailscale IPv4 address to retain internal
+TTS text stages: original input, post-Markdown text, post-text-mode text,
+preprocessed text and synthesis chunks. The bounded queue never blocks inference;
+unavailable ingestion or a full queue drops records with a content-free warning.
+There is no separate disk spool or public destination. Authorization headers are
+not copied. Content is not anonymized.
+
+The DSH plugin additionally accepts `telemetryIngest` (default empty). When enabled,
+it records composer draft changes using the registered `useInput` hook, playback
+state changes, original assistant text, session/message/playback/request IDs, and
+synthesized audio including cache hits. Draft snapshots are not guaranteed to
+capture every keystroke; playback events describe browser state, not proof that
+the user heard the sound. These hooks require the matching Host/client plugin to
+be activated; packaging them does not activate an already running DSH profile.
+
+See [activation and verification](<docs/private-voice-telemetry.md>) for the current
+coverage, shared rolling retention policy and rollout gates. No training is run.
+
 ## Execution provider (CPU default)
 
 Unset `TERATTS_EXECUTION_PROVIDER` or `cpu` retains CPU inference. Optional CUDA
