@@ -18,6 +18,7 @@
     <nav aria-label="Разделы">
       <button id="disputes-tab" type="button" aria-pressed="true">Спорные фрагменты</button>
       <button id="terms-tab" type="button" aria-pressed="false">Все слова</button>
+      <button id="github-tab" type="button" aria-pressed="false">GitHub: все варианты</button>
     </nav>
     <form id="search-form" class="toolbar">
       <label for="search">Найти слово или название</label>
@@ -33,6 +34,7 @@
         </label>
       </div>
     </form>
+    <section id="name-summary" hidden aria-label="Найденные варианты GitHub"></section>
     <p id="notice" role="status" aria-live="polite"></p>
     <section id="results" aria-label="Результаты"></section>
     <div class="pagination"><button id="previous" type="button" class="secondary">Назад</button><span id="page-label"></span><button id="next" type="button" class="secondary">Дальше</button></div>

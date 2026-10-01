@@ -20,6 +20,7 @@ import time
 import unicodedata
 
 from voice_corpus import MAX_BYTES, MIN_FREE_BYTES, SAMPLE_NAME
+import name_evidence
 
 DB_NAME = "vocabulary.sqlite"
 DB_LIMIT = 2_000_000_000
@@ -142,6 +143,7 @@ def open_database(root, limit=DB_LIMIT):
     for term in CONFIRMED:
         connection.execute("INSERT INTO terms VALUES(?,?,1) ON CONFLICT(normalized) DO NOTHING",
                            (normalize(term), term))
+    name_evidence.ensure_schema(connection)
     connection.commit()
     return connection
 
@@ -221,14 +223,17 @@ def collect(root, batch=25, idle_seconds=30):
         started = time.monotonic()
         for path in paths:
             source = path.name
-            if connection.execute("SELECT 1 FROM sources WHERE source=?", (source,)).fetchone():
+            if (connection.execute("SELECT 1 FROM sources WHERE source=?", (source,)).fetchone()
+                    and connection.execute("SELECT 1 FROM name_scans WHERE source=? AND version=?",(source,name_evidence.VERSION)).fetchone()):
                 continue
             try:
                 metadata = read_metadata(path)
             except (FileNotFoundError, ValueError, tarfile.TarError, KeyError, json.JSONDecodeError):
                 continue
             with connection:
-                processed += int(import_metadata(connection, source, metadata))
+                changed=import_metadata(connection, source, metadata)
+                audited=name_evidence.import_evidence(connection,source,metadata)
+                processed += int(changed or audited)
             examined += 1
             if (examined >= batch or time.monotonic() - started >= 0.2
                     or (root / DB_NAME).stat().st_size - db_size >= RESERVE // 4):

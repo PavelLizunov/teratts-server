@@ -30,4 +30,12 @@ Live acceptance: 975 terms/1601 observations/39 disputes. Sixteen Python tests p
 
 After a user report of different sentence positions paired as words, review now displays full paired sentences and exact code-point highlights. Fragment choice requires a unique ordered diff block with nearby matching anchors and no obvious moved-word evidence. Repetition/large divergence/missing context falls back to sentence choice or skip. This is textual heuristic correspondence, NOT acoustic timestamps. Server rejects fragment decisions on uncertain pairs. New decisions retain scope/text/alignment snapshot; previous feedback is preserved, not reinterpreted. Live 39 cards: 31 contextual fragment / 8 sentence fallback; 18 tests and live Chromium highlight/fallback/mobile checks passed. Only review service redeployed, inference unchanged.
 
+### GitHub occurrence evidence review
+
+Dedicated /github view indexes saved original STT raw text and existing teacher records, not corrected output. Broad variants (гитха/gethab/git hub/gitab/hub git/Git/GitLab-like) are candidates only. Full codepoint-highlighted sentence, provenance/stage and original audio; per-occurrence yes/no/unsure/custom feedback snapshot. It NEVER promotes an occurrence into a global replacement alias, especially Git/GitLab. Current narrow live spelling rule remains unchanged.
+
+Name documents/mentions/scan markers share the bank quota/guards. Historical already-imported sources independently audited, idempotent; future timer scans continue. Canonical column/schema allows future names, but current detector/private API is GitHub-only. URL/code protected; bounded 32 KiB text/100 mentions, heuristic detection may miss unrelated-looking errors. No acoustic timestamps or cloud inference.
+
+Live audit: all 3159 current archives examined, 591 STT records, 34 candidates across 11 raw STT documents and 14 case-preserved surfaces. Twenty-three tests passed, browser deep link/real ambiguity/search/mobile and synthetic-only persistent live save verified; fixture removed, prior 39 feedback preserved. Native voice service PIDs unchanged. Private source text/audio/DB/screenshots excluded from Git backup.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.
