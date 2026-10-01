@@ -1,0 +1,6 @@
+{
+  "github": true,
+  "rule": "github-spelling-v1",
+  "authorization": "user_requested_GitHub_only",
+  "other_terms": false
+}
