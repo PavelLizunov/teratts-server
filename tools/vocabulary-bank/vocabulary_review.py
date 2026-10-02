@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 import vocabulary_bank as bank
 import technical_terms
+import review_groups
 from stt_dictionary import apply_dictionary,normalize_plugin
 from voice_corpus import MAX_BYTES, MIN_FREE_BYTES
 
@@ -124,19 +125,15 @@ def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
     if len(query)>100 or not 0<=page<=1_000_000:raise ReviewError(400,"Неверный поиск")
     with contextlib.closing(connect(root)) as connection:
         if not has_mentions(connection):return {"items":[],"total":0,"page":page,"page_size":20,"variants":[],"scanned_sources":0}
-        condition="WHERE m.canonical=? AND (instr(fold(m.surface),?)>0 OR instr(fold(d.text),?)>0)"
-        if pending and has_feedback(connection):condition+=" AND NOT EXISTS(SELECT 1 FROM feedback f WHERE f.target_kind='name_occurrence' AND f.target_key=cast(m.id as text))"
-        args=(canonical,query.casefold(),query.casefold())
-        total=connection.execute(f"SELECT count(*) FROM name_mentions m JOIN name_documents d ON d.source=m.source AND d.stage=m.stage {condition}",args).fetchone()[0]
-        ids=connection.execute(f"SELECT m.id FROM name_mentions m JOIN name_documents d ON d.source=m.source AND d.stage=m.stage {condition} ORDER BY CASE m.label WHEN 'ambiguous' THEN 0 WHEN 'suspected' THEN 1 ELSE 2 END,m.id DESC LIMIT 20 OFFSET ?",(*args,page*20)).fetchall()
-        items=[]
-        for (identity,) in ids:
-            row=mention_row(connection,identity)
-            _,source,stage,row_canonical,start,end,surface,reason,label,text,sample,digest=row
-            decision=None
-            if has_feedback(connection):
-                last=connection.execute("SELECT decision,value FROM feedback WHERE target_kind='name_occurrence' AND target_key=? ORDER BY created_ns DESC LIMIT 1",(str(identity),)).fetchone()
-                if last:decision={"decision":last[0],"value":last[1]}
+        groups,grouping=review_groups.group_rows(connection,canonical)
+        all_groups=groups
+        groups=[g for g in groups if query.casefold() in g['row'][6].casefold() or query.casefold() in g['row'][9].casefold()]
+        if pending:groups=[g for g in groups if g['decision'] is None]
+        total=len(groups);items=[]
+        for group in groups[page*20:(page+1)*20]:
+            row=group['row']
+            identity,source,stage,row_canonical,start,end,surface,reason,label,text,sample,digest=row
+            decision=group['decision']
             preview=rule_preview(root,text)
             recorded_final=None
             if isinstance(sample,str) and SAMPLE_ID.fullmatch(sample):
@@ -144,18 +141,22 @@ def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
                 except (OSError,ValueError,tarfile.TarError,KeyError):pass
             normalized,plugin_changes=normalize_plugin(surface)
             items.append({"rule_preview":preview,"recorded_final_text":recorded_final,
+                "member_keys":[str(r[0]) for r in group["members"]],"evidence_count":len(group["members"]),"evidence_stages":sorted(set(r[2] for r in group["members"])),"feedback_conflict":group["conflict"],
                 "known_plugin_rule":bool(plugin_changes or surface=='plugin') and 'plugin' in preview['active_rules'],
                 "normalized_surface":normalized,"key":str(identity),"canonical":row_canonical,"surface":surface,"reason":reason,"label":label,
                 "stage":stage,"text":text,"range":[start,end],"sample_id":sample,
                 "suggestions":technical_terms.suggestions(surface,canonical) if canonical in technical_terms.TOPICS else [],
                 "topic_queue":canonical in technical_terms.TOPICS,
                 "audio_available":bool(isinstance(sample,str) and SAMPLE_ID.fullmatch(sample) and (Path(root)/(sample+'.tar')).is_file()),
-                "decision":decision,"revision":fingerprint('name_occurrence',row)})
-        variants=[{"surface":r[0],"count":r[1]} for r in connection.execute("SELECT surface,count(*) FROM name_mentions WHERE canonical=? GROUP BY surface ORDER BY count(*) DESC,surface LIMIT 50",(canonical,))]
+                "decision":decision,"revision":group["revision"]})
+        variant_counts={}
+        for group in all_groups:
+            surface=group['row'][6];variant_counts[surface]=variant_counts.get(surface,0)+1
+        variants=[{'surface':surface,'count':count} for surface,count in sorted(variant_counts.items(),key=lambda pair:(-pair[1],pair[0]))[:50]]
         scanned=connection.execute("SELECT count(*) FROM name_scans").fetchone()[0]
         scanned_stt=connection.execute("SELECT count(*) FROM sources s JOIN name_scans n ON s.source=n.source WHERE s.kind='stt'").fetchone()[0]
         speech_documents=connection.execute("SELECT count(*) FROM name_documents d WHERE stage='stt_raw' AND EXISTS(SELECT 1 FROM name_mentions m WHERE m.source=d.source AND m.stage=d.stage AND m.canonical=?)",(canonical,)).fetchone()[0]
-    return {"items":items,"total":total,"page":page,"page_size":20,"variants":variants,"scanned_sources":scanned,"scanned_stt":scanned_stt,"matched_stt_records":speech_documents}
+    return {"items":items,"total":total,"page":page,"page_size":20,"variants":variants,"scanned_sources":scanned,"scanned_stt":scanned_stt,"matched_stt_records":speech_documents,"grouping":grouping}
 
 
 def dispute_alignment(primary, teacher, left, right):
@@ -274,6 +275,8 @@ def save_feedback(root, payload):
             if not key.isdigit():raise ReviewError(400,"Неверный фрагмент")
             row=get_dispute(connection,key)
         expected=fingerprint(kind,row)
+        members=[row]
+        if kind=="name_occurrence":members,expected=review_groups.for_row(connection,row)
         if kind=="dispute":
             primary,teacher,alignment=dispute_context(root,row)
             expected=dispute_revision(row,primary,teacher,alignment)
@@ -302,7 +305,12 @@ def save_feedback(root, payload):
             if kind=="dispute":
                 connection.execute("INSERT INTO feedback_context VALUES(?,?)",(rid,json.dumps({"scope":"sentence" if decision.startswith("sentence_") else "fragment", "primary":primary,"teacher":teacher,"alignment":alignment},ensure_ascii=False)))
             if kind=="name_occurrence":
-                connection.execute("INSERT INTO feedback_context VALUES(?,?)",(rid,json.dumps({"scope":"named_occurrence","canonical":row[3],"surface":row[6],"range":[row[4],row[5]],"text":row[9],"stage":row[2],"source":row[1],"sample_id":row[10],"alias_approved":False},ensure_ascii=False)))
+                shared_time=time.time_ns()
+                for member in members:
+                    if str(member[0])==key:continue
+                    member_rid=rid+'_m'+str(member[0])
+                    connection.execute("INSERT INTO feedback VALUES(?,?,?,?,?,?)",(member_rid,kind,str(member[0]),decision,value.strip(),shared_time))
+                connection.execute("INSERT INTO feedback_context VALUES(?,?)",(rid,json.dumps({"scope":"named_occurrence_group","member_keys":[str(m[0]) for m in members],"canonical":row[3],"surface":row[6],"range":[row[4],row[5]],"text":row[9],"stage":row[2],"source":row[1],"sample_id":row[10],"alias_approved":False},ensure_ascii=False)))
             # A term click approves vocabulary existence, not utterance correctness.
             if kind=="term" and decision=="confirm":connection.execute("UPDATE terms SET confirmed=1 WHERE normalized=?",(key,))
             if kind=="term" and decision=="reject":connection.execute("UPDATE terms SET confirmed=0 WHERE normalized=?",(key,))

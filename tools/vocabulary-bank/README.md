@@ -58,4 +58,10 @@ Every feedback click pauses/resets that card's real WAV before POST; failed save
 
 Installed NeMo-Speech.cpp0.1.0 docs explicitly say Parakeet TDTv3 has no word boosting. Nemotron3.5 is multilingual ru+context candidate, not migrated/downloaded/tested here. See private Model Forge docs/review-audio-chatgpt-asr-context.md.
 
+### Conservative duplicate review grouping
+
+View-only review_groups.py groups same-audio/canonical/full-normalized-token-text/token-position/surface stage copies. Different samples, repeated token positions, distinct transcripts and absent sample IDs do not merge. Raw primary preferred, all member stages/IDs retained. Consistent previous decisions hide group; conflicting history explicitly pending. New choices append member decisions with group snapshot; revision includes membership/current decisions, stale groups rejected. Max5000-row window explicit, not unlimited UI-load proof.
+
+Development exact-occurrence GitHub/plugin duplicates routed to respective queues; no evidence deletion. Live91->27cards (63 specialized routed,1stagecopymerged),pending12,all250previousfeedbackretained. Thirty-seven tests passed, synthetic two-member live save/hide+cleanup,Chromium groupedprovenance/mobile/noerrors;STT/gatewayunchanged. Real repeated word in different recordings still needs separate review if context differs. Full private docs/review-deduplication.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.
