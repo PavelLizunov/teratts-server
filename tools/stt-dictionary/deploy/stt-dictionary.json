@@ -1,7 +1,8 @@
 {
   "github": true,
   "omarchy": true,
-  "rule": "personal-spelling-v3",
+  "rule": "personal-spelling-v4",
+  "chatgpt": true,
   "plugin": true,
   "authorization": "user_confirmed_GitHub_variants_and_requested_Omarchy",
   "plugins_auto_correction": "user_requested_canonical_plugin",

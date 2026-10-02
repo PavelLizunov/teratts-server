@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 import vocabulary_bank as bank
 import technical_terms
+from stt_dictionary import apply_dictionary,normalize_plugin
 from voice_corpus import MAX_BYTES, MIN_FREE_BYTES
 
 SAMPLE_ID = re.compile(r"[0-9]{20}-[a-f0-9]{32}\Z")
@@ -64,12 +65,20 @@ def has_feedback(connection):
     return bool(connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback'").fetchone())
 
 
+def rule_preview(root,text):
+    config=Path(root).parent/'config/stt-dictionary.json'
+    preview,metadata=apply_dictionary(text,config)
+    return {'text':preview,'status':metadata['status'],'active_rules':metadata.get('active_rules',[]),
+            'changes':len(metadata['changes']),'basis':'current_rule_preview_not_historical_output'}
+
+
 def summary(root):
     with contextlib.closing(connect(root)) as connection:
         result = bank.status(connection)
         result["feedback_count"] = connection.execute("SELECT count(*) FROM feedback").fetchone()[0] if has_feedback(connection) else 0
         result["latest_import_ns"] = connection.execute("SELECT max(imported_at) FROM sources").fetchone()[0]
         result["source_kinds"] = dict(connection.execute("SELECT kind,count(*) FROM sources GROUP BY kind"))
+    result['dictionary']=rule_preview(root,'')
     return result
 
 
@@ -128,7 +137,15 @@ def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
             if has_feedback(connection):
                 last=connection.execute("SELECT decision,value FROM feedback WHERE target_kind='name_occurrence' AND target_key=? ORDER BY created_ns DESC LIMIT 1",(str(identity),)).fetchone()
                 if last:decision={"decision":last[0],"value":last[1]}
-            items.append({"key":str(identity),"canonical":row_canonical,"surface":surface,"reason":reason,"label":label,
+            preview=rule_preview(root,text)
+            recorded_final=None
+            if isinstance(sample,str) and SAMPLE_ID.fullmatch(sample):
+                try:recorded_final=bank.read_metadata(Path(root)/(sample+'.tar')).get('final_text')
+                except (OSError,ValueError,tarfile.TarError,KeyError):pass
+            normalized,plugin_changes=normalize_plugin(surface)
+            items.append({"rule_preview":preview,"recorded_final_text":recorded_final,
+                "known_plugin_rule":bool(plugin_changes or surface=='plugin') and 'plugin' in preview['active_rules'],
+                "normalized_surface":normalized,"key":str(identity),"canonical":row_canonical,"surface":surface,"reason":reason,"label":label,
                 "stage":stage,"text":text,"range":[start,end],"sample_id":sample,
                 "suggestions":technical_terms.suggestions(surface,canonical) if canonical in technical_terms.TOPICS else [],
                 "topic_queue":canonical in technical_terms.TOPICS,

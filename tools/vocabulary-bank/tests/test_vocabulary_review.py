@@ -73,6 +73,17 @@ class Tests(unittest.TestCase):
         self.assertTrue(review.term_list(self.root,"hello")["items"][0]["confirmed"])
         payload["decision"]="reject"
         with self.assertRaises(review.ReviewError):review.save_feedback(self.root,payload)
+    def test_plugin_current_preview_does_not_overwrite_raw(self):
+        config=self.root.parent/'config';config.mkdir();(config/'stt-dictionary.json').write_text('{"plugin":true}')
+        sid=self.corpus.save(b'audio',{'kind':'stt','raw_text':'Два плагина работают','final_text':'Два плагина работают'})
+        bank.collect(self.root,idle_seconds=0)
+        row=next(r for r in review.name_list(self.root,canonical='плагины')['items'] if r['sample_id']==sid)
+        self.assertEqual(row['text'],'Два плагина работают')
+        self.assertEqual(row['rule_preview']['text'],'Два plugin работают')
+        self.assertEqual(row['recorded_final_text'],'Два плагина работают')
+        self.assertTrue(row['known_plugin_rule'])
+        self.assertIn('plugin',review.summary(self.root)['dictionary']['active_rules'])
+
     def test_stale_and_custom_validation(self):
         payload=self.payload();payload["revision"]="old"
         with self.assertRaises(review.ReviewError) as e:review.save_feedback(self.root,payload)

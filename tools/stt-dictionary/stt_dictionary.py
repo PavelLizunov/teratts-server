@@ -4,12 +4,14 @@ import hashlib
 from pathlib import Path
 import re
 
-RULE_ID = "personal-spelling-v3"
+RULE_ID = "personal-spelling-v4"
 BOUND_LEFT=r"(?<![\w/@.\\+\-])"
 BOUND_RIGHT=r"(?![\w/@\\+\-]|\.[\w])"
 GITHUB=re.compile(BOUND_LEFT+r"(?:github|git[ \t]+hub|гитхап|гитхаба?|гетхаб|гитха|гетха|гит[ \t]+хаб)"+BOUND_RIGHT,re.I)
 OMARCHY=re.compile(BOUND_LEFT+r"(?:omarchy|омарчи|умрчи)"+BOUND_RIGHT,re.I)
 PLUGIN=re.compile(BOUND_LEFT+r"(?:плагин(?:а|у|ом|е|ы|ов|ам|ами|ах)?|plugins?)"+BOUND_RIGHT,re.I)
+CHATGPT_BASE=r"(?:chat[ \t]*gpt|чат[ \t-]*(?:gpt|гпт|джи[ \t-]*пи[ \t-]*ти|джипити|джибити|гпити))"
+CHATGPT=re.compile(BOUND_LEFT+CHATGPT_BASE+r"(?:[ \t]+(?:pro|про))?"+BOUND_RIGHT,re.I)
 PROTECTED = re.compile(
     r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)"
     r"|https?://[^\s<>]+|[\w.+-]+@[\w.-]+"
@@ -39,6 +41,18 @@ def normalize_plugin(text):
     return replace_exact(text,PLUGIN,"plugin","plugin-canonical-v1")
 
 
+def normalize_chatgpt(text):
+    protected=[m.span() for m in PROTECTED.finditer(text)];changes=[]
+    def replace(match):
+        if any(a<match.end() and b>match.start() for a,b in protected):return match.group()
+        canonical='ChatGPT Pro' if re.search(r'[ \t]+(?:pro|про)$',match.group(),re.I) else 'ChatGPT'
+        if match.group()==canonical:return canonical
+        changes.append({'rule':'chatgpt-spelling-v1','start':match.start(),'end':match.end(),
+            'before':match.group(),'after':canonical,'offset_basis':'text_before_this_rule'})
+        return canonical
+    return CHATGPT.sub(replace,text),changes
+
+
 def apply_dictionary(text,config_path,requested=True):
     if not requested:return text,{"status":"request_disabled","rule":RULE_ID,"changes":[]}
     try:
@@ -48,7 +62,7 @@ def apply_dictionary(text,config_path,requested=True):
         if not isinstance(config,dict):raise ValueError("Invalid config")
     except (OSError,ValueError,TypeError):return text,{"status":"config_unavailable","rule":RULE_ID,"changes":[]}
     active=[];changes=[]
-    for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy),("plugin",normalize_plugin)]:
+    for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy),("plugin",normalize_plugin),("chatgpt",normalize_chatgpt)]:
         if config.get(name) is True:
             active.append(name);text,updates=normalizer(text);changes.extend(updates)
     return text,{"status":"applied" if changes else "unchanged" if active else "config_disabled",

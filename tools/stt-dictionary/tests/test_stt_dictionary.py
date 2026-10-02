@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from stt_dictionary import normalize_github,normalize_omarchy,normalize_plugin,apply_dictionary,clean_opening
+from stt_dictionary import normalize_github,normalize_omarchy,normalize_plugin,normalize_chatgpt,apply_dictionary,clean_opening
 
 class Tests(unittest.TestCase):
     def test_explicit_variants_and_repetitions(self):
@@ -63,5 +63,16 @@ class Tests(unittest.TestCase):
             p=Path(tmp)/'r.json';p.write_text('{"plugin":true}')
             self.assertEqual(apply_dictionary('два плагина и GitHub',p)[0],'два plugin и GitHub')
             self.assertEqual(apply_dictionary('плагины',p,False)[0],'плагины')
+    def test_chatgpt_exact_pro_and_no_suffix_loss(self):
+        text='chat gpt, чат джибити про, чат джи пи ти, chatgpt pro и чат GPT про'
+        self.assertEqual(normalize_chatgpt(text)[0],'ChatGPT, ChatGPT Pro, ChatGPT, ChatGPT Pro и ChatGPT Pro')
+        self.assertEqual(normalize_chatgpt('chat gpt plus')[0],'ChatGPT plus')
+        for text in ['GPT Pro', 'джибити', 'https://chatgpt.com', '`chat gpt pro`','chatgpt_pro','chat gpt/repo','chatgpt.pro']:
+            self.assertEqual(normalize_chatgpt(text),(text,[]))
+    def test_chatgpt_independent_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)/'r.json';p.write_text('{"chatgpt":true,"plugin":true}')
+            self.assertEqual(apply_dictionary('чат джибити про и плагины',p)[0],'ChatGPT Pro и plugin')
+            self.assertEqual(apply_dictionary('чат джибити про',p,False)[0],'чат джибити про')
     def test_empty_input(self):self.assertEqual(normalize_github(""),("",[]))
 if __name__=="__main__":unittest.main(verbosity=2)

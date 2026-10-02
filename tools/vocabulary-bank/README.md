@@ -5,7 +5,7 @@ Source-only backup of the private Model Forge collector, not a TTS-engine depend
 Run tests:
 
 ```sh
-python3 -m unittest discover -s tools/vocabulary-bank/tests -v
+PYTHONPATH=tools/stt-dictionary python3 -m unittest discover -s tools/vocabulary-bank/tests -v
 ```
 
 Collector reads bounded sample.json metadata from existing TAR corpus, stores normalized terms, original surfaces/counts, source/stage and disputed primary/teacher spans. Three user-confirmed vocabulary seeds: Omarchy, Steam Deck, Bonsai. Model suggestions and occurrences never inherit human confirmation. Ordinary observed words are inventory, not asserted named entities. Newest unprocessed sources first; stable source identity prevents repeated import inflation.
@@ -51,5 +51,11 @@ Final audit: all 5664 archives current-version scanned,892 STT records, Developm
 ### Opening feedback intent repair
 
 Previous opening UI generic yes falsely suggested that every Ну meant Смотри. User clarified intent. Append-only repair_opening_intent.py supersedes only latest yes-on-Ну with explicit custom Ну, retains originals and skips no/unsure/custom/later human decisions. Five repaired, second run zero, original five audit rows retained. New buttons distinguish Ну, Смотри and suspected Maria; server refuses generic yes for opening queue. No raw speech correction or cleanup activation follows from these feedback changes. Two dedicated tests plus regressions/live mobile labels verified. No private feedback IDs/content in source backup.
+
+### Audio decisions and visible active rules
+
+Every feedback click pauses/resets that card's real WAV before POST; failed save never resumes, tab/list replacement also pauses. Raw surface/context stays immutable. Review uses shared stt-dictionary module (same runtime directory on Deck, PYTHONPATH above in source backup) to show current-rule preview and active plugin banner; historical final displayed separately. Known standard plugin forms no longer ask users to reapprove an active normalization alias. Browser actual playback tested success/503/tab pause/reset, no real feedback insertion; preview!=raw test and mobile no errors passed.
+
+Installed NeMo-Speech.cpp0.1.0 docs explicitly say Parakeet TDTv3 has no word boosting. Nemotron3.5 is multilingual ru+context candidate, not migrated/downloaded/tested here. See private Model Forge docs/review-audio-chatgpt-asr-context.md.
 
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.
