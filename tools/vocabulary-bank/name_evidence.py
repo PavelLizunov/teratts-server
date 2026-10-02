@@ -3,8 +3,9 @@ from difflib import SequenceMatcher
 import hashlib
 import re
 
-VERSION = "personal-evidence-v2"
-CANONICALS = ("GitHub", "Omarchy", "плагины", "Смотри")
+import technical_terms
+VERSION = "technical-evidence-v3"
+CANONICALS = ("GitHub", "Omarchy", "плагины", "Смотри", "Разработка", "Linux")
 MAX_TEXT = 32768
 TOKENS = re.compile(r"[^\W_]+", re.UNICODE)
 PROTECTED = re.compile(r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)|https?://[^\s<>]+|\b[\w.-]+\.[a-z]{2,}(?:/\S*)?", re.I)
@@ -43,6 +44,7 @@ def other_candidates(text,canonical):
 
 
 def candidates(text, canonical="GitHub"):
+    if canonical in technical_terms.TOPICS:return technical_terms.candidates(text,canonical)
     if canonical!="GitHub":return other_candidates(text,canonical)
     if not isinstance(text,str):return []
     text=text[:MAX_TEXT];tokens=list(TOKENS.finditer(text));protected=[m.span() for m in PROTECTED.finditer(text)]

@@ -18,6 +18,7 @@ import threading
 from urllib.parse import parse_qs, urlparse
 
 import vocabulary_bank as bank
+import technical_terms
 from voice_corpus import MAX_BYTES, MIN_FREE_BYTES
 
 SAMPLE_ID = re.compile(r"[0-9]{20}-[a-f0-9]{32}\Z")
@@ -110,7 +111,7 @@ def mention_row(connection,key):
 
 
 def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
-    if canonical not in {"GitHub","Omarchy","плагины","Смотри"}:raise ReviewError(400,"Неизвестная очередь")
+    if canonical not in {"GitHub","Omarchy","плагины","Смотри","Разработка","Linux"}:raise ReviewError(400,"Неизвестная очередь")
     if len(query)>100 or not 0<=page<=1_000_000:raise ReviewError(400,"Неверный поиск")
     with contextlib.closing(connect(root)) as connection:
         if not has_mentions(connection):return {"items":[],"total":0,"page":page,"page_size":20,"variants":[],"scanned_sources":0}
@@ -129,6 +130,8 @@ def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
                 if last:decision={"decision":last[0],"value":last[1]}
             items.append({"key":str(identity),"canonical":row_canonical,"surface":surface,"reason":reason,"label":label,
                 "stage":stage,"text":text,"range":[start,end],"sample_id":sample,
+                "suggestions":technical_terms.suggestions(surface,canonical) if canonical in technical_terms.TOPICS else [],
+                "topic_queue":canonical in technical_terms.TOPICS,
                 "audio_available":bool(isinstance(sample,str) and SAMPLE_ID.fullmatch(sample) and (Path(root)/(sample+'.tar')).is_file()),
                 "decision":decision,"revision":fingerprint('name_occurrence',row)})
         variants=[{"surface":r[0],"count":r[1]} for r in connection.execute("SELECT surface,count(*) FROM name_mentions WHERE canonical=? GROUP BY surface ORDER BY count(*) DESC,surface LIMIT 50",(canonical,))]
@@ -222,7 +225,7 @@ def save_feedback(root, payload):
     if kind not in ["term","dispute","name_occurrence"] or not isinstance(key,str) or len(key)>200:
         raise ReviewError(400,"Неверная запись")
     if not isinstance(rid,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,80}",rid):raise ReviewError(400,"Неверный ID")
-    allowed={"name_occurrence":{"yes","no","unsure","custom"},"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom","sentence_primary","sentence_teacher","sentence_custom"}}
+    allowed={"name_occurrence":{"yes","no","unsure","custom","as_heard"},"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom","sentence_primary","sentence_teacher","sentence_custom"}}
     if decision not in allowed[kind]:raise ReviewError(400,"Неверное решение")
     value=payload.get("value","")
     if not isinstance(value,str) or len(value)>(2048 if decision=="sentence_custom" else 160) or (decision in {"custom","sentence_custom"} and not value.strip()) or any(ord(c)<32 for c in value):
@@ -246,6 +249,8 @@ def save_feedback(root, payload):
         elif kind=="name_occurrence":
             if not key.isdigit():raise ReviewError(400,"Неверное упоминание")
             row=mention_row(connection,key)
+            if row[3] in technical_terms.TOPICS and decision=='yes':
+                raise ReviewError(400,"Для тематической карточки выбери точное слово или своё написание")
         else:
             if not key.isdigit():raise ReviewError(400,"Неверный фрагмент")
             row=get_dispute(connection,key)
@@ -322,14 +327,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             self.boundary();parsed=urlparse(self.path);query=parse_qs(parsed.query)
-            if parsed.path in ["/","/index.html","/github","/omarchy","/plugins","/opening","/app.js","/style.css"]:
-                name={"/":"index.html","/github":"index.html","/omarchy":"index.html","/plugins":"index.html","/opening":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
+            if parsed.path in ["/","/index.html","/github","/omarchy","/plugins","/opening","/development","/linux","/app.js","/style.css"]:
+                name={"/":"index.html","/github":"index.html","/omarchy":"index.html","/plugins":"index.html","/opening":"index.html","/development":"index.html","/linux":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
                 body=(self.server.assets/name).read_bytes()
                 mime={"index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
                 return self.send(200,body,mime)
             if parsed.path=="/api/status":return self.send(200,{**summary(self.server.root),"csrf":self.server.csrf})
             page=int(query.get("page",["0"])[0]);q=query.get("q",[""])[0]
-            name_routes={"/api/github":"GitHub","/api/omarchy":"Omarchy","/api/plugins":"плагины","/api/opening":"Смотри"}
+            name_routes={"/api/github":"GitHub","/api/omarchy":"Omarchy","/api/plugins":"плагины","/api/opening":"Смотри","/api/development":"Разработка","/api/linux":"Linux"}
             if parsed.path in name_routes:return self.send(200,name_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1",name_routes[parsed.path]))
             if parsed.path=="/api/terms":return self.send(200,term_list(self.server.root,q,page,query.get("filter",["all"])[0]))
             if parsed.path=="/api/disputes":return self.send(200,dispute_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1"))

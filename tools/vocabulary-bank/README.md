@@ -40,4 +40,12 @@ Live audit: all 3159 current archives examined, 591 STT records, 34 candidates a
 
 Personal v2 queue audit: all existing sources versioned at final snapshot, Omarchy 12 mentions / plugins 34 / opening 37 (32 Ну,4 Смотри,1 Мария), prior 73 feedback decisions preserved. Six name tests + 18 bank/review passed; live mobile deep links/cards and explicit synthetic controls verified. Omarchy/cleanup native spelling integration is separately documented under tools/stt-dictionary, not enabled by evidence decisions. Maria never automatically becomes smotri.
 
+### Developer/Git and Linux topical review
+
+New /development and /linux topics use 32 curated development and 42 Linux term groups, detection only. Exact/transliterated/inflected names and bounded near-match on long distinctive names; no short-command fuzzy guesses. Phrase matches preferred over single-word overlaps. Protected URLs/code and unrelated пуля/пульт/пульс/controller are not forced into pull/contributor.
+
+Topic cards show exact suggestions (pull vs pool), original-as-heard, not-technical, unsure and custom spelling. Server rejects generic yes-to-topic; exact chosen value is stored with occurrence snapshot. No active dictionary/inference changes or cloud calls. Inflected Russian speech may correctly stay Russian, not forced into English base form. Full acoustic alignment unavailable.
+
+Final audit: all 5664 archives current-version scanned,892 STT records, Development91 mentions in59 raw documents/Linux15 in15 documents,98 feedback preserved. Twenty-nine tests passed, live Chromium distinct pull/pool/search/mobile/JS and synthetic-only exact pull decision+reload+cleanup verified. Main voice PID1996400 unchanged, review-only deployment. Private docs in Model Forge docs/developer-linux-review.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.
