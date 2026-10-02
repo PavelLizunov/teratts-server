@@ -76,4 +76,10 @@ Current /blind page displays Model1/Model2 only; old /nemotron page/API is a bli
 
 New blind_comparison feedback uses option1/option2 and private resolved-choice snapshot,never exposes model on save. Old nonblind preferences preserved separately and not mixed/prefilled. Fourblind tests plus fullbackup suite45passed,liveChromiumneutralbody/API+legacyalias/stablereload/realAudioStop/mobile0errors;syntheticreverseorientationrealvote resolved correctly,reloadedhide,fixture+testvoteremoved. Previous250feedback unchanged,949real assignmentsstable. Diagnostic20selection/previous exposure/style clues remain biases;this is voluntaryblindUI not protection from privilegedDBowner or populationaccuracy proof. Private operatingdoc ModelForge docs/blind-model-comparison.md.
 
+### Longer unseen blind challenge set
+
+First20blindvotes completed;16wereunder3s,so userfoundthemtootrivial. New immutable set long-content-v1 selects30previouslyunreviewed nonemptyclips with>=12tokens each and>=3tokendifferences,duration5–40s,notpunctuationonly/nearidentical,duplicatebaselinetextexcluded.15technical/6number-negation/9otherlexicaldifferences,actual7.637–31.359s,median17.386,total547.565s. Balancedexistingorientation,all949mapping/old20votespreserved. Diagnosticbiasedselectionnotgeneralqualityscore,winnersremainhidden.
+
+challengefilternewdefault;priorityfirst20retained,noreset. Neutral selection reasons/noidentityfields. Threeadditionaltests+fullsuite48passed,liveChromiumchallenge30/page2/oldpending0/stablereload/noerrors/mobileoverflowfixed. No extra inference/STTrestart. Private membership notGit;source-only selector/guardinstallerbackedup. Full private docs/blind-challenge-set.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

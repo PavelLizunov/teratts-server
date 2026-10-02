@@ -413,7 +413,7 @@ class Handler(BaseHTTPRequestHandler):
             page=int(query.get("page",["0"])[0]);q=query.get("q",[""])[0]
             name_routes={"/api/github":"GitHub","/api/omarchy":"Omarchy","/api/plugins":"плагины","/api/opening":"Смотри","/api/development":"Разработка","/api/linux":"Linux"}
             if parsed.path in name_routes:return self.send(200,name_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1",name_routes[parsed.path]))
-            if parsed.path in ['/api/blind','/api/nemotron']:return self.send(200,blind_list(self.server.root,q,page,query.get('pending',['1'])[0]=='1',query.get('filter',['priority'])[0]))
+            if parsed.path in ['/api/blind','/api/nemotron']:return self.send(200,blind_list(self.server.root,q,page,query.get('pending',['1'])[0]=='1',query.get('filter',['challenge'])[0]))
             if parsed.path.startswith('/blind-audio/'):return self.send(200,blind_audio(self.server.root,parsed.path.removeprefix('/blind-audio/')),'audio/wav')
             if parsed.path.startswith('/comparison-audio/'):raise ReviewError(404,'Используй аудио слепой карточки')
             if parsed.path=="/api/terms":return self.send(200,term_list(self.server.root,q,page,query.get("filter",["all"])[0]))

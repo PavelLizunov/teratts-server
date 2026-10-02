@@ -42,10 +42,14 @@ def resolve_choice(row,decision):
 
 
 def public_rows(c,query='',page=0,pending=True,filter='priority'):
-    if filter not in ['priority','empty','technical','all'] or len(query)>100 or not 0<=page<=10000:raise ValueError('Invalid filter')
+    if filter not in ['challenge','priority','empty','technical','all'] or len(query)>100 or not 0<=page<=10000:raise ValueError('Invalid filter')
     if not c.execute("SELECT 1 FROM sqlite_master WHERE name='blind_assignments'").fetchone():raise ValueError('Blind review not initialized')
     condition='WHERE (instr(fold(m.primary_text),?)>0 OR instr(fold(m.candidate_text),?)>0)'
-    if filter=='priority':condition+=' AND m.priority=1'
+    sets_exist=bool(c.execute("SELECT 1 FROM sqlite_master WHERE name='blind_review_sets'").fetchone())
+    if filter=='challenge':
+        if sets_exist:condition+=" AND EXISTS(SELECT 1 FROM blind_review_sets s WHERE s.token=b.token AND s.set_id='long-content-v1')"
+        else:condition+=' AND 0'
+    elif filter=='priority':condition+=' AND m.priority=1'
     elif filter=='empty':condition+=" AND m.category IN ('candidate_empty','primary_empty')"
     elif filter=='technical':condition+=' AND m.technical=1'
     feedback=bool(c.execute("SELECT 1 FROM sqlite_master WHERE name='feedback'").fetchone())
@@ -62,7 +66,11 @@ def public_rows(c,query='',page=0,pending=True,filter='priority'):
             if last:decision={'decision':last[0],'value':last[1]}
         category=row[10]
         neutral='empty' if category in ['candidate_empty','primary_empty'] else 'agreement' if category=='agreement' else 'difference'
-        items.append({'key':token,'option1_text':primary if flag else candidate,'option2_text':candidate if flag else primary,
+        reasons=[]
+        if filter=='challenge' and sets_exist:
+            saved=c.execute("SELECT reasons_json FROM blind_review_sets WHERE set_id='long-content-v1' AND token=?",(token,)).fetchone()
+            if saved:reasons=json.loads(saved[0])
+        items.append({'selection_reasons':reasons,'key':token,'option1_text':primary if flag else candidate,'option2_text':candidate if flag else primary,
                       'duration_s':row[9],'category':neutral,'decision':decision,'revision':revision(row),
                       'blind':True,'training_approved':False})
     decisions={}
@@ -70,5 +78,6 @@ def public_rows(c,query='',page=0,pending=True,filter='priority'):
         decisions=dict(c.execute("SELECT f.decision,count(*) FROM feedback f WHERE target_kind='blind_comparison' AND NOT EXISTS(SELECT 1 FROM feedback n WHERE n.target_kind=f.target_kind AND n.target_key=f.target_key AND n.created_ns>f.created_ns) GROUP BY f.decision"))
     return {'items':items,'total':total,'page':page,'page_size':10,'comparison_stats':{
         'unique_audio':c.execute('SELECT count(*) FROM blind_assignments').fetchone()[0],
+        'challenge_count':c.execute("SELECT count(*) FROM blind_review_sets WHERE set_id='long-content-v1'").fetchone()[0] if sets_exist else 0,
         'priority_count':c.execute('SELECT count(*) FROM model_comparisons WHERE priority=1').fetchone()[0],
         'decisions':decisions,'blind':True,'diagnostic_selection_not_accuracy_sample':True}}
