@@ -70,4 +70,10 @@ Private /nemotron page imports verified full-run summary SHA into949unique-audio
 
 Frozen private WAV retrieval strictSHA/owner/nosymlink/hash/size,not arbitrary paths and no synthesis/inference. Samequota/flock/CSRFguards. Completedimport949/repeat0;old250feedbackpreserved. Fourcomparison tests plus regressions=41backup tests passed. Live Chromiumallfilters,next/back/audio-stop/mobile/JS,allfivechoices+custom saved on single syntheticrow and reloaded;rowand6testvotesremoved. SourceDB/rawresults/WAV/screenshotsnotGit. Review-onlydeployment. Private ModelForge docs/nemotron-comparison-review.md.
 
+### Blind randomized comparison
+
+Current /blind page displays Model1/Model2 only; old /nemotron page/API is a blind compatibility alias. Balanced random per-card assignment+opaque token/display order persisted server-side,stable across reload/filter/restart. Public JSON uses option1_text/option2_text,neutral categories/stats,no primary/candidate identities,model/audio hashes/sourceIDs/mapping. Opaque audio path;old explicit SHAaudio routeclosed. Mapping/privateauditDB not published or committed.
+
+New blind_comparison feedback uses option1/option2 and private resolved-choice snapshot,never exposes model on save. Old nonblind preferences preserved separately and not mixed/prefilled. Fourblind tests plus fullbackup suite45passed,liveChromiumneutralbody/API+legacyalias/stablereload/realAudioStop/mobile0errors;syntheticreverseorientationrealvote resolved correctly,reloadedhide,fixture+testvoteremoved. Previous250feedback unchanged,949real assignmentsstable. Diagnostic20selection/previous exposure/style clues remain biases;this is voluntaryblindUI not protection from privilegedDBowner or populationaccuracy proof. Private operatingdoc ModelForge docs/blind-model-comparison.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

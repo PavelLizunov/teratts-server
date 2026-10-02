@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import secrets
 
 MODEL_SHA='3fc991d3badad7277c11030a7519832cddaf2057aafed6d4b25147e953a070b1'
 MANIFEST_SHA='18deafef165d25d8420b17aa85c5e89a1c31326664c7089a1daa15d48b01e77f'
@@ -69,7 +70,13 @@ def import_records(c,records):
             c.execute('INSERT INTO model_comparisons VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                 (r['sha'],r['primary'],r['candidate'],json.dumps(r['samples']),r['source_count'],r['duration'],r['category'],r['technical'],r['priority'],r['ratio'],MODEL_SHA,MANIFEST_SHA))
             added+=1
+    initialize_blind(c)
     return added
+
+
+def initialize_blind(c):
+    from blind_comparison import initialize
+    initialize(c)
 
 
 def exists(c):return bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_comparisons'").fetchone())
