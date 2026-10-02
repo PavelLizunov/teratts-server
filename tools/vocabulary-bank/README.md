@@ -64,4 +64,10 @@ View-only review_groups.py groups same-audio/canonical/full-normalized-token-tex
 
 Development exact-occurrence GitHub/plugin duplicates routed to respective queues; no evidence deletion. Live91->27cards (63 specialized routed,1stagecopymerged),pending12,all250previousfeedbackretained. Thirty-seven tests passed, synthetic two-member live save/hide+cleanup,Chromium groupedprovenance/mobile/noerrors;STT/gatewayunchanged. Real repeated word in different recordings still needs separate review if context differs. Full private docs/review-deduplication.md.
 
+### Nemotron / Parakeet human comparison
+
+Private /nemotron page imports verified full-run summary SHA into949unique-audio rows,not951duplicate-sourcecards. Default20diagnosticrecords:8variedcandidateempty,1reverseempty,8technicalsubstantialdifferences,3nonemptyagreementcontrols. Filters priority/empty34/technical120/full949,search/pagination/pending. Human preference Parakeet/Nemotron/bothbad/equivalent/unsure/customwholetext persists with both model outputs/samplehash/modelmanifest provenance;human_gold=false/training_approved=false,model never switched.
+
+Frozen private WAV retrieval strictSHA/owner/nosymlink/hash/size,not arbitrary paths and no synthesis/inference. Samequota/flock/CSRFguards. Completedimport949/repeat0;old250feedbackpreserved. Fourcomparison tests plus regressions=41backup tests passed. Live Chromiumallfilters,next/back/audio-stop/mobile/JS,allfivechoices+custom saved on single syntheticrow and reloaded;rowand6testvotesremoved. SourceDB/rawresults/WAV/screenshotsnotGit. Review-onlydeployment. Private ModelForge docs/nemotron-comparison-review.md.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

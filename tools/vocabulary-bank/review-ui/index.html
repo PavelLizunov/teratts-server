@@ -24,6 +24,7 @@
       <button id="opening-tab" type="button" aria-pressed="false">Начало фразы</button>
       <button id="development-tab" type="button" aria-pressed="false">Разработка / Git</button>
       <button id="linux-tab" type="button" aria-pressed="false">Linux</button>
+      <button id="nemotron-tab" type="button" aria-pressed="false">Nemotron / Parakeet</button>
     </nav>
     <form id="search-form" class="toolbar">
       <label for="search">Найти слово или название</label>
@@ -36,6 +37,9 @@
         <label id="pending-control"><input id="pending" type="checkbox" checked> Только без решения</label>
         <label id="term-filter-control" hidden>Показывать
           <select id="term-filter"><option value="all">Все слова</option><option value="candidates">Кандидаты</option><option value="confirmed">Подтверждённые названия</option></select>
+        </label>
+        <label id="model-filter-control" hidden>Сравнение
+          <select id="model-filter"><option value="priority">Начать с 20 выбранных примеров</option><option value="empty">Одна модель промолчала</option><option value="technical">Технические названия</option><option value="all">Все 949 записей</option></select>
         </label>
       </div>
     </form>

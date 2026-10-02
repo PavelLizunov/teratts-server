@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 import vocabulary_bank as bank
 import technical_terms
 import review_groups
+import model_comparison_review as model_review
 from stt_dictionary import apply_dictionary,normalize_plugin
 from voice_corpus import MAX_BYTES, MIN_FREE_BYTES
 
@@ -240,13 +241,13 @@ def save_feedback(root, payload):
     if not isinstance(payload,dict):raise ReviewError(400,"Неверный формат")
     kind,key,decision=payload.get("kind"),payload.get("key"),payload.get("decision")
     rid,revision=payload.get("request_id"),payload.get("revision")
-    if kind not in ["term","dispute","name_occurrence"] or not isinstance(key,str) or len(key)>200:
+    if kind not in ["term","dispute","name_occurrence","model_comparison"] or not isinstance(key,str) or len(key)>200:
         raise ReviewError(400,"Неверная запись")
     if not isinstance(rid,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,80}",rid):raise ReviewError(400,"Неверный ID")
-    allowed={"name_occurrence":{"yes","no","unsure","custom","as_heard"},"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom","sentence_primary","sentence_teacher","sentence_custom"}}
+    allowed={"model_comparison":{"primary","candidate","both_bad","equivalent","unsure","custom"},"name_occurrence":{"yes","no","unsure","custom","as_heard"},"term":{"confirm","reject","skip","custom"},"dispute":{"primary","teacher","skip","custom","sentence_primary","sentence_teacher","sentence_custom"}}
     if decision not in allowed[kind]:raise ReviewError(400,"Неверное решение")
     value=payload.get("value","")
-    if not isinstance(value,str) or len(value)>(2048 if decision=="sentence_custom" else 160) or (decision in {"custom","sentence_custom"} and not value.strip()) or any(ord(c)<32 for c in value):
+    if not isinstance(value,str) or len(value)>(2048 if decision=="sentence_custom" or kind=='model_comparison' else 160) or (decision in {"custom","sentence_custom"} and not value.strip()) or any(ord(c)<32 for c in value):
         raise ReviewError(400,"Неверное написание")
     root=Path(root);fd=os.open(root/".lock",os.O_RDWR|os.O_NOFOLLOW)
     connection=None;old=os.umask(0o077)
@@ -264,6 +265,9 @@ def save_feedback(root, payload):
         if kind=="term":
             row=connection.execute("SELECT normalized,display,confirmed FROM terms WHERE normalized=?",(key,)).fetchone()
             if not row:raise ReviewError(404,"Слово не найдено")
+        elif kind=='model_comparison':
+            try:row=model_review.comparison_row(connection,key)
+            except ValueError:raise ReviewError(404,'Сравнение не найдено')
         elif kind=="name_occurrence":
             if not key.isdigit():raise ReviewError(400,"Неверное упоминание")
             row=mention_row(connection,key)
@@ -304,6 +308,8 @@ def save_feedback(root, payload):
             connection.execute("INSERT INTO feedback VALUES(?,?,?,?,?,?)",(rid,kind,key,decision,value.strip(),time.time_ns()))
             if kind=="dispute":
                 connection.execute("INSERT INTO feedback_context VALUES(?,?)",(rid,json.dumps({"scope":"sentence" if decision.startswith("sentence_") else "fragment", "primary":primary,"teacher":teacher,"alignment":alignment},ensure_ascii=False)))
+            if kind=='model_comparison':
+                connection.execute('INSERT INTO feedback_context VALUES(?,?)',(rid,json.dumps({'scope':'whole_audio_model_preference','audio_sha256':row[0],'primary_text':row[1],'candidate_text':row[2],'sample_ids':json.loads(row[3]),'model_sha':row[10],'manifest_sha':row[11],'human_gold':False,'training_approved':False},ensure_ascii=False)))
             if kind=="name_occurrence":
                 shared_time=time.time_ns()
                 for member in members:
@@ -318,6 +324,27 @@ def save_feedback(root, payload):
     finally:
         if connection:connection.close()
         os.close(fd);os.umask(old)
+
+
+def comparison_list(root,query='',page=0,pending=True,filter='priority'):
+    with contextlib.closing(connect(root)) as c:
+        result=model_review.rows(c,query,page,pending,filter)
+        for item in result['items']:
+            path=model_review.frozen_audio_path(root,item['key'])
+            item['audio_available']=path.is_file() and not path.is_symlink()
+        return result
+
+
+def comparison_audio(root,sha):
+    with contextlib.closing(connect(root)) as c:
+        row=model_review.comparison_row(c,sha)
+    path=model_review.frozen_audio_path(root,sha)
+    if path.is_symlink() or not path.is_file():raise ReviewError(404,'Тестовая запись недоступна')
+    info=path.lstat()
+    if info.st_nlink!=1 or info.st_uid!=os.getuid() or info.st_size>11*1024*1024:raise ReviewError(400,'Неверное аудио')
+    data=path.read_bytes()
+    if hashlib.sha256(data).hexdigest()!=sha:raise ReviewError(503,'Хэш тестового аудио изменился')
+    return data
 
 
 def audio_bytes(root,sample):
@@ -354,8 +381,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             self.boundary();parsed=urlparse(self.path);query=parse_qs(parsed.query)
-            if parsed.path in ["/","/index.html","/github","/omarchy","/plugins","/opening","/development","/linux","/app.js","/style.css"]:
-                name={"/":"index.html","/github":"index.html","/omarchy":"index.html","/plugins":"index.html","/opening":"index.html","/development":"index.html","/linux":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
+            if parsed.path in ["/","/index.html","/github","/omarchy","/plugins","/opening","/development","/linux","/nemotron","/app.js","/style.css"]:
+                name={"/":"index.html","/github":"index.html","/omarchy":"index.html","/plugins":"index.html","/opening":"index.html","/development":"index.html","/linux":"index.html","/nemotron":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
                 body=(self.server.assets/name).read_bytes()
                 mime={"index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
                 return self.send(200,body,mime)
@@ -363,6 +390,8 @@ class Handler(BaseHTTPRequestHandler):
             page=int(query.get("page",["0"])[0]);q=query.get("q",[""])[0]
             name_routes={"/api/github":"GitHub","/api/omarchy":"Omarchy","/api/plugins":"плагины","/api/opening":"Смотри","/api/development":"Разработка","/api/linux":"Linux"}
             if parsed.path in name_routes:return self.send(200,name_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1",name_routes[parsed.path]))
+            if parsed.path=='/api/nemotron':return self.send(200,comparison_list(self.server.root,q,page,query.get('pending',['1'])[0]=='1',query.get('filter',['priority'])[0]))
+            if parsed.path.startswith('/comparison-audio/'):return self.send(200,comparison_audio(self.server.root,parsed.path.removeprefix('/comparison-audio/')),'audio/wav')
             if parsed.path=="/api/terms":return self.send(200,term_list(self.server.root,q,page,query.get("filter",["all"])[0]))
             if parsed.path=="/api/disputes":return self.send(200,dispute_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1"))
             if parsed.path.startswith("/audio/"):return self.send(200,audio_bytes(self.server.root,parsed.path.removeprefix("/audio/")),"audio/wav")
