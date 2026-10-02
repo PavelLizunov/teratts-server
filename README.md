@@ -79,6 +79,37 @@ curl -o hello.wav http://127.0.0.1:8088/tts \
 `POST /tts` returns mono 16-bit PCM WAV at 44.1 kHz. The server serializes
 inference because one engine owns the four mutable ONNX Runtime sessions.
 
+### Markdown input
+
+`POST /tts` treats omitted `input_format` as `"markdown"`. Cleanup happens on the
+server for every client, before text-mode processing and synthesis. Headings,
+lists, emphasis, strikethrough, links, images, tables, and code are converted to
+speech text; link/image destinations are omitted while labels are retained.
+Code content is spoken rather than discarded. Task-list prefixes use Russian by
+default or English with `language: "en"`.
+
+```json
+{"text":"## Новости\n\nЭто **важно**: [подробности](https://example.com).","voice":"ru_f1"}
+```
+
+Use `"input_format":"plain"` for text that is already prepared or must not be
+interpreted as Markdown. This bypasses Markdown cleanup, not the subsequent
+language/text-mode validation. The DSH plugin already sends explicit `plain`
+for its prepared synthesis chunks. Explicit `"input_format":"markdown"` also
+remains supported. The CLI `--speak` path is unchanged.
+
+Markdown preparation accepts at most 64 KiB of input and 128 KiB of generated
+text. `/tts` still limits the resulting text to 2,400 characters and rejects
+empty speech text. Inline HTML tags are stripped except supported `<ru>`/`<en>`
+language tags; unsupported block HTML returns HTTP 400 rather than being read.
+Literal Markdown syntax and paragraph punctuation may change during preparation;
+select `plain` when that is undesirable.
+
+`POST /prepare` returns prepared text as JSON without synthesis. Unlike `/tts`,
+its omitted `input_format` remains `"plain"`; send `"markdown"` to request cleanup.
+Its response includes `text`, `output_format`, `preparation_revision`, and
+`warnings`. Empty prepared text is returned with a `no_speakable_content` warning.
+
 ## Optional remote primary with retained local fallback
 
 CPU-only serving is unchanged when `TERATTS_PRIMARY_URL` and
@@ -109,13 +140,15 @@ primary request, and any CPU fallback, replaces the CPU-only 120-second deadline
 Both paths share one admission ticket and active permit. If less than the configured
 primary timeout plus a five-second CPU reserve remains, the primary is skipped;
 this reserve is not a guarantee that every CPU input finishes within five seconds.
-After local authorization
-and request validation, the primary receives the **original raw text** and explicit
-effective voice, language, duration scale, `speech_front`, and `text_mode`.
+After local authorization, Markdown preparation (unless `input_format: "plain"`),
+and request validation, the primary receives the **Markdown-prepared text** (or
+original text for explicit `plain`) and explicit effective voice, language,
+duration scale, `speech_front`, and `text_mode`. Forwarded requests always specify
+`input_format: "plain"` to prevent a second Markdown pass.
 `russian_stress` is forwarded only for Russian; English rejects any explicit
-stress field, even `false`. No lexicon/normalization/conversion is applied locally
-before forwarding. Fallback uses the original local prepared request, not primary
-output, and runs the existing preprocessing exactly once.
+stress field, even `false`. No lexicon/linguistic normalization/conversion is
+applied locally before forwarding. Fallback uses the same local prepared request,
+not primary output, and runs the existing preprocessing exactly once.
 
 At most one primary attempt and one local CPU attempt occur. Primary timeout or
 transport failure can fall back; known backend JSON codes qualify only as
@@ -294,9 +327,16 @@ cargo test --offline --bin teratts-server installed_converter_cross_project -- -
 ## DSH client plugin
 
 `dsh-plugin/` contributes a button to `conversation.chat.assistant-actions`.
-Install it into the DSH Web profile, add the `ui-teratts` row from
-`dsh-plugin/cordis.patch.yml`, rebuild the Web artifacts, and refresh the
-existing DSH URL. Host-owned settings configure the endpoint (default
+Plugin 0.9.2 targets DSH **0.2.0-rc.1**. Pack it with
+`npm pack ./dsh-plugin --ignore-scripts` and install the resulting archive through
+the Harness Plugin Manager (`install_bundle`); the bundle supplies the `ui-teratts`
+row. Keep the archive at a durable path: package-manager updates may need to read
+that local file again. Use the archive, not a directory link: Host dependencies resolve from the
+profile installation, not from the source checkout. Enable that row if an existing profile override disables it. Check the
+installation's `application` result: replacing an installed package can require
+an operator-approved DSH restart, followed by refreshing the existing DSH URL.
+A successful package installation alone does not mean the plugin is active.
+Host-owned row configuration sets the endpoint (default
 `http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
 `https://teratts.tail9fd337.ts.net`). The browser keeps no credentials;
 synthesis routes through the Host plugin. Active playback exposes
@@ -337,9 +377,16 @@ coordinator until an explicit administrative reset or a fresh plugin instance;
 manual synthesis remains available. Error-body reads are limited to 4 KiB.
 
 Run the plugin checks with `node --test dsh-plugin/test/*.test.js` from this
-repository. Runtime integration tests additionally require the pinned local DSH
-installation referenced by their fixtures. Source edits do not activate a new Host
-plugin; deployment and any session-disrupting reload require a separate operation.
+repository. Runtime integration tests use `$DSH_PROFILE_DIR/node_modules`, or
+`DSH_TEST_NODE_MODULES=/absolute/path/to/node_modules` outside a DSH session, and
+verify the declared peers against the actual runtime. DSH 0.2 configuration comes
+from the Loader's `ui-teratts` Config, not the removed `settings.installSection`
+API; changing ordinary configuration remounts the plugin and clears its caches.
+The client supplies strict codec `create()` factories, unwraps the DSH 0.2
+RemoteResult envelope, and has no private Harness UI-module imports. Integration
+tests mount its descriptors through the real Typert Registry and Client Gateway;
+the transport is stubbed, so these tests do not establish live audio playback. Source edits do not activate a new Host plugin; deployment and
+any session-disrupting reload require a separate operation.
 See the [scheduling security review](docs/audits/tts-scheduling-security-2026-09-27.md)
 and [bounded preprocessing experiment](docs/audits/tts-preprocessing-performance-2026-09-27.md)
 for verification evidence and limits; the latter does not measure neural inference speed.

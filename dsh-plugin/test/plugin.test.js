@@ -112,7 +112,7 @@ test("client runtime inject declares only available services", () => {
 test("package bundle inject avoids static shell modules", () => {
   const inject = packageJson.dsh.client.inject;
   for (const name of [
-    "@deepseek-ai/dsh-client-runtime",
+    "@deepseek-ai/dsh-client-ui-renderer",
     "@deepseek-ai/dsh-api-remotes",
     "@deepseek-ai/dsh-client-ui-conversation",
   ]) {

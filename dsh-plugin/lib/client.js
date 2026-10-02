@@ -123,6 +123,15 @@ function cleanMarkdown(text) {
   return sanitizeLanguageTags(unified).replace(/\s+/g, " ").trim();
 }
 
+// DSH 0.2 Remote calls resolve an envelope even for carrier/Host failures.
+function unwrapRemoteResult(result) {
+  if (result?.ok === true && Object.hasOwn(result, "value")) return result.value;
+  if (result?.ok === false && result.error) {
+    throw new Error(result.error.message || "TeraTTS request failed");
+  }
+  throw new Error("Invalid TeraTTS RPC result");
+}
+
 const FIRST_SPEECH_CHUNK_CHARS = 140;
 const SPEECH_RPC_TIMEOUT_MS = 65_000;
 
@@ -357,12 +366,21 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const module = { exports: {} };
     const React = require("react");
-    const {
-      IconLoadingOutline16,
-      IconStopFill16,
-      Toast,
-      Tooltip,
-    } = require("@deepseek-ai/dsh-client-ui-primitives");
+    // Local controls: Harness Client packages are not public module imports.
+    function IconLoadingOutline16(props) {
+      return React.createElement("svg", { ...props, width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true },
+        React.createElement("path", { d: "M8 2a6 6 0 1 1-6 6", fill: "none", stroke: "currentColor", strokeWidth: 1.5 }));
+    }
+    function IconStopFill16() {
+      return React.createElement("svg", { width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true },
+        React.createElement("rect", { x: 3, y: 3, width: 10, height: 10, rx: 1, fill: "currentColor" }));
+    }
+    function Tooltip({ label, children }) {
+      return React.cloneElement(children, { title: label });
+    }
+    function Toast({ text }) {
+      return React.createElement("span", { role: "alert", className: "teratts-error" }, text);
+    }
 
     const textSchema = {
       parse(value) {
@@ -407,7 +425,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:text",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
           ],
@@ -415,7 +433,7 @@ window.__ModuleLoader__.load({
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/synthesize:result",
-            schema: audioSchema,
+            create: () => audioSchema,
           },
         },
         {
@@ -432,7 +450,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -442,14 +460,14 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/acquireForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
         {
@@ -466,7 +484,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -476,14 +494,14 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/renewForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
         {
@@ -500,7 +518,7 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:ownerId",
-                schema: textSchema,
+                create: () => textSchema,
               },
             },
             {
@@ -510,24 +528,21 @@ window.__ModuleLoader__.load({
               codec: {
                 mode: "strict",
                 typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:epoch",
-                schema: anySchema,
+                create: () => anySchema,
               },
             },
           ],
           result: {
             mode: "strict",
             typeSymbol: "dsh-client-ui-teratts#terattsVoice/releaseForeground:result",
-            schema: anySchema,
+            create: () => anySchema,
           },
         },
       ],
     };
 
-    const styleId = "dsh-client-ui-teratts/action";
-    if (!document.querySelector(`style[data-plugin-css=${JSON.stringify(styleId)}]`)) {
-      const style = document.createElement("style");
-      style.dataset.plugin = "dsh-client-ui-teratts";
-      style.dataset.pluginCss = styleId;
+    function PlaybackStyles() {
+      const style = { textContent: "" };
       style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
       style.textContent += '[class*="_actions"]:has(.teratts-player){height:auto!important;min-height:calc(28px + var(--dsh-content-font-delta,0px));overflow:visible!important;flex-wrap:wrap!important;align-items:flex-start!important}';
       style.textContent += ".teratts-player{flex-basis:100%;width:100%;max-width:440px;order:10;margin:6px 0 2px 0;padding:8px 12px 6px 12px;background:var(--dsw-alias-bubble-secondary,rgba(125,125,125,0.08));border:1px solid var(--dsw-alias-border-l3,rgba(125,125,125,0.18));border-radius:14px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}";
@@ -538,7 +553,8 @@ window.__ModuleLoader__.load({
       style.textContent += ".teratts-progress{min-height:32px;cursor:pointer;accent-color:var(--dsw-alias-label-primary);margin:0}.teratts-progress{min-height:44px}.teratts-action:focus-visible,.teratts-play-btn:focus-visible,.teratts-pill-btn:focus-visible,.teratts-progress:focus-visible{outline:2px solid currentColor;outline-offset:2px}";
       style.textContent += ".teratts-pinned{position:fixed!important;left:12px!important;right:12px!important;bottom:var(--teratts-composer-offset,calc(var(--dsh-composer-height,80px) + 12px))!important;width:auto!important;max-width:440px!important;margin:0 auto!important;z-index:1000!important;box-shadow:0 8px 32px rgba(0,0,0,0.32)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;background:var(--dsw-specific-menu,rgba(28,28,30,0.92))!important;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.16))!important;border-radius:16px!important;padding:10px 14px 8px 14px!important;pointer-events:auto!important;animation:teratts-pop-in .18s cubic-bezier(0.16,1,0.3,1)}@media(min-width:601px){.teratts-pinned{left:auto!important;right:24px!important;width:380px!important;margin:0!important}}@keyframes teratts-pop-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}";
       style.textContent += "@media(max-width:600px),(pointer:coarse){.teratts-play-btn{width:44px;height:44px;min-width:44px}.teratts-pill-btn{min-width:44px;min-height:44px;border-radius:22px;font-size:13px;padding:0 12px}}@media(prefers-reduced-motion:reduce){.teratts-loading{animation:none}}";
-      document.head.appendChild(style);
+      style.textContent += ".teratts-error{color:var(--dsw-alias-label-primary);font-size:12px;max-width:280px;white-space:normal}";
+      return React.createElement("style", null, style.textContent);
     }
 
     function messageText(snapshot, messageId) {
@@ -1031,11 +1047,6 @@ window.__ModuleLoader__.load({
       return value;
     }
 
-    let ReactDOM = null;
-    try {
-      ReactDOM = require("react-dom");
-    } catch (_) {}
-
     function PlayIcon() {
       return React.createElement(
         "svg",
@@ -1263,27 +1274,19 @@ window.__ModuleLoader__.load({
         ),
       );
 
-      const usePortal = typeof document !== "undefined" && document.body && ReactDOM && typeof ReactDOM.createPortal === "function" && typeof window !== "undefined" && !globalThis.__teratts_testNoPortal;
-      if (usePortal) {
-        return React.createElement(
-          React.Fragment,
-          null,
-          actionButton,
-          ReactDOM.createPortal(playerCard, document.body),
-        );
-      }
-      return playerCard;
+      return React.createElement(React.Fragment, null, actionButton, playerCard);
     }
 
     const inject = ["remote", "slots"];
     async function apply(ctx) {
-      let disposeRemote = null;
-      try {
-        disposeRemote = await ctx.remote.$mount(REMOTE);
-      } catch (error) {
-        console.error("[dsh-client-ui-teratts] remote mount failed:", error);
-      }
-      const voice = ctx.get("remote.terattsVoice");
+      // Do not register a dead action when the runtime rejects our descriptors.
+      const disposeRemote = await ctx.remote.$mount(REMOTE);
+      const remoteVoice = ctx.get("remote.terattsVoice");
+      const voice = remoteVoice && Object.fromEntries(
+        ["synthesize", "acquireForeground", "renewForeground", "releaseForeground"].map((method) => [
+          method, async (...args) => unwrapRemoteResult(await remoteVoice[method](...args)),
+        ]),
+      );
       const disposeSlot = ctx.slots.inject("conversation.chat.assistant-actions", () =>
         ctx.slots.register(
           {
@@ -1292,10 +1295,10 @@ window.__ModuleLoader__.load({
             order: 20,
           },
           (props) =>
-            React.createElement(TeraTtsAction, {
-              ...props,
-              voice,
-            }),
+            React.createElement(React.Fragment, null,
+              React.createElement(PlaybackStyles),
+              React.createElement(TeraTtsAction, { ...props, voice }),
+            ),
         ),
       );
       return async () => {

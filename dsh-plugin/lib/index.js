@@ -15,7 +15,6 @@ import {
   waitForSharedJob,
 } from "./coordinator.js";
 
-const SETTINGS_NAMESPACE = "teratts";
 const DEFAULT_TOKEN_REF = "TERATTS_TOKEN";
 export const MAX_RESPONSE_BYTES = 16 * 1024 * 1024; // 16 MiB
 
@@ -711,39 +710,14 @@ export function apply(ctx, config = {}) {
     tokenEnv: config.tokenEnv ?? DEFAULT_TOKEN_REF,
     prepareMode: config.prepareMode ?? "off",
   };
-  let current = () => base;
-  const service = new TeraTtsVoiceService(ctx, () => current());
-  ctx.on("dispose", () => {
+  // DSH 0.2 reads ordinary Config from the Loader; configuration changes remount
+  // this instance, disposing its caches and in-flight work with the old config.
+  const current = () => base;
+  const service = new TeraTtsVoiceService(ctx, current);
+  ctx.effect(() => () => {
     service.coordinator.dispose();
     for (const job of service.foregroundJobs.values()) job.controller.abort();
   });
-
-  const installSection = (settingsService) => {
-    settingsService.installSection(ctx, SETTINGS_NAMESPACE, Config, base, {
-      setSource(source) {
-        current = source;
-        service.cache.clear();
-        service.preparedTextCache.clear();
-      },
-      onChange() {
-        service.cache.clear();
-        service.preparedTextCache.clear();
-      },
-    });
-  };
-
-  if (typeof ctx.inject === "function") {
-    ctx.inject(["settings"], (settingsCtx) => {
-      if (settingsCtx.settings && typeof settingsCtx.settings.installSection === "function") {
-        installSection(settingsCtx.settings);
-      }
-    });
-  } else {
-    const settingsService = ctx.get ? ctx.get("settings") : ctx.settings;
-    if (settingsService && typeof settingsService.installSection === "function") {
-      installSection(settingsService);
-    }
-  }
 
   const onSessionEvent = preparationListener(service, () => current());
   ctx.on("session/event", (session, event) => {

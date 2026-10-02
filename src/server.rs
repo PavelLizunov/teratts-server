@@ -260,8 +260,12 @@ pub struct TtsRequest {
     #[serde(default)]
     pub speech_front: Option<bool>,
     pub text_mode: Option<TextMode>,
-    #[serde(default)]
+    #[serde(default = "default_tts_input_format")]
     pub input_format: InputFormat,
+}
+
+fn default_tts_input_format() -> InputFormat {
+    InputFormat::Markdown
 }
 
 #[derive(Debug, Deserialize)]
@@ -822,6 +826,8 @@ async fn primary_audio(
     }
     let forward = ForwardRequest {
         text: raw_text,
+        // The gateway already prepared Markdown, or the caller explicitly opted out.
+        input_format: InputFormat::Plain,
         voice: &prepared.voice,
         language: prepared.language.as_str(),
         duration_scale: prepared.scale,
@@ -2323,6 +2329,94 @@ mod tests {
 
         // Before entering linguistic frontend / sampler, both paths receive identical prepared text!
         assert_eq!(prepared_from_md.text, prepared_from_plain.text);
+    }
+
+    fn markdown_test_state(primary: Option<RemotePrimary>) -> Arc<AppState> {
+        Arc::new(AppState {
+            pool: Arc::new(Vec::new()), // Tests must never reach real inference.
+            voices: vec!["ru_f1".into(), "eng_f3".into()],
+            manifest: Manifest::pinned().unwrap(),
+            release: PathBuf::new(),
+            admission: Admission::new(),
+            markdown_admission: MarkdownAdmission::new(),
+            bearer_token: Some("test-token".into()),
+            ruaccent_mode: "disabled".into(),
+            ruaccent_ready: false,
+            speech_front_default: false,
+            lexicon: LexiconReload::new(None).unwrap(),
+            text_config: russian_only::Config {
+                default_mode: TextMode::Compatible,
+                converter: None,
+            },
+            primary,
+        })
+    }
+
+    fn markdown_test_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer test-token"));
+        headers
+    }
+
+    #[test]
+    fn input_format_defaults_are_endpoint_specific() {
+        let body = r#"{"text":"**Привет**"}"#;
+        assert_eq!(serde_json::from_str::<TtsRequest>(body).unwrap().input_format, InputFormat::Markdown);
+        assert_eq!(serde_json::from_str::<PrepareRequest>(body).unwrap().input_format, InputFormat::Plain);
+        for invalid in ["null", "\"auto\"", "true"] {
+            let body = format!(r#"{{"text":"test","input_format":{invalid}}}"#);
+            assert!(serde_json::from_str::<TtsRequest>(&body).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn tts_markdown_default_reaches_primary_once_and_plain_bypasses_cleanup() {
+        use crate::remote_primary::tests::{mock, response};
+        let md = "# Тест\n\nЭто **важно** и [ссылка](https://example.com).";
+        for (format, text, language, expected) in [
+            (None, md, "ru", "Тест. Это важно и ссылка."),
+            (Some("markdown"), md, "ru", "Тест. Это важно и ссылка."),
+            (Some("plain"), "**буквально** `код`", "ru", "**буквально** `код`"),
+            (None, "- [x] Done", "en", "Completed: Done."),
+            (None, "Привет, мир!", "ru", "Привет, мир!"),
+        ] {
+            let audio = wav::encode_mono_i16(&[vec![0.0, 0.25]]).unwrap();
+            let (primary, server) = mock(response(200, "audio/wav", "compatible", &audio), Duration::ZERO, 1000).await;
+            let mut body = serde_json::json!({
+                "text": text, "language": language,
+                "voice": if language == "en" { "eng_f3" } else { "ru_f1" }
+            });
+            if let Some(format) = format {
+                body["input_format"] = format.into();
+            }
+            let input = serde_json::from_value(body).unwrap();
+            let result = tts(State(markdown_test_state(Some(primary))), markdown_test_headers(), Ok(Json(input))).await.unwrap();
+            assert_eq!(result.status(), StatusCode::OK);
+            let actual_audio = axum::body::to_bytes(result.into_body(), 1024).await.unwrap();
+            assert_eq!(actual_audio.as_ref(), audio.as_slice());
+            let received = server.await.unwrap();
+            let split = received.windows(4).position(|v| v == b"\r\n\r\n").unwrap() + 4;
+            let forwarded: serde_json::Value = serde_json::from_slice(&received[split..]).unwrap();
+            assert_eq!(forwarded["text"], expected);
+            assert_eq!(forwarded["input_format"], "plain");
+        }
+    }
+
+    #[tokio::test]
+    async fn tts_default_markdown_rejects_invalid_content_before_inference() {
+        for text in [
+            "---".to_string(),
+            "x".repeat(crate::markdown_speech::MAX_INPUT_BYTES + 1),
+            "x".repeat(MAX_TEXT_CHARS + 1),
+            "<div>\nunsupported\n</div>".to_string(),
+        ] {
+            let input = serde_json::from_value(serde_json::json!({"text": text})).unwrap();
+            let error = tts(State(markdown_test_state(None)), markdown_test_headers(), Ok(Json(input))).await.unwrap_err();
+            assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        }
+        let input = serde_json::from_value(serde_json::json!({"text": "<div>\nunsupported\n</div>"})).unwrap();
+        let error = tts(State(markdown_test_state(None)), HeaderMap::new(), Ok(Json(input))).await.unwrap_err();
+        assert_eq!(error.status, StatusCode::UNAUTHORIZED);
     }
 
     #[test]

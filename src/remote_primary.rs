@@ -24,6 +24,7 @@ pub(crate) struct RemotePrimary {
 #[derive(Serialize)]
 pub(crate) struct ForwardRequest<'a> {
     pub text: &'a str,
+    pub input_format: crate::markdown_speech::InputFormat,
     pub voice: &'a str,
     pub language: &'static str,
     pub duration_scale: f32,
@@ -352,6 +353,7 @@ pub(crate) mod tests {
     fn forward() -> ForwardRequest<'static> {
         ForwardRequest {
             text: "  <en>Widget 15%</en>  ",
+            input_format: crate::markdown_speech::InputFormat::Plain,
             voice: "eng_f3",
             language: "en",
             duration_scale: 1.25,
@@ -548,7 +550,7 @@ pub(crate) mod tests {
         let json: serde_json::Value = serde_json::from_slice(&request[split..]).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"text":"  <en>Widget 15%</en>  ","voice":"eng_f3","language":"en","duration_scale":1.25,"speech_front":false,"text_mode":"compatible"})
+            serde_json::json!({"text":"  <en>Widget 15%</en>  ","input_format":"plain","voice":"eng_f3","language":"en","duration_scale":1.25,"speech_front":false,"text_mode":"compatible"})
         );
     }
 
