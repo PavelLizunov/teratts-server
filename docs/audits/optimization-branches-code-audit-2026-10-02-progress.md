@@ -1,0 +1,62 @@
+# Whole-code audit progress (not a final report)
+
+## Snapshot
+
+Main: `d937a90778824d1cb564a187f351ff400877cae8`. Audit branch: `task/optimization-branches-code-audit-20261002`. Inspection is read-only for source and deployment. No fixes, merges, deployments or benchmark campaigns are authorized by this audit.
+
+## Branch map (initial fetched snapshot)
+
+Counts are `main-only / branch-only`, not a claim of distinct code patches.
+
+| Ref | Tip | Counts | Status |
+|---|---|---|---|
+| local agent/speech-front-remediation | 84cd6bc | 10 / 0 | Fully in main; old origin branch deleted |
+| local feat/phase3-markdown-preparation | 715a117 | 23 / 0 | Fully in main despite ahead of old upstream |
+| fix/server-markdown-default (local/origin) | e49dfd7 | 1 / 0 | Merged PR #5 |
+| fix/tts-dsh-020-compatibility (local/origin) | cfa3259 | 6 / 0 | In main |
+| local main | 5c015f4 | 10 / 0 | Behind GitHub main; untouched |
+| perf-autoresearch/teratts-opt (local/origin) | 0d414b8 | 54 / 8 | Experimental branch requires net-change review |
+| perf/phase2-cpu-tuning (local/origin) | 792941f | 29 / 0 | Fully in main |
+| origin/agent/speech-front-integration | 12c305a | 19 / 1 | Unique history, but main has its own current lexicon reload implementation; compare contracts rather than blindly merge |
+| origin/agent/speech-latency-gpu | eea5255 | 1 / 0 | Fully in main |
+| origin/feat/phase3-markdown-preparation | a3bdbf2 | 29 / 0 | Fully in main |
+| origin/task/private-voice-deep-hooks | be99bc7 | 4 / 21 | Separate substantial feature history: 73 files, approx. 5,523 added lines, not simply optimization |
+
+Private-voice branch moved during earlier fetches. Review must pin `be99bc74a13637b15cffbfb4ccc929b587cd71a7` and record changes at final refresh. Includes STT plugins, Steam Deck launcher/runtime, audio health, teacher tooling and local converter code. All these branch-owned sources need an explicit coverage slice; they are not covered by inspecting only main's 19 Rust modules.
+
+Autoresearch net patch includes eager style tensor loading, speechfront initialization, changed CPU/memory service quotas, standalone benchmark/quality evaluator, and browser helper changes. The buffer reuse commit is reverted within the branch. The `ruaccent` change merely names the same single `to_lowercase()` expression before lookup, so no speedup is established by the patch itself. Eager style loading is not an ONNX session warmup.
+
+## Read coverage so far
+
+- Main production: server lines 1–1189; primary lines 1–354; tera lines 1–889; main lines 1–250; full downloader, manifest, execution_provider, chunk, indexer, npy, rng, wav.
+- Speech: ruaccent 1–939; russian_only 1–524; speechfront 1–300; textnorm 1–280; full markdown_speech.
+- Plugin: index 1–569 and historical lifecycle inspection; full coordinator and speech-text; browser full-diff integration review but whole-module coverage remains pending.
+- Documentation: README 1–260, performance and single-user task specs, preprocessing performance report, current deployment service and ORT artifact pin.
+- Tools: quantize_int8 inspected. Deployment functions, remaining tools/evaluators, full tests and private-voice sources still pending.
+- This is an inspection ledger, not proof all code has been audited or all apparent problems are real.
+
+## Candidate issues to validate before reporting
+
+1. Rust `chunk::hard_split` does not split a single word longer than 120 chars, and sentence splitting is not language-tag aware. Check CLI/server call contracts and existing tag tests before assessing correctness or actual cost.
+2. `/tts` computes synthesis revision before refreshing lexicon (server 618 vs. 643); remote audio is labeled using gateway-local revision (server 818–824). Check cache freshness/primary ownership and reproduce without neural inference.
+3. `LexiconReload::revision` hashes last approved raw lexicon, while startup/failed refresh can use builtin; evaluate whether revisions change with effective normalizer and whether plugin health refresh can detect edits without uncached synthesis.
+4. `speechChunkLimits` validates first/next but not second size; determine reachable config surface, then classify as minor validation debt if only trusted internal use.
+5. `prepareConfigured` calls unbounded `response.json()` unlike bounded audio/error readers; inspect endpoint trust and public Remote exposure before judging severity.
+6. Prepared-text cache key includes current revision before discovery, while returned revision can change; check warmup/invalidation semantics and test a changing preparation backend before claiming a bug.
+7. RUAccent classifier tensors copy inputs/outputs and omograph contexts clone token vectors; these are performance candidates only, not confirmed bottlenecks. Preserve pinned Python parity.
+8. INT8 calibration tool builds random arrays without setting text_mask to ones and accepts arbitrary sorted tensor-name npz dictionaries. Inspect correctness, quality gates and user-facing docs. Do not quantize or benchmark during audit.
+
+## Upstream research (fresh HTTP responses)
+
+- [ONNX Runtime latest release API](https://api.github.com/repos/microsoft/onnxruntime/releases/latest) returned stable [1.30.0](https://github.com/microsoft/onnxruntime/releases/tag/v1.30.0), published 2026-09-10. Repo deployment artifact pin remains 1.27.0. Release notes include AVX2 LayerNorm/RMSNorm and NCHWc thread improvements plus reliability fixes. This warrants a compatibility/quality benchmark proposal, not an automatic update or promised speedup; GenAI KV cache features do not directly apply to this diffusion TTS pipeline.
+- [ort release API](https://api.github.com/repos/pykeio/ort/releases/latest) returned [2.0.0-rc.13](https://github.com/pykeio/ort/releases/tag/v2.0.0-rc.13), same as repo pin, API 27. Verify runtime backward API compatibility before proposing a newer dynamic library.
+- [TeraTTSv2 model API](https://huggingface.co/api/models/TeraSpace/TeraTTSv2) returned SHA `f05ea799094571a3553904a555df3834fb0b963b`, identical to repo pin. No newer revision is established for this model.
+- General web search failed HTTP 402 (search endpoint balance). Configuration/credentials were not changed; primary URL fetches work and research continues through upstream APIs/docs. This is a coverage limitation for broad discovery, not a task blocker.
+
+## Verification state
+
+Previous integration task on identical main production source passed 126 Node tests, syntax/diff checks and reused recorded 146-pass/4-ignored Rust evidence. This audit has not yet executed additional checks. Cargo/rustc/shellcheck absent on current PATH; Python and Node are present. No independent worker review was dispatched because no explicitly pinned Gemini/Opus route is available and workflow orchestration was not requested.
+
+## Next work
+
+Finish production read coverage and validate candidate issues; inspect all unmerged branch sources by pinned snapshot; run safe isolated/local checks; expand primary-source dependency and technology research; synthesize confirmed findings and an actionable prioritized report. Refresh refs and publish final documents/evidence only.
