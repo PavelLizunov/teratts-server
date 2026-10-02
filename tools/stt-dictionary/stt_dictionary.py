@@ -4,11 +4,12 @@ import hashlib
 from pathlib import Path
 import re
 
-RULE_ID = "personal-spelling-v2"
+RULE_ID = "personal-spelling-v3"
 BOUND_LEFT=r"(?<![\w/@.\\+\-])"
 BOUND_RIGHT=r"(?![\w/@\\+\-]|\.[\w])"
 GITHUB=re.compile(BOUND_LEFT+r"(?:github|git[ \t]+hub|гитхап|гитхаба?|гетхаб|гитха|гетха|гит[ \t]+хаб)"+BOUND_RIGHT,re.I)
 OMARCHY=re.compile(BOUND_LEFT+r"(?:omarchy|омарчи|умрчи)"+BOUND_RIGHT,re.I)
+PLUGIN=re.compile(BOUND_LEFT+r"(?:плагин(?:а|у|ом|е|ы|ов|ам|ами|ах)?|plugins?)"+BOUND_RIGHT,re.I)
 PROTECTED = re.compile(
     r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)"
     r"|https?://[^\s<>]+|[\w.+-]+@[\w.-]+"
@@ -34,6 +35,10 @@ def normalize_omarchy(text):
     return replace_exact(text,OMARCHY,"Omarchy","omarchy-spelling-v1")
 
 
+def normalize_plugin(text):
+    return replace_exact(text,PLUGIN,"plugin","plugin-canonical-v1")
+
+
 def apply_dictionary(text,config_path,requested=True):
     if not requested:return text,{"status":"request_disabled","rule":RULE_ID,"changes":[]}
     try:
@@ -43,7 +48,7 @@ def apply_dictionary(text,config_path,requested=True):
         if not isinstance(config,dict):raise ValueError("Invalid config")
     except (OSError,ValueError,TypeError):return text,{"status":"config_unavailable","rule":RULE_ID,"changes":[]}
     active=[];changes=[]
-    for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy)]:
+    for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy),("plugin",normalize_plugin)]:
         if config.get(name) is True:
             active.append(name);text,updates=normalizer(text);changes.extend(updates)
     return text,{"status":"applied" if changes else "unchanged" if active else "config_disabled",

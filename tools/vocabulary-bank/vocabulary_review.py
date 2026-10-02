@@ -249,6 +249,8 @@ def save_feedback(root, payload):
         elif kind=="name_occurrence":
             if not key.isdigit():raise ReviewError(400,"Неверное упоминание")
             row=mention_row(connection,key)
+            if row[3]=='Смотри' and decision=='yes':
+                raise ReviewError(400,"Для начала фразы выбери явно Ну/Смотри, исходное слово или своё написание")
             if row[3] in technical_terms.TOPICS and decision=='yes':
                 raise ReviewError(400,"Для тематической карточки выбери точное слово или своё написание")
         else:

@@ -48,4 +48,8 @@ Topic cards show exact suggestions (pull vs pool), original-as-heard, not-techni
 
 Final audit: all 5664 archives current-version scanned,892 STT records, Development91 mentions in59 raw documents/Linux15 in15 documents,98 feedback preserved. Twenty-nine tests passed, live Chromium distinct pull/pool/search/mobile/JS and synthetic-only exact pull decision+reload+cleanup verified. Main voice PID1996400 unchanged, review-only deployment. Private docs in Model Forge docs/developer-linux-review.md.
 
+### Opening feedback intent repair
+
+Previous opening UI generic yes falsely suggested that every Ну meant Смотри. User clarified intent. Append-only repair_opening_intent.py supersedes only latest yes-on-Ну with explicit custom Ну, retains originals and skips no/unsure/custom/later human decisions. Five repaired, second run zero, original five audit rows retained. New buttons distinguish Ну, Смотри and suspected Maria; server refuses generic yes for opening queue. No raw speech correction or cleanup activation follows from these feedback changes. Two dedicated tests plus regressions/live mobile labels verified. No private feedback IDs/content in source backup.
+
 No million-word prompt: future hints must be bounded to relevant terms. No mass dictionary download or filler creation. The full private operating report stays in Model Forge docs/vocabulary-bank.md, outside this repository.

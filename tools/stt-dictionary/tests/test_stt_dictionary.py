@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from stt_dictionary import normalize_github,normalize_omarchy,apply_dictionary,clean_opening
+from stt_dictionary import normalize_github,normalize_omarchy,normalize_plugin,apply_dictionary,clean_opening
 
 class Tests(unittest.TestCase):
     def test_explicit_variants_and_repetitions(self):
@@ -52,5 +52,16 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/"rule.json";p.write_text('{"github":false,"omarchy":true}')
             self.assertEqual(apply_dictionary("гитха Омарчи",p)[0],"гитха Omarchy")
+    def test_plugin_all_inflections_intentionally_collapsed(self):
+        forms='плагин плагина плагину плагином плагине плагины плагинов плагинам плагинами плагинах Plugin plugins'
+        text,changes=normalize_plugin(forms)
+        self.assertEqual(text,' '.join(['plugin']*12));self.assertEqual(len(changes),12)
+        for original in ['плагинный','плагинок','плаги','./плагин','/tmp/plugins','https://x.test/plugin','plugin_name','`плагины`','plugins/foo']:
+            self.assertEqual(normalize_plugin(original),(original,[]))
+    def test_plugin_config_and_optout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)/'r.json';p.write_text('{"plugin":true}')
+            self.assertEqual(apply_dictionary('два плагина и GitHub',p)[0],'два plugin и GitHub')
+            self.assertEqual(apply_dictionary('плагины',p,False)[0],'плагины')
     def test_empty_input(self):self.assertEqual(normalize_github(""),("",[]))
 if __name__=="__main__":unittest.main(verbosity=2)
