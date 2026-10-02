@@ -3,7 +3,8 @@ from difflib import SequenceMatcher
 import hashlib
 import re
 
-VERSION = "github-evidence-v1"
+VERSION = "personal-evidence-v2"
+CANONICALS = ("GitHub", "Omarchy", "плагины", "Смотри")
 MAX_TEXT = 32768
 TOKENS = re.compile(r"[^\W_]+", re.UNICODE)
 PROTECTED = re.compile(r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)|https?://[^\s<>]+|\b[\w.-]+\.[a-z]{2,}(?:/\S*)?", re.I)
@@ -15,8 +16,35 @@ def fold(word):
     return word.translate(table)
 
 
+def other_candidates(text,canonical):
+    if canonical not in CANONICALS or not isinstance(text,str):return []
+    text=text[:MAX_TEXT];protected=[m.span() for m in PROTECTED.finditer(text)];result=[]
+    for index,token in enumerate(TOKENS.finditer(text)):
+        word=token.group().casefold();reason=None;label="suspected"
+        if canonical=="Omarchy":
+            if word in ["omarchy","омарчи","умрчи","омарче","амарча","омарча","омарки","амарчи"]:
+                reason="Omarchy или близкое написание названия ОС";label="likely"
+            elif word in ["мерч","мерче","марчи","морчи","омарч","амарче"]:
+                reason="Возможна Omarchy, но также обычный мерч";label="ambiguous"
+        elif canonical=="плагины":
+            if re.fullmatch(r"плагин(?:ы|а|у|ом|ов|ам|ами|ах)?",word):
+                reason="Форма слова «плагин» — проверь, что услышано верно";label="likely"
+            elif word.startswith(("плаг","плог","plug")):
+                reason="Усечённое/похожее слово; число и падеж неизвестны";label="ambiguous"
+        elif canonical=="Смотри" and index==0:
+            if word in ["мария","марий","смария"]:
+                reason="В начале могло быть «смотри», но это также имя";label="ambiguous"
+            elif word in ["смотри","смотрите","ну","слушай"]:
+                reason="Вводное слово или содержательная команда — не удалять вслепую";label="ambiguous"
+        if reason and not any(a<token.end() and b>token.start() for a,b in protected):
+            result.append({"start":token.start(),"end":token.end(),"surface":token.group(),"reason":reason,"label":label})
+        if len(result)>=100:break
+    return result
+
+
 def candidates(text, canonical="GitHub"):
-    if canonical!="GitHub" or not isinstance(text,str):return []
+    if canonical!="GitHub":return other_candidates(text,canonical)
+    if not isinstance(text,str):return []
     text=text[:MAX_TEXT];tokens=list(TOKENS.finditer(text));protected=[m.span() for m in PROTECTED.finditer(text)]
     result=[];used=set()
     for index,token in enumerate(tokens):
@@ -64,12 +92,13 @@ def import_evidence(connection,source,metadata):
     if not (isinstance(rid,str) and rid.startswith("synthetic")):
         for stage,text,sample in stages(metadata):
             if not isinstance(text,str):continue
-            text=text[:MAX_TEXT];mentions=candidates(text)
-            if not mentions:continue
-            digest=hashlib.sha256(text.encode()).hexdigest()
-            connection.execute("INSERT OR IGNORE INTO name_documents VALUES(?,?,?,?,?)",(source,stage,text,sample,digest))
-            for m in mentions:
-                connection.execute("INSERT OR IGNORE INTO name_mentions(source,stage,canonical,start,end,surface,reason,label) VALUES(?,?,?,?,?,?,?,?)",
-                    (source,stage,"GitHub",m["start"],m["end"],m["surface"],m["reason"],m["label"]))
+            text=text[:MAX_TEXT];digest=hashlib.sha256(text.encode()).hexdigest()
+            for canonical in CANONICALS:
+                mentions=candidates(text,canonical)
+                if not mentions:continue
+                connection.execute("INSERT OR IGNORE INTO name_documents VALUES(?,?,?,?,?)",(source,stage,text,sample,digest))
+                for m in mentions:
+                    connection.execute("INSERT OR IGNORE INTO name_mentions(source,stage,canonical,start,end,surface,reason,label) VALUES(?,?,?,?,?,?,?,?)",
+                        (source,stage,canonical,m["start"],m["end"],m["surface"],m["reason"],m["label"]))
     connection.execute("INSERT INTO name_scans VALUES(?,?) ON CONFLICT(source) DO UPDATE SET version=excluded.version",(source,VERSION))
     return True

@@ -1,6 +1,9 @@
 {
   "github": true,
-  "rule": "github-spelling-v1",
-  "authorization": "user_requested_GitHub_only",
-  "other_terms": false
+  "omarchy": true,
+  "rule": "personal-spelling-v2",
+  "authorization": "user_confirmed_GitHub_variants_and_requested_Omarchy",
+  "plugins_auto_correction": false,
+  "maria_auto_correction": false,
+  "cleanup_default": false
 }

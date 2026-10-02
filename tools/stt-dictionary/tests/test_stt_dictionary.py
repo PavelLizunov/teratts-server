@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from stt_dictionary import normalize_github,apply_dictionary
+from stt_dictionary import normalize_github,normalize_omarchy,apply_dictionary,clean_opening
 
 class Tests(unittest.TestCase):
     def test_explicit_variants_and_repetitions(self):
@@ -34,5 +34,23 @@ class Tests(unittest.TestCase):
             self.assertEqual(apply_dictionary("Гитхап",p)[1]['status'],'config_unavailable')
             p.unlink()
             self.assertEqual(apply_dictionary("Гитхап",p)[0],"Гитхап")
+    def test_confirmed_github_additions_and_ambiguity(self):
+        self.assertEqual(normalize_github("гитха гетха Гетхаб Гитхаба git hub")[0],"GitHub GitHub GitHub GitHub GitHub")
+        for text in ["git gitab hub git GitLab", "git hub/repo", "`гетха`"]:
+            self.assertEqual(normalize_github(text),(text,[]))
+    def test_omarchy_and_unrelated_merch(self):
+        self.assertEqual(normalize_omarchy("Плагины для Омарчи и Умрчи, omarchy.")[0],"Плагины для Omarchy и Omarchy, Omarchy.")
+        for text in ["Я купил мерч", "Мария пишет плагины", "https://omarchy.org", "./omarchy", "omarchy_plugin"]:
+            self.assertEqual(normalize_omarchy(text),(text,[]))
+    def test_cleanup_opt_in_and_semantics(self):
+        text="Ну, смотри, плагины для Omarchy работают."
+        self.assertEqual(clean_opening(text)[0],text)
+        self.assertEqual(clean_opening(text,True)[0],"плагины для Omarchy работают.")
+        for text in ["Мария, посмотри плагины", "Смотри фильм", "Ну и что?", "Смотри, фильм", "Смотри", "`Ну, слово`", "Там, ну, плагины"]:
+            self.assertEqual(clean_opening(text,True)[0],text)
+    def test_rules_independent_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)/"rule.json";p.write_text('{"github":false,"omarchy":true}')
+            self.assertEqual(apply_dictionary("гитха Омарчи",p)[0],"гитха Omarchy")
     def test_empty_input(self):self.assertEqual(normalize_github(""),("",[]))
 if __name__=="__main__":unittest.main(verbosity=2)

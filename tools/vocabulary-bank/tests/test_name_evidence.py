@@ -49,6 +49,17 @@ class Tests(unittest.TestCase):
             try:self.assertFalse(json.loads(c.execute('select context_json from feedback_context').fetchone()[0])['alias_approved'])
             finally:c.close()
             self.assertTrue(review.save_feedback(root,payload)['duplicate'])
+    def test_omarchy_plugins_opening_separate_queues(self):
+        self.assertEqual(evidence.candidates('Для Омарчи плагины',canonical='Omarchy')[0]['surface'],'Омарчи')
+        self.assertEqual(evidence.candidates('Напиши плагинок',canonical='плагины')[0]['label'],'ambiguous')
+        self.assertEqual(evidence.candidates('Мария всякое декодирование возможно?',canonical='Смотри')[0]['surface'],'Мария')
+        self.assertFalse(evidence.candidates('Там была Мария',canonical='Смотри'))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'c';corpus=Corpus(root,min_free_bytes=0)
+            corpus.save(b'audio',{'kind':'stt','raw_text':'Мария напиши плагины для Умрчи','final_text':'x'})
+            bank.collect(root,idle_seconds=0)
+            for name in ['Omarchy','плагины','Смотри']:self.assertEqual(review.name_list(root,canonical=name)['total'],1)
+            self.assertEqual(review.name_list(root)['total'],0)
     def test_existing_source_still_audited(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'c';corpus=Corpus(root,min_free_bytes=0)

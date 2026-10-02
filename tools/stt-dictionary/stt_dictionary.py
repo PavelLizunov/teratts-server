@@ -1,12 +1,14 @@
-"""One explicitly user-approved STT spelling rule; no fuzzy matching/inference."""
+"""Explicit approved spellings and optional leading filler cleanup, no inference."""
 import json
 import hashlib
 from pathlib import Path
 import re
 
-RULE_ID = "github-spelling-v1"
-MATCH = re.compile(r"(?<![\w/@.\\+\-])(?:github|гитхап|гитхаб|гит[ \t]+хаб)(?![\w/@\\+\-]|\.[\w])", re.IGNORECASE)
-# Don't reinterpret URLs, paths, emails, markdown link destinations or code.
+RULE_ID = "personal-spelling-v2"
+BOUND_LEFT=r"(?<![\w/@.\\+\-])"
+BOUND_RIGHT=r"(?![\w/@\\+\-]|\.[\w])"
+GITHUB=re.compile(BOUND_LEFT+r"(?:github|git[ \t]+hub|гитхап|гитхаба?|гетхаб|гитха|гетха|гит[ \t]+хаб)"+BOUND_RIGHT,re.I)
+OMARCHY=re.compile(BOUND_LEFT+r"(?:omarchy|омарчи|умрчи)"+BOUND_RIGHT,re.I)
 PROTECTED = re.compile(
     r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)"
     r"|https?://[^\s<>]+|[\w.+-]+@[\w.-]+"
@@ -14,36 +16,51 @@ PROTECTED = re.compile(
     r"|\b[\w-]+(?:[./\\][\w.-]+)+", re.IGNORECASE)
 
 
-def normalize_github(text):
-    protected = [match.span() for match in PROTECTED.finditer(text)]
-    changes = []
+def replace_exact(text,pattern,canonical,rule):
+    protected=[m.span() for m in PROTECTED.finditer(text)];changes=[]
     def replace(match):
-        if any(start < match.end() and end > match.start() for start, end in protected):
-            return match.group()
-        if match.group() == "GitHub":
-            return match.group()
-        changes.append({"rule": RULE_ID, "start": match.start(), "end": match.end(),
-                        "before": match.group(), "after": "GitHub"})
-        return "GitHub"
-    return MATCH.sub(replace, text), changes
+        if match.group()==canonical or any(a<match.end() and b>match.start() for a,b in protected):return match.group()
+        changes.append({"rule":rule,"start":match.start(),"end":match.end(),"before":match.group(),"after":canonical,
+                        "offset_basis":"text_before_this_rule"})
+        return canonical
+    return pattern.sub(replace,text),changes
 
 
-def apply_dictionary(text, config_path, requested=True):
-    """Return original on config failure; only GitHub may be activated here."""
-    if not requested:
-        return text, {"status": "request_disabled", "rule": RULE_ID, "changes": []}
+def normalize_github(text):
+    return replace_exact(text,GITHUB,"GitHub","github-spelling-v2")
+
+
+def normalize_omarchy(text):
+    return replace_exact(text,OMARCHY,"Omarchy","omarchy-spelling-v1")
+
+
+def apply_dictionary(text,config_path,requested=True):
+    if not requested:return text,{"status":"request_disabled","rule":RULE_ID,"changes":[]}
     try:
-        path = Path(config_path)
-        if path.stat().st_size > 4096:
-            raise ValueError("Oversized config")
-        config_bytes = path.read_bytes()
-        config = json.loads(config_bytes)
-        if not isinstance(config, dict):
-            raise ValueError("Invalid config")
-        if config.get("github") is not True:
-            return text, {"status": "config_disabled", "rule": RULE_ID, "changes": []}
-    except (OSError, ValueError, TypeError):
-        return text, {"status": "config_unavailable", "rule": RULE_ID, "changes": []}
-    corrected, changes = normalize_github(text)
-    return corrected, {"status": "applied" if changes else "unchanged", "rule": RULE_ID,
-                       "changes": changes, "config_sha256": hashlib.sha256(config_bytes).hexdigest()}
+        path=Path(config_path)
+        if path.stat().st_size>4096:raise ValueError("Oversized config")
+        data=path.read_bytes();config=json.loads(data)
+        if not isinstance(config,dict):raise ValueError("Invalid config")
+    except (OSError,ValueError,TypeError):return text,{"status":"config_unavailable","rule":RULE_ID,"changes":[]}
+    active=[];changes=[]
+    for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy)]:
+        if config.get(name) is True:
+            active.append(name);text,updates=normalizer(text);changes.extend(updates)
+    return text,{"status":"applied" if changes else "unchanged" if active else "config_disabled",
+                 "rule":RULE_ID,"active_rules":active,"changes":changes,"config_sha256":hashlib.sha256(data).hexdigest()}
+
+
+def clean_opening(text,requested=False):
+    """Opt-in cleanup, punctuation-delimited only. Maria is NEVER touched."""
+    if not requested:return text,{"status":"request_disabled","changes":[]}
+    original=text;changes=[]
+    for _ in range(2):
+        match=re.match(r"^\s*(?:ну|смотри)\s*[,：:]\s*",text,re.I)
+        if not match:break
+        rest=text[match.end():]
+        if len(re.findall(r"\w+",rest))<2:break
+        changes.append({"rule":"opening-filler-v1","before":match.group(),"after":"",
+                        "start":0,"end":match.end(),"offset_basis":"text_before_this_rule"})
+        text=rest
+    return text,{"status":"applied" if changes else "unchanged","changes":changes,
+                 "pre_cleanup_text":original}

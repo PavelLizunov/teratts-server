@@ -109,31 +109,32 @@ def mention_row(connection,key):
     return row
 
 
-def name_list(root,query="",page=0,pending=True):
+def name_list(root,query="",page=0,pending=True,canonical="GitHub"):
+    if canonical not in {"GitHub","Omarchy","плагины","Смотри"}:raise ReviewError(400,"Неизвестная очередь")
     if len(query)>100 or not 0<=page<=1_000_000:raise ReviewError(400,"Неверный поиск")
     with contextlib.closing(connect(root)) as connection:
         if not has_mentions(connection):return {"items":[],"total":0,"page":page,"page_size":20,"variants":[],"scanned_sources":0}
-        condition="WHERE m.canonical='GitHub' AND (instr(fold(m.surface),?)>0 OR instr(fold(d.text),?)>0)"
+        condition="WHERE m.canonical=? AND (instr(fold(m.surface),?)>0 OR instr(fold(d.text),?)>0)"
         if pending and has_feedback(connection):condition+=" AND NOT EXISTS(SELECT 1 FROM feedback f WHERE f.target_kind='name_occurrence' AND f.target_key=cast(m.id as text))"
-        args=(query.casefold(),query.casefold())
+        args=(canonical,query.casefold(),query.casefold())
         total=connection.execute(f"SELECT count(*) FROM name_mentions m JOIN name_documents d ON d.source=m.source AND d.stage=m.stage {condition}",args).fetchone()[0]
         ids=connection.execute(f"SELECT m.id FROM name_mentions m JOIN name_documents d ON d.source=m.source AND d.stage=m.stage {condition} ORDER BY CASE m.label WHEN 'ambiguous' THEN 0 WHEN 'suspected' THEN 1 ELSE 2 END,m.id DESC LIMIT 20 OFFSET ?",(*args,page*20)).fetchall()
         items=[]
         for (identity,) in ids:
             row=mention_row(connection,identity)
-            _,source,stage,canonical,start,end,surface,reason,label,text,sample,digest=row
+            _,source,stage,row_canonical,start,end,surface,reason,label,text,sample,digest=row
             decision=None
             if has_feedback(connection):
                 last=connection.execute("SELECT decision,value FROM feedback WHERE target_kind='name_occurrence' AND target_key=? ORDER BY created_ns DESC LIMIT 1",(str(identity),)).fetchone()
                 if last:decision={"decision":last[0],"value":last[1]}
-            items.append({"key":str(identity),"canonical":canonical,"surface":surface,"reason":reason,"label":label,
+            items.append({"key":str(identity),"canonical":row_canonical,"surface":surface,"reason":reason,"label":label,
                 "stage":stage,"text":text,"range":[start,end],"sample_id":sample,
                 "audio_available":bool(isinstance(sample,str) and SAMPLE_ID.fullmatch(sample) and (Path(root)/(sample+'.tar')).is_file()),
                 "decision":decision,"revision":fingerprint('name_occurrence',row)})
-        variants=[{"surface":r[0],"count":r[1]} for r in connection.execute("SELECT surface,count(*) FROM name_mentions WHERE canonical='GitHub' GROUP BY surface ORDER BY count(*) DESC,surface LIMIT 50")]
+        variants=[{"surface":r[0],"count":r[1]} for r in connection.execute("SELECT surface,count(*) FROM name_mentions WHERE canonical=? GROUP BY surface ORDER BY count(*) DESC,surface LIMIT 50",(canonical,))]
         scanned=connection.execute("SELECT count(*) FROM name_scans").fetchone()[0]
         scanned_stt=connection.execute("SELECT count(*) FROM sources s JOIN name_scans n ON s.source=n.source WHERE s.kind='stt'").fetchone()[0]
-        speech_documents=connection.execute("SELECT count(*) FROM name_documents WHERE stage='stt_raw'").fetchone()[0]
+        speech_documents=connection.execute("SELECT count(*) FROM name_documents d WHERE stage='stt_raw' AND EXISTS(SELECT 1 FROM name_mentions m WHERE m.source=d.source AND m.stage=d.stage AND m.canonical=?)",(canonical,)).fetchone()[0]
     return {"items":items,"total":total,"page":page,"page_size":20,"variants":variants,"scanned_sources":scanned,"scanned_stt":scanned_stt,"matched_stt_records":speech_documents}
 
 
@@ -321,14 +322,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             self.boundary();parsed=urlparse(self.path);query=parse_qs(parsed.query)
-            if parsed.path in ["/","/index.html","/github","/app.js","/style.css"]:
-                name={"/":"index.html","/github":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
+            if parsed.path in ["/","/index.html","/github","/omarchy","/plugins","/opening","/app.js","/style.css"]:
+                name={"/":"index.html","/github":"index.html","/omarchy":"index.html","/plugins":"index.html","/opening":"index.html"}.get(parsed.path,parsed.path.lstrip('/'))
                 body=(self.server.assets/name).read_bytes()
                 mime={"index.html":"text/html; charset=utf-8","app.js":"text/javascript; charset=utf-8","style.css":"text/css; charset=utf-8"}[name]
                 return self.send(200,body,mime)
             if parsed.path=="/api/status":return self.send(200,{**summary(self.server.root),"csrf":self.server.csrf})
             page=int(query.get("page",["0"])[0]);q=query.get("q",[""])[0]
-            if parsed.path=="/api/github":return self.send(200,name_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1"))
+            name_routes={"/api/github":"GitHub","/api/omarchy":"Omarchy","/api/plugins":"плагины","/api/opening":"Смотри"}
+            if parsed.path in name_routes:return self.send(200,name_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1",name_routes[parsed.path]))
             if parsed.path=="/api/terms":return self.send(200,term_list(self.server.root,q,page,query.get("filter",["all"])[0]))
             if parsed.path=="/api/disputes":return self.send(200,dispute_list(self.server.root,q,page,query.get("pending",["1"])[0]=="1"))
             if parsed.path.startswith("/audio/"):return self.send(200,audio_bytes(self.server.root,parsed.path.removeprefix("/audio/")),"audio/wav")

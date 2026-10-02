@@ -1,8 +1,10 @@
-# Explicit GitHub spelling rule
+# Explicit personal spelling rules and optional cleanup
 
-Private deployment adapter, not a new TTS engine feature. Only the user-approved GitHub term: standalone Гитхап, Гитхаб, Гит Хаб and case variants of github → GitHub. No fuzzy matching, other-term promotion, training or second inference. Codes/URLs/paths/emails/identifiers protected by conservative text regex. Declensions and гетхаб intentionally not whitelisted.
+Private deployment adapter, not a TTS engine feature or new recognizer. Canonical GitHub whitelist includes user-reviewed гитха/гетха/гетхаб/Гитхаба/git hub in addition to earlier forms. Omarchy uses exact standalone Omarchy/Омарчи/Умрчи only; ordinary мерч, Git/GitLab/gitab/hub git and protected code/URLs/paths/emails/identifiers remain untouched. No fuzzy replacement, training, provider changes or second inference.
 
-Current gateway applies after formatting; raw_text preserved, pre_dictionary_text/final_text/correction offsets/config hash retained locally. `dictionary=false` bypasses on a request even for raw-mode. Local JSON `github:false` disables without restart; bad/missing config returns original. Standard JSON/text response shapes unchanged; dictionary headers exposed.
+Gateway applies after formatting, preserves raw/pre-dictionary/pre-cleanup/final and per-stage before/after/offset provenance. `dictionary=false` bypasses spelling; local JSON `github:false`/`omarchy:false` disables each without restart. Malformed/missing config preserves original. Standard JSON/text shapes unchanged, dictionary/cleanup headers available.
+
+Default-off `cleanup=true` removes at most two punctuation-delimited leading Ну,/Смотри, only with at least two words remaining. It preserves Maria, content commands, interior words, short phrases and quoted/code forms. No confidence that model-recognized Maria was really smotri; Maria-to-smotri is review-only. Plugin inflections/truncated words reviewed separately, not globally rewritten as plural.
 
 Tests:
 
@@ -10,6 +12,6 @@ Tests:
 python3 -m unittest discover -s tools/stt-dictionary/tests -v
 ```
 
-Six rule tests passed; Model Forge actual-handler/archive suite 17 passed and telemetry suite 9 passed. Live default/optout same synthetic WAV: two гитхаб substitutions, helper 0.32 ms; original/pre-rule/final metadata verified, only synthetic test samples removed. First word гетхаб remained unchanged; no false claim of full GitHub recognition. One gateway-only restart explicitly authorized/performed; model/DSH/TTS unchanged. No independent reviewer, full code parser or long real-voice soak.
+Ten rule/cleanup tests, 18 actual-handler/archive, six name-evidence,18 bank/review,nine telemetry regressions passed (61 total). Live same WAV default/off/cleanup: short GitHub aliases normalized, punctuation opening removed only on opt-in, original fields verified. Dictionary smoke 0.25–0.27 ms. Synthetic Omarchy was decoded морчи and left unchanged, гитхабе remains outside whitelist: not all speech errors fixed. One approved gateway restart, Parakeet/LLM/OCR unchanged; no DSH/TTS restart. Five synthetic fixtures removed, no real data deletion.
 
-Source snapshot in deploy/ is specific to current homelab gateway and assumes existing dependencies/services; do not install as generic CLI. Full private rollout details in Model Forge docs/github-stt-rule.md. DB, private corpus, transcripts and credentials never included in this source backup.
+Only task source snapshot in deploy/; not a generic CLI installation. Private full report in Model Forge docs/personal-spelling-cleanup.md. No private corpus/DB/keys included. No independent reviewer/long natural-voice soak. Routine non-disruptive work needs no repeated user confirmation; future disruptive restarts still require fresh single-use authorization.

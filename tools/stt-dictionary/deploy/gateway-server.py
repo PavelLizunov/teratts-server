@@ -2,7 +2,7 @@ import io, time, wave, struct, sys, urllib.request, urllib.error, json, os, uuid
 from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, Query, HTTPException, Response, Request
 import functools
-from gateway.stt_dictionary import apply_dictionary
+from gateway.stt_dictionary import apply_dictionary, clean_opening
 from fastapi.responses import JSONResponse
 import numpy as np
 from PIL import Image
@@ -229,7 +229,8 @@ async def transcribe_audio(
     mode: Optional[str] = Query("default"),  # "default" (SAGE), "smart" (LLM), "raw"
     smart: Optional[bool] = Query(False),
     format: Optional[bool] = Query(True),
-    dictionary: bool = Query(True)
+    dictionary: bool = Query(True),
+    cleanup: bool = Query(False)
 ):
     audio_bytes = await file.read()
     if len(audio_bytes) > 10 * 1024 * 1024:
@@ -304,11 +305,15 @@ async def transcribe_audio(
     final_text, dictionary_result = apply_dictionary(final_text,
         os.environ.get("STT_DICTIONARY_CONFIG", "/home/deck/homelab/config/stt-dictionary.json"), dictionary)
     dictionary_latency_ms = (time.perf_counter() - t_dictionary) * 1000
+    pre_cleanup_text = final_text
+    final_text, cleanup_result = clean_opening(final_text, cleanup)
     total_latency_ms = (time.perf_counter() - t0) * 1000.0
     print(f"[STT] Mode={effective_mode} | Audio={len(audio_bytes)/1024:.1f}KB | STT={stt_latency_ms:.1f}ms SAGE={sage_latency_ms:.1f}ms LLM={llm_latency_ms:.1f}ms | Total={total_latency_ms:.1f}ms", flush=True)
 
     headers = {
         "X-STT-Backend": STT_BACKEND,
+        "X-Cleanup-Status": cleanup_result["status"],
+        "X-Cleanup-Changes": str(len(cleanup_result["changes"])),
         "X-Dictionary-Status": dictionary_result["status"],
         "X-Dictionary-Changes": str(len(dictionary_result["changes"])),
         "X-Dictionary-Latency-Ms": f"{dictionary_latency_ms:.2f}",
@@ -332,6 +337,7 @@ async def transcribe_audio(
                 "language_hint": language, "raw_text": raw_text, "final_text": final_text,
                 "formatting_status": formatting_status,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,
+                "pre_cleanup_text": pre_cleanup_text, "cleanup": cleanup_result,
                 "client_context": stt_context(request),
                 "smart_requested": smart, "format_requested": format,
                 "response_format": response_format,
