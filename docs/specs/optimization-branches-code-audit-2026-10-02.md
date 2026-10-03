@@ -40,6 +40,14 @@ Deliver an evidence-based branch map, whole-owned-code coverage ledger, confirme
 - Most branches are ancestors of main. Outstanding histories: autoresearch 8 commits (with a reverted buffer experiment), speech-front-integration 1 commit, private-voice-deep-hooks 21 commits at the initial snapshot. Remote private-voice branch changed during earlier fetches, so pin review to the captured hash and refresh at completion.
 - Local main is 10 commits behind origin/main; leave it untouched during audit. Local phase3 is ahead of its old upstream but fully included in main.
 
-## Progress
+## Result
 
-Audit started; no final findings or completion claimed.
+Read-only audit completed against main d937a90778824d1cb564a187f351ff400877cae8 and pinned unmerged branch tips. Final report: docs/audits/optimization-branches-code-audit-2026-10-03.md; full coverage and sources/evidence: docs/audits/optimization-20261002/.
+
+- All local/origin tips mapped; identical stable patch IDs prove original lexicon branch feature is already squash-integrated. Remaining private/perf branches were inspected without merging.
+- All owned executable sources in main and unique unmerged tip changes inspected, with code/test/data/runtime boundaries explicitly recorded.
+- Fresh safe checks: 126 main Node, 135 private Node and 88 isolated private Python tests passed. Syntax/AST, immutable evaluator quality/hash checks and isolated diagnostic paths passed.
+- All 246 locked registry versions queried for OSV advisories; rustls vulnerability and paste unmaintained notification verified in primary sources. All 17 direct/development crate versions checked; same-model/alternate technology research uses primary URLs.
+- No new Rust compilation/test run: local guard rejected before compilation, no override. No actual remote runtime, model quality, live browser audio, deployment/restart or benchmark campaign performed; report preserves these limits.
+- All implementation/model/dependency/configuration files remain unchanged from main. Only task-owned documents/diagnostic evidence are staged and published to dedicated task branch. User's pre-existing untracked files are preserved.
+- Future fixes/benchmarks are recommendations, not performed or implicitly authorized. Final Git publication and source comparison are recorded by final session verification.

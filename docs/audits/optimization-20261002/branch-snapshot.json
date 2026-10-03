@@ -1,0 +1,132 @@
+{
+  "observed_at_utc": "2026-10-03T00:29:04.419869+00:00",
+  "main_sha": "d937a90778824d1cb564a187f351ff400877cae8",
+  "refs": [
+    {
+      "ref": "agent/speech-front-remediation",
+      "sha": "84cd6bc87dd4e21469acf5d3c438edbc4bf9d757",
+      "upstream": "origin/agent/speech-front-remediation",
+      "main_only": 11,
+      "branch_only": 0
+    },
+    {
+      "ref": "feat/phase3-markdown-preparation",
+      "sha": "715a117e622e3d5fc83a5a4689852f83b762a105",
+      "upstream": "origin/feat/phase3-markdown-preparation",
+      "main_only": 14,
+      "branch_only": 0
+    },
+    {
+      "ref": "fix/server-markdown-default",
+      "sha": "e49dfd777dd1e8f81e288aa3ec41cca7cac24b1f",
+      "upstream": "origin/fix/server-markdown-default",
+      "main_only": 1,
+      "branch_only": 0
+    },
+    {
+      "ref": "fix/tts-dsh-020-compatibility",
+      "sha": "cfa3259e18b1e84bbfb8001262fe58db796ec208",
+      "upstream": "origin/fix/tts-dsh-020-compatibility",
+      "main_only": 6,
+      "branch_only": 0
+    },
+    {
+      "ref": "main",
+      "sha": "5c015f4e7660311154c6ba331b00ea6b4d4e1caa",
+      "upstream": "origin/main",
+      "main_only": 10,
+      "branch_only": 0
+    },
+    {
+      "ref": "perf-autoresearch/teratts-opt",
+      "sha": "0d414b85d0e17fb340b5d7e6947177cb081c3881",
+      "upstream": null,
+      "main_only": 54,
+      "branch_only": 8
+    },
+    {
+      "ref": "perf/phase2-cpu-tuning",
+      "sha": "792941f40fd31bf4ed076780af910f20e49e3132",
+      "upstream": "origin/perf/phase2-cpu-tuning",
+      "main_only": 29,
+      "branch_only": 0
+    },
+    {
+      "ref": "task/optimization-branches-code-audit-20261002",
+      "sha": "720cb9de9f93b309aba461a1ca7cb0b5e6e54342",
+      "upstream": "origin/task/optimization-branches-code-audit-20261002",
+      "main_only": 0,
+      "branch_only": 3
+    },
+    {
+      "ref": "origin/agent/speech-front-integration",
+      "sha": "12c305abb03a52f51cc605f233a38fb8bafcb24d",
+      "upstream": null,
+      "main_only": 54,
+      "branch_only": 1
+    },
+    {
+      "ref": "origin/agent/speech-latency-gpu",
+      "sha": "eea5255f0e0435c1457293941672bd54aeaa4af6",
+      "upstream": null,
+      "main_only": 44,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/feat/phase3-markdown-preparation",
+      "sha": "a3bdbf29a840a30928cf6be03394943853a99530",
+      "upstream": null,
+      "main_only": 20,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/fix/server-markdown-default",
+      "sha": "e49dfd777dd1e8f81e288aa3ec41cca7cac24b1f",
+      "upstream": null,
+      "main_only": 1,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/fix/tts-dsh-020-compatibility",
+      "sha": "cfa3259e18b1e84bbfb8001262fe58db796ec208",
+      "upstream": null,
+      "main_only": 6,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/main",
+      "sha": "d937a90778824d1cb564a187f351ff400877cae8",
+      "upstream": null,
+      "main_only": 0,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/perf-autoresearch/teratts-opt",
+      "sha": "0d414b85d0e17fb340b5d7e6947177cb081c3881",
+      "upstream": null,
+      "main_only": 54,
+      "branch_only": 8
+    },
+    {
+      "ref": "origin/perf/phase2-cpu-tuning",
+      "sha": "792941f40fd31bf4ed076780af910f20e49e3132",
+      "upstream": null,
+      "main_only": 29,
+      "branch_only": 0
+    },
+    {
+      "ref": "origin/task/optimization-branches-code-audit-20261002",
+      "sha": "720cb9de9f93b309aba461a1ca7cb0b5e6e54342",
+      "upstream": null,
+      "main_only": 0,
+      "branch_only": 3
+    },
+    {
+      "ref": "origin/task/private-voice-deep-hooks",
+      "sha": "be99bc74a13637b15cffbfb4ccc929b587cd71a7",
+      "upstream": null,
+      "main_only": 4,
+      "branch_only": 21
+    }
+  ]
+}

@@ -2,31 +2,31 @@ TAP version 13
 # Subtest: rejected metadata refresh does not re-date stale revision (candidate dismissed)
 ok 1 - rejected metadata refresh does not re-date stale revision (candidate dismissed)
   ---
-  duration_ms: 1.849117
+  duration_ms: 2.062586
   type: 'test'
   ...
 # Subtest: browser adapter unwraps rejected lease values correctly (candidate dismissed)
 ok 2 - browser adapter unwraps rejected lease values correctly (candidate dismissed)
   ---
-  duration_ms: 5.679146
+  duration_ms: 6.230487
   type: 'test'
   ...
 # Subtest: first server preparation result is keyed by old revision and repeated unnecessarily
 ok 3 - first server preparation result is keyed by old revision and repeated unnecessarily
   ---
-  duration_ms: 23.1095
+  duration_ms: 24.924461
   type: 'test'
   ...
 # Subtest: Host reuses cached audio while health keeps the last lexicon revision
 ok 4 - Host reuses cached audio while health keeps the last lexicon revision
   ---
-  duration_ms: 11.426667
+  duration_ms: 11.568649
   type: 'test'
   ...
 # Subtest: custom second chunk limit is not validated with other limits
 ok 5 - custom second chunk limit is not validated with other limits
   ---
-  duration_ms: 0.557304
+  duration_ms: 0.571019
   type: 'test'
   ...
 1..5
@@ -37,4 +37,4 @@ ok 5 - custom second chunk limit is not validated with other limits
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 96.80789
+# duration_ms 100.074383

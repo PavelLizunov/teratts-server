@@ -48,5 +48,18 @@
       "paste 1.0.15: RUSTSEC-2024-0436 (informational unmaintained)"
     ]
   },
-  "frozen_preprocessing_quality": "full-v1 check passed, negative controls passed, timing mode not executed"
+  "frozen_preprocessing_quality": "full-v1 check passed, negative controls passed, timing mode not executed",
+  "private_nemotron_pilot": {
+    "passed": 3,
+    "failed": 0
+  },
+  "private_python_total": 88,
+  "legacy_evaluator_manifest": "passed",
+  "JS_syntax": "all main production modules/tools and private production modules/review UI passed",
+  "builtin_lexicon": {
+    "entries": 186,
+    "nonempty_unique_lowercased_forms": true,
+    "pronunciation_evaluated": false
+  },
+  "source_changes": "none versus d937a90778824d1cb564a187f351ff400877cae8"
 }

@@ -99,6 +99,11 @@ Extracted exact Git archive `be99bc74a13637b15cffbfb4ccc929b587cd71a7` to a temp
 - DSH public GitHub latest release and client-ui-react npm latest endpoints returned 404. Protocol npm latest tag returned older 0.1.0-rc.6 than installed 0.2.0-rc.1; do not downgrade because dist-tag is stale. Current real-peer integration tests are stronger local evidence. No public DSH update claim.
 - Branch-specific source findings captured in optimization-20261002/pinned-branch-findings.md; still partial, with corrected/dismissed suspicions explicitly preserved.
 
-## Next work
+## Final round 3
 
-Finish exact file-by-file coverage ledger and public technology/source report, review security priority and scan branch snapshot changes at final fetch. Synthesize concise final prioritized audit/branch recommendations with no hidden unexamined owned code, record practical verification limits, and publish documents/evidence only. Goal remains active.
+- Final fetch and ls-remote confirmed unchanged main/private/performance tips. Branch snapshot and exact source scope saved: 54 main executable source/test files and 57 private changed/added source/test files, plus all unique performance and original speech-front commit changes.
+- Speech-front unique original commit and squash 31581d9 have identical stable patch ID `7172fe5d6a7fa09e87cfd686cf3e49c88d055b9f`. Its feature is not missing from main; do not merge old branch.
+- Remaining test/source/docs inspection complete within coverage-ledger boundary; Nemotron pilot helper 3/3 passed, total isolated private Python tests 88. All JS main/private syntax passed; legacy evaluator manifest SHA checks passed. All 186 builtin lexicon forms parsed, nonempty and lowercased forms unique; pronunciation not listened to.
+- Two earlier draft evidence statements about legacy benchmark `name` fields and GET_HEALTH stage placeholders were removed after direct reread; neither is a product finding. Keep only verified full-body latency/no-stage metrics and WAV-only quality weakness.
+- Final source report, technology review, coverage ledger, diagnostic and registry packets prepared. No source/model/config/service/dependency changes; no new inference/load campaign. Final report explicitly distinguishes source-derived Rust findings from executed Node/synthetic checks and historical evidence.
+- Final deliverable: docs/audits/optimization-branches-code-audit-2026-10-03.md. Task completion is gated on final artifact validation, dedicated-branch publication and exact source-baseline comparison; no fixes or merges are part of completion.
