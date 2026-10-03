@@ -56,6 +56,26 @@ test('first server preparation result is keyed by old revision and repeated unne
   assert.equal(calls, 2, 'third request reuses the correctly keyed entry');
 });
 
+test('Host reuses cached audio while health keeps the last lexicon revision', async (t) => {
+  const { service, config } = await isolatedService(t);
+  let synthCalls = 0;
+  let effectiveReading = 'old approved reading';
+  t.mock.method(service.coordinator, 'getOrFetchSynthesisRevision', async () => 'last-loaded-revision');
+  t.mock.method(service, 'synthesizeConfigured', async () => {
+    synthCalls++;
+    return { audioBuffer: Buffer.from(effectiveReading), mimeType: 'audio/wav',
+      synthesisRevision: 'last-loaded-revision' };
+  });
+  const first = await service.synthesize('same cached words');
+  assert.equal(Buffer.from(first.audioBase64, 'base64').toString(), 'old approved reading');
+  effectiveReading = 'new approved reading on disk';
+  const next = await service.synthesize('same cached words');
+  assert.equal(Buffer.from(next.audioBase64, 'base64').toString(), 'old approved reading');
+  assert.equal(synthCalls, 1);
+  // Mock reproduces Host half only: server health uses current_synthesis_revision()
+  // which reads last loaded LexiconReload::revision without filesystem refresh.
+});
+
 test('custom second chunk limit is not validated with other limits', () => {
   assert.doesNotThrow(() => splitSpeechText('a '.repeat(40), {
     firstChars: 20, secondChars: -1, nextChars: 30,

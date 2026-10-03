@@ -1,0 +1,52 @@
+{
+  "main_sha": "d937a90778824d1cb564a187f351ff400877cae8",
+  "private_sha": "be99bc74a13637b15cffbfb4ccc929b587cd71a7",
+  "main_node": {
+    "passed": 126,
+    "failed": 0
+  },
+  "private_node_linked_profile": {
+    "passed": 135,
+    "failed": 0
+  },
+  "private_vocabulary_documented_PYTHONPATH": {
+    "passed": 48,
+    "failed": 0
+  },
+  "private_stt_dictionary": {
+    "passed": 14,
+    "failed": 0
+  },
+  "private_nemotron_full": {
+    "passed": 7,
+    "failed": 0
+  },
+  "private_teacher": {
+    "passed": 14,
+    "failed": 0
+  },
+  "shell_syntax": "passed; main deploy and profile orchestrator only",
+  "python_AST": "main tools and all 47 pinned feature Python files passed",
+  "rust": "not executed: local compile guard rejected before compilation; no override",
+  "gateway_snapshot_copies_identical": true,
+  "not_executed": [
+    "deployment",
+    "service_restart",
+    "remote_worker_build",
+    "model_inference",
+    "benchmark_campaign",
+    "live_browser_audio"
+  ],
+  "private_ultra_mocked_adapter": {
+    "passed": 2,
+    "failed": 0
+  },
+  "osv": {
+    "checked_registry_packages": 246,
+    "advisories": [
+      "rustls 0.23.43: RUSTSEC-2026-0285 (medium)",
+      "paste 1.0.15: RUSTSEC-2024-0436 (informational unmaintained)"
+    ]
+  },
+  "frozen_preprocessing_quality": "full-v1 check passed, negative controls passed, timing mode not executed"
+}

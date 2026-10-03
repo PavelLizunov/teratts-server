@@ -1,0 +1,12 @@
+{
+  "kind": "source-derived/selection-only diagnostics",
+  "rust_binary_executed": false,
+  "deployment_executed": false,
+  "cli_tagged_input": "<en>Hello Hello Hello Hello Hello Hello Hello Hello Hello Hello . World World World World World World World World World World!</en>",
+  "raw_cli_sentence_parts": [
+    "<en>Hello Hello Hello Hello Hello Hello Hello Hello Hello Hello .",
+    "World World World World World World World World World World!</en>"
+  ],
+  "rollback_selected_new_unactivated_release": true,
+  "interpretation": "CLI raw split precedes validated tags; automatic rollback uses modification order, not last activated identity"
+}

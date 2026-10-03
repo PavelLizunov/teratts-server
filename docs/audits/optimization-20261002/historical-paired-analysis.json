@@ -1,0 +1,42 @@
+{
+  "historical_only": true,
+  "new_benchmark": false,
+  "results": {
+    "search1": {
+      "control": {
+        "median_s": 0.16937852750000001,
+        "MAD_s": 0.0005885809999999769,
+        "n": 6,
+        "quality_sha_matches": true,
+        "peak_rss_bytes": 52297728
+      },
+      "candidate": {
+        "median_s": 0.0006241069999999986,
+        "MAD_s": 6.267000000004675e-06,
+        "n": 6,
+        "quality_sha_matches": true,
+        "peak_rss_bytes": 52158464
+      },
+      "relative_reduction": 0.996315312163757,
+      "absolute_reduction_s": 0.16875442050000003
+    },
+    "confirmation1": {
+      "control": {
+        "median_s": 0.32126726699999997,
+        "MAD_s": 0.0004865159999999369,
+        "n": 6,
+        "quality_sha_matches": true,
+        "peak_rss_bytes": 52678656
+      },
+      "candidate": {
+        "median_s": 0.0010264220000000004,
+        "MAD_s": 3.3427500000002166e-05,
+        "n": 6,
+        "quality_sha_matches": true,
+        "peak_rss_bytes": 52682752
+      },
+      "relative_reduction": 0.9968050837871385,
+      "absolute_reduction_s": 0.32024084499999994
+    }
+  }
+}
