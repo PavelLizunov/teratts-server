@@ -28,7 +28,7 @@ Deliver an evidence-based branch map, whole-owned-code coverage ledger, confirme
 ## Verification
 
 - Safe Node regression/syntax checks and shell syntax checks; inspect tooling side effects before running anything.
-- Cargo is not available on current PATH; record Rust execution limits and reuse historical evidence only for unchanged code.
+- Cargo is not on the default PATH, but the installed toolchain was found later. Its wrapper explicitly forbids local compilation on this control-plane host; an offline one-job attempt was rejected before compilation. Do not override the guard or start an unauthorized remote build. Record Rust execution limits and reuse historical evidence only for unchanged code.
 - No dependency installs, arbitrary package execution, model downloads or inference stress tests.
 - Findings require source evidence and reachable conditions; distinguish confirmed bug, suspicion and optional improvement.
 - Report actual covered/uncovered files and independently reviewed/not independently reviewed status.

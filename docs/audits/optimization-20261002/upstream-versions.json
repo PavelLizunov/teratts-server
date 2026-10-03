@@ -1,0 +1,730 @@
+{
+  "observed_at_utc": "2026-10-03T00:02:08.026703+00:00",
+  "source": "crates.io public registry API",
+  "dependencies": [
+    {
+      "crate": "anyhow",
+      "source_url": "https://crates.io/api/v1/crates/anyhow",
+      "requirement": "1",
+      "locked": [
+        "1.0.104"
+      ],
+      "max_stable_version": "1.0.104",
+      "max_version": "1.0.104",
+      "newest_version": "1.0.104",
+      "updated_at": "2026-07-18T20:59:37.656167Z",
+      "recent_versions": [
+        {
+          "version": "1.0.104",
+          "created_at": "2026-07-18T20:59:37.656167Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.103",
+          "created_at": "2026-06-25T20:43:34.173928Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.102",
+          "created_at": "2026-02-20T02:37:14.123476Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.101",
+          "created_at": "2026-02-05T19:20:32.735708Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.100",
+          "created_at": "2025-09-19T14:21:43.692151Z",
+          "yanked": false,
+          "rust_version": "1.39"
+        }
+      ]
+    },
+    {
+      "crate": "axum",
+      "source_url": "https://crates.io/api/v1/crates/axum",
+      "requirement": "0.8",
+      "locked": [
+        "0.8.9"
+      ],
+      "max_stable_version": "0.8.9",
+      "max_version": "0.8.9",
+      "newest_version": "0.8.9",
+      "updated_at": "2026-04-14T07:55:20.258398Z",
+      "recent_versions": [
+        {
+          "version": "0.8.9",
+          "created_at": "2026-04-14T07:55:20.258398Z",
+          "yanked": false,
+          "rust_version": "1.80"
+        },
+        {
+          "version": "0.8.8",
+          "created_at": "2025-12-20T16:27:24.614743Z",
+          "yanked": false,
+          "rust_version": "1.78"
+        },
+        {
+          "version": "0.8.7",
+          "created_at": "2025-11-14T21:20:11.157953Z",
+          "yanked": false,
+          "rust_version": "1.78"
+        },
+        {
+          "version": "0.8.6",
+          "created_at": "2025-09-30T12:52:18.918292Z",
+          "yanked": false,
+          "rust_version": "1.78"
+        },
+        {
+          "version": "0.8.5",
+          "created_at": "2025-09-28T19:11:14.790994Z",
+          "yanked": false,
+          "rust_version": "1.78"
+        }
+      ]
+    },
+    {
+      "crate": "chislo",
+      "source_url": "https://crates.io/api/v1/crates/chislo",
+      "requirement": "=0.3.1",
+      "locked": [
+        "0.3.1"
+      ],
+      "max_stable_version": "0.3.1",
+      "max_version": "0.3.1",
+      "newest_version": "0.3.1",
+      "updated_at": "2026-06-24T14:12:36.823062Z",
+      "recent_versions": [
+        {
+          "version": "0.3.1",
+          "created_at": "2026-06-24T14:12:36.823062Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        }
+      ]
+    },
+    {
+      "crate": "flate2",
+      "source_url": "https://crates.io/api/v1/crates/flate2",
+      "requirement": "1",
+      "locked": [
+        "1.1.9"
+      ],
+      "max_stable_version": "1.1.10",
+      "max_version": "1.1.10",
+      "newest_version": "1.1.10",
+      "updated_at": "2026-08-28T04:35:22.192325Z",
+      "recent_versions": [
+        {
+          "version": "1.1.10",
+          "created_at": "2026-08-28T04:35:22.192325Z",
+          "yanked": false,
+          "rust_version": "1.67.0"
+        },
+        {
+          "version": "1.1.9",
+          "created_at": "2026-02-03T06:50:17.589Z",
+          "yanked": false,
+          "rust_version": "1.67.0"
+        },
+        {
+          "version": "1.1.8",
+          "created_at": "2026-01-12T11:57:47.071232Z",
+          "yanked": false,
+          "rust_version": "1.67.0"
+        },
+        {
+          "version": "1.1.7",
+          "created_at": "2025-12-05T10:00:12.025090Z",
+          "yanked": true,
+          "rust_version": "1.67.0"
+        },
+        {
+          "version": "1.1.6",
+          "created_at": "2025-12-05T03:50:19.008768Z",
+          "yanked": true,
+          "rust_version": "1.67.0"
+        }
+      ]
+    },
+    {
+      "crate": "mimalloc",
+      "source_url": "https://crates.io/api/v1/crates/mimalloc",
+      "requirement": "0.1",
+      "locked": [
+        "0.1.52"
+      ],
+      "max_stable_version": "0.1.52",
+      "max_version": "0.1.52",
+      "newest_version": "0.1.52",
+      "updated_at": "2026-05-22T13:15:21.565252Z",
+      "recent_versions": [
+        {
+          "version": "0.1.52",
+          "created_at": "2026-05-22T13:15:21.565252Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.51",
+          "created_at": "2026-05-20T12:43:18.624837Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.50",
+          "created_at": "2026-04-22T10:28:54.611663Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.49",
+          "created_at": "2026-04-19T22:36:39.772275Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.48",
+          "created_at": "2025-08-26T08:32:23.574192Z",
+          "yanked": false,
+          "rust_version": null
+        }
+      ]
+    },
+    {
+      "crate": "ort",
+      "source_url": "https://crates.io/api/v1/crates/ort",
+      "requirement": "=2.0.0-rc.13",
+      "locked": [
+        "2.0.0-rc.13"
+      ],
+      "max_stable_version": null,
+      "max_version": "2.0.0-rc.13",
+      "newest_version": "2.0.0-rc.13",
+      "updated_at": "2026-07-28T06:47:07.112688Z",
+      "recent_versions": [
+        {
+          "version": "2.0.0-rc.13",
+          "created_at": "2026-07-28T06:47:07.112688Z",
+          "yanked": false,
+          "rust_version": "1.88"
+        },
+        {
+          "version": "2.0.0-rc.12",
+          "created_at": "2026-03-05T04:56:45.131839Z",
+          "yanked": false,
+          "rust_version": "1.88"
+        },
+        {
+          "version": "2.0.0-rc.11",
+          "created_at": "2026-01-07T03:47:23.523151Z",
+          "yanked": false,
+          "rust_version": "1.88"
+        },
+        {
+          "version": "2.0.0-rc.10",
+          "created_at": "2025-06-01T06:41:36.010730Z",
+          "yanked": false,
+          "rust_version": "1.81"
+        },
+        {
+          "version": "2.0.0-rc.9",
+          "created_at": "2024-11-21T19:46:39.266654Z",
+          "yanked": false,
+          "rust_version": "1.70"
+        }
+      ]
+    },
+    {
+      "crate": "pulldown-cmark",
+      "source_url": "https://crates.io/api/v1/crates/pulldown-cmark",
+      "requirement": "0.13.4",
+      "locked": [
+        "0.13.4"
+      ],
+      "max_stable_version": "0.13.4",
+      "max_version": "0.13.4",
+      "newest_version": "0.13.4",
+      "updated_at": "2026-05-20T08:48:23.621050Z",
+      "recent_versions": [
+        {
+          "version": "0.13.4",
+          "created_at": "2026-05-20T08:48:23.621050Z",
+          "yanked": false,
+          "rust_version": "1.71.1"
+        },
+        {
+          "version": "0.13.3",
+          "created_at": "2026-03-22T10:36:09.820555Z",
+          "yanked": false,
+          "rust_version": "1.71.1"
+        },
+        {
+          "version": "0.13.2",
+          "created_at": "2026-03-21T10:30:17.382096Z",
+          "yanked": false,
+          "rust_version": "1.71.1"
+        },
+        {
+          "version": "0.13.1",
+          "created_at": "2026-02-23T08:25:58.097875Z",
+          "yanked": false,
+          "rust_version": "1.71.1"
+        },
+        {
+          "version": "0.13.0",
+          "created_at": "2025-02-12T16:13:01.983822Z",
+          "yanked": false,
+          "rust_version": "1.71.1"
+        }
+      ]
+    },
+    {
+      "crate": "regex",
+      "source_url": "https://crates.io/api/v1/crates/regex",
+      "requirement": "1",
+      "locked": [
+        "1.13.1"
+      ],
+      "max_stable_version": "1.13.1",
+      "max_version": "1.13.1",
+      "newest_version": "1.13.1",
+      "updated_at": "2026-07-15T20:19:35.162139Z",
+      "recent_versions": [
+        {
+          "version": "1.13.1",
+          "created_at": "2026-07-15T20:19:35.162139Z",
+          "yanked": false,
+          "rust_version": "1.65"
+        },
+        {
+          "version": "1.13.0",
+          "created_at": "2026-07-09T12:01:37.396325Z",
+          "yanked": false,
+          "rust_version": "1.65"
+        },
+        {
+          "version": "1.12.4",
+          "created_at": "2026-06-09T15:01:54.322436Z",
+          "yanked": false,
+          "rust_version": "1.65"
+        },
+        {
+          "version": "1.12.3",
+          "created_at": "2026-02-03T13:48:35.405091Z",
+          "yanked": false,
+          "rust_version": "1.65"
+        },
+        {
+          "version": "1.12.2",
+          "created_at": "2025-10-13T14:38:36.033630Z",
+          "yanked": false,
+          "rust_version": "1.65"
+        }
+      ]
+    },
+    {
+      "crate": "reqwest",
+      "source_url": "https://crates.io/api/v1/crates/reqwest",
+      "requirement": "0.12",
+      "locked": [
+        "0.12.28"
+      ],
+      "max_stable_version": "0.13.5",
+      "max_version": "0.13.5",
+      "newest_version": "0.13.5",
+      "updated_at": "2026-09-08T20:55:26.479356Z",
+      "recent_versions": [
+        {
+          "version": "0.13.5",
+          "created_at": "2026-09-08T20:55:26.479356Z",
+          "yanked": false,
+          "rust_version": "1.85.0"
+        },
+        {
+          "version": "0.13.4",
+          "created_at": "2026-05-25T17:12:48.317444Z",
+          "yanked": false,
+          "rust_version": "1.85.0"
+        },
+        {
+          "version": "0.13.3",
+          "created_at": "2026-04-27T13:11:13.362979Z",
+          "yanked": false,
+          "rust_version": "1.64.0"
+        },
+        {
+          "version": "0.13.2",
+          "created_at": "2026-02-06T19:47:02.850685Z",
+          "yanked": false,
+          "rust_version": "1.64.0"
+        },
+        {
+          "version": "0.13.1",
+          "created_at": "2025-12-30T19:33:26.606604Z",
+          "yanked": false,
+          "rust_version": "1.64.0"
+        }
+      ]
+    },
+    {
+      "crate": "serde",
+      "source_url": "https://crates.io/api/v1/crates/serde",
+      "requirement": "1",
+      "locked": [
+        "1.0.229"
+      ],
+      "max_stable_version": "1.0.229",
+      "max_version": "1.0.229",
+      "newest_version": "1.0.229",
+      "updated_at": "2026-07-18T23:05:13.266456Z",
+      "recent_versions": [
+        {
+          "version": "1.0.229",
+          "created_at": "2026-07-18T23:05:13.266456Z",
+          "yanked": false,
+          "rust_version": "1.56"
+        },
+        {
+          "version": "1.0.228",
+          "created_at": "2025-09-27T16:51:35.265429Z",
+          "yanked": false,
+          "rust_version": "1.56"
+        },
+        {
+          "version": "1.0.227",
+          "created_at": "2025-09-25T23:43:08.742811Z",
+          "yanked": false,
+          "rust_version": "1.56"
+        },
+        {
+          "version": "1.0.226",
+          "created_at": "2025-09-20T23:37:58.558002Z",
+          "yanked": false,
+          "rust_version": "1.56"
+        },
+        {
+          "version": "1.0.225",
+          "created_at": "2025-09-16T03:43:57.050243Z",
+          "yanked": false,
+          "rust_version": "1.56"
+        }
+      ]
+    },
+    {
+      "crate": "serde_json",
+      "source_url": "https://crates.io/api/v1/crates/serde_json",
+      "requirement": "1",
+      "locked": [
+        "1.0.151"
+      ],
+      "max_stable_version": "1.0.151",
+      "max_version": "1.0.151",
+      "newest_version": "1.0.151",
+      "updated_at": "2026-07-20T05:54:44.078083Z",
+      "recent_versions": [
+        {
+          "version": "1.0.151",
+          "created_at": "2026-07-20T05:54:44.078083Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.0.150",
+          "created_at": "2026-05-21T20:26:09.944672Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.0.149",
+          "created_at": "2026-01-06T16:23:34.585926Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.148",
+          "created_at": "2025-12-27T06:35:35.409327Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        },
+        {
+          "version": "1.0.147",
+          "created_at": "2025-12-23T22:12:28.922971Z",
+          "yanked": false,
+          "rust_version": "1.68"
+        }
+      ]
+    },
+    {
+      "crate": "sha2",
+      "source_url": "https://crates.io/api/v1/crates/sha2",
+      "requirement": "0.10",
+      "locked": [
+        "0.10.9"
+      ],
+      "max_stable_version": "0.11.0",
+      "max_version": "0.11.0",
+      "newest_version": "0.11.0",
+      "updated_at": "2026-03-25T15:05:27.949444Z",
+      "recent_versions": [
+        {
+          "version": "0.11.0",
+          "created_at": "2026-03-25T15:05:27.949444Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "0.11.0-rc.5",
+          "created_at": "2026-02-02T17:13:45.044660Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "0.11.0-rc.4",
+          "created_at": "2026-01-24T17:24:47.342672Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "0.11.0-rc.3",
+          "created_at": "2025-11-05T17:32:14.175790Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "0.11.0-rc.2",
+          "created_at": "2025-09-02T23:08:02.228378Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        }
+      ]
+    },
+    {
+      "crate": "tempfile",
+      "source_url": "https://crates.io/api/v1/crates/tempfile",
+      "requirement": "3",
+      "locked": [
+        "3.27.0"
+      ],
+      "max_stable_version": "3.27.0",
+      "max_version": "3.27.0",
+      "newest_version": "3.27.0",
+      "updated_at": "2026-03-11T00:20:04.812840Z",
+      "recent_versions": [
+        {
+          "version": "3.27.0",
+          "created_at": "2026-03-11T00:20:04.812840Z",
+          "yanked": false,
+          "rust_version": "1.63"
+        },
+        {
+          "version": "3.26.0",
+          "created_at": "2026-02-24T03:29:09.857464Z",
+          "yanked": false,
+          "rust_version": "1.63"
+        },
+        {
+          "version": "3.25.0",
+          "created_at": "2026-02-09T18:55:02.005021Z",
+          "yanked": false,
+          "rust_version": "1.63"
+        },
+        {
+          "version": "3.24.0",
+          "created_at": "2025-12-23T22:41:47.963541Z",
+          "yanked": false,
+          "rust_version": "1.63"
+        },
+        {
+          "version": "3.23.0",
+          "created_at": "2025-09-23T05:32:33.826527Z",
+          "yanked": false,
+          "rust_version": "1.63"
+        }
+      ]
+    },
+    {
+      "crate": "tokenizers",
+      "source_url": "https://crates.io/api/v1/crates/tokenizers",
+      "requirement": "=0.23.1",
+      "locked": [
+        "0.23.1"
+      ],
+      "max_stable_version": "0.23.2",
+      "max_version": "1.0.0-rc.2",
+      "newest_version": "1.0.0-rc.2",
+      "updated_at": "2026-09-21T11:14:18.164465Z",
+      "recent_versions": [
+        {
+          "version": "1.0.0-rc.2",
+          "created_at": "2026-09-21T11:14:18.164465Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.23.2",
+          "created_at": "2026-09-03T08:49:28.624173Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.23.1",
+          "created_at": "2026-04-27T14:39:17.479740Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.22.2",
+          "created_at": "2025-12-02T12:53:51.498043Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.22.1",
+          "created_at": "2025-09-19T09:46:10.340856Z",
+          "yanked": false,
+          "rust_version": null
+        }
+      ]
+    },
+    {
+      "crate": "tokio",
+      "source_url": "https://crates.io/api/v1/crates/tokio",
+      "requirement": "1",
+      "locked": [
+        "1.53.1"
+      ],
+      "max_stable_version": "1.53.1",
+      "max_version": "1.53.1",
+      "newest_version": "1.53.1",
+      "updated_at": "2026-07-20T17:06:09.996426Z",
+      "recent_versions": [
+        {
+          "version": "1.53.1",
+          "created_at": "2026-07-20T17:06:09.996426Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.53.0",
+          "created_at": "2026-07-17T08:15:43.911700Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.52.4",
+          "created_at": "2026-07-16T13:25:31.755188Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.51.4",
+          "created_at": "2026-07-16T12:01:43.312781Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        },
+        {
+          "version": "1.52.3",
+          "created_at": "2026-05-08T12:53:27.539099Z",
+          "yanked": false,
+          "rust_version": "1.71"
+        }
+      ]
+    },
+    {
+      "crate": "toml",
+      "source_url": "https://crates.io/api/v1/crates/toml",
+      "requirement": "0.9",
+      "locked": [
+        "0.9.12+spec-1.1.0"
+      ],
+      "max_stable_version": "1.1.6+spec-1.1.0",
+      "max_version": "1.1.6+spec-1.1.0",
+      "newest_version": "1.1.6+spec-1.1.0",
+      "updated_at": "2026-09-10T20:28:39.522017Z",
+      "recent_versions": [
+        {
+          "version": "1.1.6+spec-1.1.0",
+          "created_at": "2026-09-10T20:28:39.522017Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "1.1.5+spec-1.1.0",
+          "created_at": "2026-09-02T13:52:08.284086Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "1.1.4+spec-1.1.0",
+          "created_at": "2026-07-28T19:03:26.704821Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "1.1.3+spec-1.1.0",
+          "created_at": "2026-07-14T13:09:47.863140Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        },
+        {
+          "version": "1.1.2+spec-1.1.0",
+          "created_at": "2026-04-01T21:24:09.084250Z",
+          "yanked": false,
+          "rust_version": "1.85"
+        }
+      ]
+    },
+    {
+      "crate": "unicode-normalization",
+      "source_url": "https://crates.io/api/v1/crates/unicode-normalization",
+      "requirement": "0.1",
+      "locked": [
+        "0.1.25"
+      ],
+      "max_stable_version": "0.1.25",
+      "max_version": "0.1.25",
+      "newest_version": "0.1.25",
+      "updated_at": "2025-10-30T16:06:38.929447Z",
+      "recent_versions": [
+        {
+          "version": "0.1.25",
+          "created_at": "2025-10-30T16:06:38.929447Z",
+          "yanked": false,
+          "rust_version": "1.36"
+        },
+        {
+          "version": "0.1.24",
+          "created_at": "2024-09-17T15:27:12.950740Z",
+          "yanked": false,
+          "rust_version": "1.36"
+        },
+        {
+          "version": "0.1.23",
+          "created_at": "2024-02-20T15:51:23.375733Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.22",
+          "created_at": "2022-09-16T15:37:14.410882Z",
+          "yanked": false,
+          "rust_version": null
+        },
+        {
+          "version": "0.1.21",
+          "created_at": "2022-07-01T16:05:04.406672Z",
+          "yanked": false,
+          "rust_version": null
+        }
+      ]
+    }
+  ]
+}

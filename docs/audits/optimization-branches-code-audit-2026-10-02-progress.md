@@ -57,6 +57,36 @@ Autoresearch net patch includes eager style tensor loading, speechfront initiali
 
 Previous integration task on identical main production source passed 126 Node tests, syntax/diff checks and reused recorded 146-pass/4-ignored Rust evidence. This audit has not yet executed additional checks. Cargo/rustc/shellcheck absent on current PATH; Python and Node are present. No independent worker review was dispatched because no explicitly pinned Gemini/Opus route is available and workflow orchestration was not requested.
 
+## Round 1 verification and revised findings
+
+- Fresh main Node suite: 126/126 passed. All deployment shell syntax checks and tools Python AST checks passed; no deployment scripts were executed. Frozen preprocessing evaluator checksums all passed.
+- A first diagnostic attempt failed due to incorrect harness assumptions (`metaCache`, nonexistent `__dispatchRemote__`). Those failures are audit harness errors, not product findings. Corrected diagnostics passed 4/4 and are committed separately as reproducible audit evidence.
+- Dismissed metadata failure re-dating suspicion: coordinator returns null without updating the successful metadata timestamp, so it retries on the next call.
+- Dismissed heartbeat envelope suspicion: browser `apply` wraps all lease calls with `unwrapRemoteResult`, so the heartbeat sees the actual lease failure. Do not report the outer-envelope condition in isolation.
+- Confirmed minor performance defect: first `prepareText` result is keyed before preparation revision discovery. First two identical calls make two HTTP preparations; third uses cache. Reproduced against isolated actual Cordis service. Applies to optional `prepareMode=on`.
+- Confirmed minor validation debt: `secondChars` accepts a negative value while first/next validate. Public runtime uses defaults; custom helper use only, not a production severity claim.
+- Rust installed toolchain located; `cargo test --offline --locked -j 1` was rejected by the host invariant guard before compilation. No override, worker job or new Rust execution. This is not a test failure in project code.
+- Corrected earlier Rust tag suspicion: HTTP pipeline uses `TeraEngine::chunk_preprocessed` / `chunk_tagged_text`, not raw `chunk::chunk_text`. CLI tagged text uses the same language-aware path. Raw helper's long-word limit remains a possible narrow contract weakness, not a confirmed HTTP language-tag bug.
+
+### Pinned private branch checks
+
+Extracted exact Git archive `be99bc74a13637b15cffbfb4ccc929b587cd71a7` to a temporary read-only review tree; did not switch source branch or copy private deployment state.
+
+- Dictionary suite: 14 passed; Nemotron corpus unit suite: 7 passed; teacher unit suites: 14 passed. These use temporary/mocked/local resources, no model inference or provider requests.
+- Vocabulary suite cannot import: tracked `vocabulary_bank.py` imports `disputes`, but the snapshot does not include disputes.py; review also imports missing `review_disputes`. Clean snapshot integration is incomplete. Confirm exact intended externally installed dependencies from owning docs before final severity.
+- Node suite: 133 pass, 1 file-load failure. `observed-synthesis.test.js` imports Host directly and cannot resolve profile-owned schemastery in clean archive; other tests correctly isolate/link actual profile dependencies. Fix test harness packaging, not claim runtime incompatibility. Do not install dependencies during audit.
+- All 47 Python sources/tests in branch parsed via AST. Actual inference/remote runtime adapters not executed.
+- Confirmed UI bug via isolated VM: `/github` and `/linux` initialize `state.tab` to `blind`, due to ternary/operator precedence in review-ui/app.js line 4. Browser interactions remain untested.
+- Read feature telemetry sender/core branch diff, gateway Python, corpus storage, vocabulary collector/review and UI, STT dictionary, Ultra adapter, teacher runner, Nemotron runners/snapshot. Remaining review slices: voice pilot selectors/comparison utilities, shell/service scripts, vocabulary helpers, snapshot documentation and test bodies.
+- Gateway snapshots use async `await file.read()` then enforce length, sync inference in async handlers and hardcoded deployment paths. Verify inherited/intended trust boundary and documented proxy limits before classifying; copying a complete deployed gateway into this repo is itself a maintenance concern, not proof that current production is vulnerable.
+
+### Updated upstream research
+
+- Registry snapshot for all 17 direct/development crates saved with primary-source URLs and observation timestamp (clock is now 2026-10-03 UTC). New patch updates: flate2 1.1.9 → 1.1.10, tokenizers 0.23.1 → 0.23.2. Breaking-line options: reqwest 0.12.28 → 0.13.5, sha2 0.10.9 → 0.11.0, toml 0.9.12 → 1.1.6. Not evidence of a vulnerability or reason for blanket upgrades.
+- ORT threading documentation confirms bounded spin controls and per-session pools/NUMA tuning; GPU I/O binding can avoid host/device copies. Repo currently copies encoder/sampler outputs into host Vec then rebuilds tensors, so binding is a plausible GPU-only experiment, not a measured current CPU win.
+- Model card documents alternate sampler1–sampler32 quality/speed tradeoff and streaming generator. Current server is pinned to sampler8 and buffers full WAV; streaming is a separate protocol change and sampler reduction requires perceptual quality checks.
+- ort latest documentation says wrapper targets ORT 1.28; repo intentionally uses API 27 with dynamic runtime 1.27. Keep ABI/API pin explicit in upgrade plan rather than inferring newest wrapper means newest deployed runtime.
+
 ## Next work
 
-Finish production read coverage and validate candidate issues; inspect all unmerged branch sources by pinned snapshot; run safe isolated/local checks; expand primary-source dependency and technology research; synthesize confirmed findings and an actionable prioritized report. Refresh refs and publish final documents/evidence only.
+Finish whole-code/test and pinned branch coverage; validate revision/cache correctness without inference; review optimization evaluator validity and compute historical paired statistics; finish primary-source release/security and candidate-technology research; synthesize report with exact source locations, complete ledger and explicit verification limits. Refresh refs and publish documents/evidence only. Goal remains active.
