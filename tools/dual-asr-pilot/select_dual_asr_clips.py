@@ -9,7 +9,6 @@ import tarfile
 import wave
 
 TECH=re.compile(r'чат|джи|gemini|github|г[ие]тх|omarchy|[ауо]марч|плаг|linux|контриб|пул|пуш|sudo|репозит',re.I)
-UNKNOWN_IDS=['01791115333651808476-e60a49af5196402e9fe0f461038ce21c','01791115841185451273-dafe1c0420114021b3bc116cd674db37','01791136394253647186-46b85e165a9444e2a8fabf2878d017c8']
 
 
 def source(path):
@@ -31,7 +30,7 @@ def source(path):
          'baseline_backend':m.get('backend'),'collected_ns':m.get('collected_at_unix_ns',0),'audio':audio}
 
 
-def choose(root):
+def choose(root,unknown_ids):
  rows=[]
  for p in sorted(Path(root).glob('*.tar')):
   try:r=source(p)
@@ -42,7 +41,7 @@ def choose(root):
   nonlocal seconds
   if r['audio_sha256'] in seen or seconds+r['duration_s']>180:return False
   selected.append({**r,'category':category});seen.add(r['audio_sha256']);seconds+=r['duration_s'];return True
- for sid in UNKNOWN_IDS:
+ for sid in unknown_ids:
   row=next((r for r in rows if r['sample_id']==sid),None)
   if row:add(row,'unknown_marker')
  groups=[('technical',6,lambda r:3<=r['duration_s']<=15 and TECH.search(r['baseline_raw'])),
@@ -66,9 +65,10 @@ def choose(root):
 
 if __name__=='__main__':
  import argparse,os,random,struct
- p=argparse.ArgumentParser();p.add_argument('corpus');p.add_argument('destination');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('corpus');p.add_argument('destination');p.add_argument('--case-ids',type=Path,required=True);a=p.parse_args()
  root=Path(a.destination);root.mkdir(mode=0o700,exist_ok=False);audio_root=root/'audio';audio_root.mkdir(mode=0o700)
- rows=choose(a.corpus);records=[]
+ case_ids=json.loads(a.case_ids.read_text())['unknown_ids']
+ rows=choose(a.corpus,case_ids);records=[]
  for i,r in enumerate(rows,1):
   audio=r.pop('audio');f=audio_root/f'{i:02d}.wav';f.write_bytes(audio);f.chmod(0o600);records.append({**r,'file':str(f.relative_to(root))})
  for name,frames in [('silence',b'\0\0'*16000),('low_noise',b''.join(struct.pack('<h',random.Random(i+20261004).randint(-35,35)) for i in range(16000)))]:
