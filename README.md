@@ -340,7 +340,10 @@ Host-owned row configuration sets the endpoint (default
 `http://127.0.0.1:8088` or the approved Linux Tailnet endpoint
 `https://teratts.tail9fd337.ts.net`). The browser keeps no credentials;
 synthesis routes through the Host plugin. Active playback exposes
-−10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. Technical fenced blocks
+−10s, +15s, and a 1× / 1.25× / 1.5× / 2× speed cycle. The player stays centered
+above the conversation composer, outside message hover controls, so scrolling or
+clicking another message does not hide it. Leaving the message's session still
+stops playback. Technical fenced blocks
 and checklist items are converted to speakable text instead of being dropped.
 For long speech, the first bounded segment begins as soon as ready, remaining
 segments synthesize sequentially in the background, each response remains

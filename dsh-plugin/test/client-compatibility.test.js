@@ -16,7 +16,7 @@ function loadClient() {
   const requested = [];
   const plugin = registration.factory((name) => {
     requested.push(name);
-    if (name === "react") return {};
+    if (name === "react" || name === "react-dom") return {};
     throw new Error(`Unsupported module: ${name}`);
   });
   return { context, plugin, requested };
@@ -106,7 +106,7 @@ test("mount failures propagate before registering any action", async () => {
 test("client factory loads without private DSH modules or DOM side effects", () => {
   const { plugin, requested } = loadClient();
   assert.equal(typeof plugin.apply, "function");
-  assert.deepEqual(requested, ["react"]);
+  assert.deepEqual(requested, ["react", "react-dom"]);
 });
 
 test("RemoteResult success unwraps business values, including lease rejection", async () => {

@@ -366,6 +366,7 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const module = { exports: {} };
     const React = require("react");
+    const { createPortal } = require("react-dom");
     // Local controls: Harness Client packages are not public module imports.
     function IconLoadingOutline16(props) {
       return React.createElement("svg", { ...props, width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true },
@@ -544,14 +545,13 @@ window.__ModuleLoader__.load({
     function PlaybackStyles() {
       const style = { textContent: "" };
       style.textContent = ".teratts-action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:4px;display:inline-flex}.teratts-action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}.teratts-action:disabled{cursor:default;opacity:.5}.teratts-action[data-active]{color:var(--dsw-alias-label-primary)}.teratts-loading{animation:teratts-spin 1s linear infinite}@keyframes teratts-spin{to{transform:rotate(360deg)}}";
-      style.textContent += '[class*="_actions"]:has(.teratts-player){height:auto!important;min-height:calc(28px + var(--dsh-content-font-delta,0px));overflow:visible!important;flex-wrap:wrap!important;align-items:flex-start!important}';
       style.textContent += ".teratts-player{flex-basis:100%;width:100%;max-width:440px;order:10;margin:6px 0 2px 0;padding:8px 12px 6px 12px;background:var(--dsw-alias-bubble-secondary,rgba(125,125,125,0.08));border:1px solid var(--dsw-alias-border-l3,rgba(125,125,125,0.18));border-radius:14px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}";
       style.textContent += ".teratts-main-row{display:flex;align-items:center;gap:10px;width:100%}.teratts-play-btn{width:36px;height:36px;min-width:36px;border-radius:50%;corner-shape:round;background:var(--dsw-alias-label-primary,#000);color:var(--dsw-alias-label-primary-foreground,var(--dsw-alias-bg-base,#fff));border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0;transition:transform .1s ease,opacity .1s ease}.teratts-play-btn:hover{opacity:.9;transform:scale(1.04)}.teratts-play-btn:active{transform:scale(.96)}.teratts-play-btn svg{width:16px;height:16px}";
       style.textContent += ".teratts-track-wrap{flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0}.teratts-time-row{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 1px}.teratts-time{font-size:11px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex-shrink:0}";
       style.textContent += ".teratts-sub-row{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:100%;padding-top:4px;border-top:1px solid var(--dsw-alias-border-l4,rgba(125,125,125,0.08))}";
       style.textContent += ".teratts-pill-btn{height:28px;padding:0 10px;border-radius:14px;background:var(--dsw-alias-interactive-bg-subtle,rgba(125,125,125,0.08));color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l4,transparent);font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;user-select:none;white-space:nowrap}.teratts-pill-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.teratts-stop-btn{color:var(--dsw-alias-label-tertiary);padding:0 8px}.teratts-stop-btn:hover{color:var(--dsw-alias-label-primary)}";
       style.textContent += ".teratts-progress{min-height:32px;cursor:pointer;accent-color:var(--dsw-alias-label-primary);margin:0}.teratts-progress{min-height:44px}.teratts-action:focus-visible,.teratts-play-btn:focus-visible,.teratts-pill-btn:focus-visible,.teratts-progress:focus-visible{outline:2px solid currentColor;outline-offset:2px}";
-      style.textContent += ".teratts-pinned{position:fixed!important;left:12px!important;right:12px!important;bottom:var(--teratts-composer-offset,calc(var(--dsh-composer-height,80px) + 12px))!important;width:auto!important;max-width:440px!important;margin:0 auto!important;z-index:1000!important;box-shadow:0 8px 32px rgba(0,0,0,0.32)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;background:var(--dsw-specific-menu,rgba(28,28,30,0.92))!important;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.16))!important;border-radius:16px!important;padding:10px 14px 8px 14px!important;pointer-events:auto!important;animation:teratts-pop-in .18s cubic-bezier(0.16,1,0.3,1)}@media(min-width:601px){.teratts-pinned{left:auto!important;right:24px!important;width:380px!important;margin:0!important}}@keyframes teratts-pop-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}";
+      style.textContent += ".teratts-pinned{position:fixed!important;left:12px!important;right:12px!important;bottom:var(--teratts-composer-offset,calc(var(--dsh-composer-height,80px) + 12px))!important;width:auto!important;max-width:440px!important;margin:0 auto!important;z-index:1000!important;box-shadow:0 8px 32px rgba(0,0,0,0.32)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;background:var(--dsw-specific-menu,rgba(28,28,30,0.92))!important;border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.16))!important;border-radius:16px!important;padding:10px 14px 8px 14px!important;pointer-events:auto!important;animation:teratts-pop-in .18s cubic-bezier(0.16,1,0.3,1)}@keyframes teratts-pop-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}";
       style.textContent += "@media(max-width:600px),(pointer:coarse){.teratts-play-btn{width:44px;height:44px;min-width:44px}.teratts-pill-btn{min-width:44px;min-height:44px;border-radius:22px;font-size:13px;padding:0 12px}}@media(prefers-reduced-motion:reduce){.teratts-loading{animation:none}}";
       style.textContent += ".teratts-error{color:var(--dsw-alias-label-primary);font-size:12px;max-width:280px;white-space:normal}";
       return React.createElement("style", null, style.textContent);
@@ -1078,6 +1078,29 @@ window.__ModuleLoader__.load({
       const active = current.owner === owner.current;
       const state = active ? current.state : "idle";
 
+      // A body portal escapes the message action row's hover opacity and
+      // containing blocks. Its composer offset must no longer be inherited.
+      React.useLayoutEffect(() => {
+        if (!active) return;
+        const composer = buttonRef.current?.closest("[data-conversation-session]")
+          ?.querySelector("[data-conversation-composer-seat]");
+        const update = () => {
+          const rect = composer?.getBoundingClientRect();
+          const offset = rect && rect.height > 0 ? Math.max(12, window.innerHeight - rect.top + 12) : 92;
+          playerRef.current?.style.setProperty("--teratts-composer-offset", `${offset}px`);
+        };
+        update();
+        const observer = composer && typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+        observer?.observe(composer);
+        window.addEventListener("resize", update);
+        window.addEventListener("scroll", update, true);
+        return () => {
+          observer?.disconnect();
+          window.removeEventListener("resize", update);
+          window.removeEventListener("scroll", update, true);
+        };
+      }, [active]);
+
       React.useEffect(
         () => () => {
           if (playback.owner === owner.current) stopPlayback();
@@ -1170,6 +1193,7 @@ window.__ModuleLoader__.load({
           className: "teratts-player teratts-card teratts-pinned",
           role: "region",
           "aria-label": "Speech player",
+          onClick: (e) => e.stopPropagation(),
         },
         React.createElement(
           "div",
@@ -1274,7 +1298,7 @@ window.__ModuleLoader__.load({
         ),
       );
 
-      return React.createElement(React.Fragment, null, actionButton, playerCard);
+      return React.createElement(React.Fragment, null, actionButton, createPortal(playerCard, document.body));
     }
 
     const inject = ["remote", "slots"];
