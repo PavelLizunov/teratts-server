@@ -38,7 +38,7 @@ def retain_stt_attempt(handler):
                     audio = await upload.read()
                     if len(audio) <= 10 * 1024 * 1024:
                         voice_corpus.save_record({
-                            "kind": "stt_failure", "backend": STT_BACKEND, **STT_METADATA,
+                            "kind": "stt_failure", "backend": STT_BACKEND,
                             "failure_type": type(error).__name__,
                             "status": getattr(error, "status_code", None),
                             "detail": getattr(error, "detail", str(error)),
@@ -63,7 +63,7 @@ def stt_context(request):
 
 # Deployment selects Parakeet; unset the variable to retain the legacy path.
 STT_BACKEND = os.environ.get("STT_BACKEND", "gigaam")
-if STT_BACKEND not in ("gigaam", "parakeet", "ultra"):
+if STT_BACKEND not in ("gigaam", "parakeet"):
     raise RuntimeError("Unsupported STT_BACKEND")
 local_http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -78,19 +78,6 @@ if STT_BACKEND == "gigaam":
     ort_opts.inter_op_num_threads = 1
     sage_encoder = ort.InferenceSession(f"{sage_dir}/encoder_model_quantized.onnx", sess_options=ort_opts, providers=["CPUExecutionProvider"])
     sage_decoder = ort.InferenceSession(f"{sage_dir}/decoder_model_quantized.onnx", sess_options=ort_opts, providers=["CPUExecutionProvider"])
-
-STT_METADATA = {"model": "nvidia/parakeet-tdt-0.6b-v3" if STT_BACKEND == "parakeet" else "gigaam-v3-e2e-ctc",
-                "model_revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b" if STT_BACKEND == "parakeet" else None,
-                "quantization": "Q8_0"}
-ultra_asr = None
-if STT_BACKEND == "ultra":
-    from gateway.ultra_asr import UltraASR
-    ultra_asr = UltraASR(os.environ["ULTRA_MODEL_PATH"], os.environ["ULTRA_MODEL_SHA256"],
-                         backend=os.environ.get("ULTRA_BACKEND", "vulkan"))
-    STT_METADATA = ultra_asr.metadata
-    @app.on_event("shutdown")
-    def close_ultra():
-        ultra_asr.close()
 
 
 def run_parakeet(audio_bytes: bytes) -> str:
@@ -230,10 +217,7 @@ def health():
                     raise ValueError("Not ready")
         except Exception:
             raise HTTPException(status_code=503, detail="Parakeet unavailable") from None
-    if STT_BACKEND == "ultra" and (ultra_asr is None or not ultra_asr.ready):
-        raise HTTPException(status_code=503, detail="Ultra unavailable")
-    return {"status": "ok", "stt": "ready", "stt_backend": STT_BACKEND, "model": STT_METADATA,
-            "sage": "ready" if STT_BACKEND == "gigaam" else "bypassed", "smart_llm": "ready", "ocr": "ready"}
+    return {"status": "ok", "stt": "ready", "stt_backend": STT_BACKEND, "sage": "bypassed" if STT_BACKEND == "parakeet" else "ready", "smart_llm": "ready", "ocr": "ready"}
 
 @app.post("/v1/audio/transcriptions")
 @retain_stt_attempt
@@ -271,9 +255,7 @@ async def transcribe_audio(
         if channels > 1:
             samples = samples.reshape(-1, channels).mean(axis=1)
 
-        if STT_BACKEND == "ultra":
-            raw_text = ultra_asr.transcribe(samples, sample_rate=framerate)
-        elif STT_BACKEND == "parakeet":
+        if STT_BACKEND == "parakeet":
             raw_text = run_parakeet(audio_bytes)
         else:
             result = stt_session.run(samples)
@@ -298,7 +280,7 @@ async def transcribe_audio(
     formatting_status = "bypassed"
     final_text = raw_text
 
-    if STT_BACKEND in {"parakeet", "ultra"} and effective_mode == "smart" and raw_text:
+    if STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
         t_llm_0 = time.perf_counter()
         structured, smart_ok = run_smart_structuring(raw_text)
         llm_latency_ms = (time.perf_counter() - t_llm_0) * 1000.0
@@ -349,7 +331,9 @@ async def transcribe_audio(
         try:
             sample_id = voice_corpus.save(audio_bytes, {
                 "kind": "stt", "backend": STT_BACKEND,
-                **STT_METADATA, "mode": effective_mode,
+                "model": "nvidia/parakeet-tdt-0.6b-v3" if STT_BACKEND == "parakeet" else "gigaam-v3-e2e-ctc",
+                "model_revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b" if STT_BACKEND == "parakeet" else None,
+                "quantization": "Q8_0", "mode": effective_mode,
                 "language_hint": language, "raw_text": raw_text, "final_text": final_text,
                 "formatting_status": formatting_status,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,

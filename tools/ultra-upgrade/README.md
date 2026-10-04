@@ -1,4 +1,6 @@
-# Active Parakeet Ultra migration: source-only backup
+# Historical Parakeet Ultra migration: source-only backup
+
+**Current state: rolled back to old Parakeet v3 / NeMo-Speech.cpp0.1.0Vulkan after user-reported quality regression.** Files below preserve the historical experiment, not current configuration. See ../stt-dictionary/rollback/README.md. Active dictionary/corpus preserved;nounverifiednewmigration.
 
 User approved Ultra + updated compatible engine and explicitly one gateway restart/old decoder stop. Actual active runtime is **transcribe.cpp0.2.4 + ParakeetUltraQ8 Vulkan**, not NeMo0.2.0: ready-made UltraGGUF has architectureparakeet and NeMo model-info rejected it. Published converter does not support this specific safetensors source; no custom converter or relabeling. NeMo0.2.0 staged separately,never claimed successful Ultra runtime.
 
