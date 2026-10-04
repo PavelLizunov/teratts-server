@@ -65,7 +65,12 @@ test("composer clearance updates and observer/listeners are cleaned up", async (
   let disconnected = false;
   const listeners = new Map();
   const composer = { getBoundingClientRect: () => ({ top, height: 100 }) };
-  rendered.children[0].children[0].children[0].props.ref.current = { closest: () => ({ querySelector: () => composer }) };
+  rendered.children[0].children[0].children[0].props.ref.current = {
+    closest: (selector) => {
+      assert.equal(selector, "[data-conversation-session]");
+      return { querySelector: (selector) => selector === "[data-composer-seat]" ? composer : null };
+    },
+  };
   const values = new Map();
   rendered.children[1].child.props.ref.current = { style: { setProperty: (name, value) => values.set(name, value) } };
   context.window.innerHeight = 800;

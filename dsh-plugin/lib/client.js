@@ -1083,7 +1083,7 @@ window.__ModuleLoader__.load({
       React.useLayoutEffect(() => {
         if (!active) return;
         const composer = buttonRef.current?.closest("[data-conversation-session]")
-          ?.querySelector("[data-conversation-composer-seat]");
+          ?.querySelector("[data-composer-seat]");
         const update = () => {
           const rect = composer?.getBoundingClientRect();
           const offset = rect && rect.height > 0 ? Math.max(12, window.innerHeight - rect.top + 12) : 92;
