@@ -23,7 +23,7 @@ Use the existing runtime `react-dom` createPortal API to place the active player
 Shared browser cannot currently reach the live GUI (loopback refused; Tailscale HTTP proxy connection failed). No dev:web watcher is running. Confirm how the installed client bundle is served before any activation claim. Message-action unmount/session navigation retains existing stop behavior; this patch does not add cross-session playback persistence.
 
 ## Status
-Implementation and non-disruptive client activation complete; Git backup pending.
+Implementation, non-disruptive client activation and verification complete. Task branch `fix/tts-player-visibility-20261004` pushed to origin; implementation commit `9a27706`. Full authenticated user-tab/audio acceptance remains unobserved as documented below.
 
 ## Evidence so far
 - Red regression: original inline player and desktop-right CSS failed new placement checks.
