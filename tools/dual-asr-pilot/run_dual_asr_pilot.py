@@ -16,7 +16,7 @@ def atomic(path,data):
     temp.chmod(0o600);temp.replace(path)
 
 
-def validate(root):
+def validate(root,which=None):
     root=Path(root);manifest=root/'dual-asr-snapshot-20261004/manifest.json'
     digest=hashlib.sha256(manifest.read_bytes()).hexdigest()
     expected=(manifest.with_suffix('.sha256')).read_text().strip()
@@ -34,6 +34,7 @@ def validate(root):
             if (w.getnchannels(),w.getsampwidth(),w.getframerate())!=(1,2,16000):raise ValueError('Unsupported audio')
     receipt=json.loads((root/'models/verified-artifacts.json').read_text())
     for item in receipt:
+        if which is not None and item['model']!=which:continue
         file=root/'models'/item['model']/item['path']
         with file.open('rb') as stream:sha=hashlib.file_digest(stream,'sha256').hexdigest()
         if sha!=item['download_sha256'] or file.stat().st_size!=item['bytes']:raise ValueError('Model artifact changed')
@@ -41,8 +42,12 @@ def validate(root):
 
 
 def run(root,which):
-    root=Path(root);m,digest=validate(root);out=root/'results'/which;out.mkdir(mode=0o700,parents=True,exist_ok=True)
+    root=Path(root);m,digest=validate(root,which);out=root/'results'/which;out.mkdir(mode=0o700,parents=True,exist_ok=True)
     if os.environ.get('CUDA_VISIBLE_DEVICES')!='':raise ValueError('Must hide GPU')
+    import sys
+    def prohibit_network(event,args):
+        if event in {'socket.connect','socket.getaddrinfo','socket.bind'}:raise RuntimeError('Inference network forbidden')
+    sys.addaudithook(prohibit_network)
     start=time.monotonic()
     if which=='whisper':
         from faster_whisper import WhisperModel
@@ -50,16 +55,24 @@ def run(root,which):
         params={'language':'ru','task':'transcribe','beam_size':5,'temperature':0,'condition_on_previous_text':False,
                 'vad_filter':False,'initial_prompt':None,'hotwords':None,'word_timestamps':False}
         def recognize(path):
-            segments,info=model.transcribe(str(path),**params)
+            import numpy as np
+            with wave.open(str(path)) as wav:
+                pcm=np.frombuffer(wav.readframes(wav.getnframes()),dtype='<i2').astype(np.float32)/32768.0
+            segments,info=model.transcribe(pcm,**params)
             segments=list(segments)
             return ' '.join(s.text.strip() for s in segments).strip(),{'language':info.language,'language_probability':info.language_probability,
                  'segments':[{'start':s.start,'end':s.end,'text':s.text,'no_speech_prob':s.no_speech_prob,'avg_logprob':s.avg_logprob} for s in segments]}
         revision='bf64d2a976a268e35041f74233f889f951f0f676'
     else:
         import torch
-        from transformers import AutoModel
+        import importlib.util
+        import sys
         torch.set_num_threads(2);torch.set_num_interop_threads(1)
-        model=AutoModel.from_pretrained(str(root/'models/gigaam'),trust_remote_code=True,local_files_only=True,
+        source=root/'models/gigaam/modeling_gigaam.py'
+        spec=importlib.util.spec_from_file_location('modeling_gigaam',source)
+        module=importlib.util.module_from_spec(spec);sys.modules[spec.name]=module;spec.loader.exec_module(module)
+        config=module.GigaAMConfig.from_pretrained(str(root/'models/gigaam'),local_files_only=True)
+        model=module.GigaAMModel.from_pretrained(str(root/'models/gigaam'),config=config,local_files_only=True,
                                         use_safetensors=False,dtype=torch.float32,weights_only=True).to('cpu').eval()
         params={'decoder':'CTC greedy','punctuation_model':None,'external_lm':None,'dtype':'float32','threads':2}
         def recognize(path):

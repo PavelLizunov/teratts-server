@@ -41,5 +41,20 @@ class Tests(unittest.TestCase):
    p=Path(tmp)/'result.json';atomic(p,{'text':'проверка'})
    self.assertEqual(p.stat().st_mode&0o777,0o600);self.assertFalse(p.with_suffix('.json.part').exists())
   src=(ROOT/'run_dual_asr_pilot.py').read_text()
-  self.assertIn("'initial_prompt':None",src);self.assertIn("device='cpu'",src);self.assertIn('weights_only=True',src)
+  self.assertIn("'initial_prompt':None",src);self.assertIn("device='cpu'",src);self.assertIn('weights_only=True',src);self.assertIn('sys.addaudithook(prohibit_network)',src)
+  self.assertIn("model.transcribe(pcm,**params)",src)
+ def test_pair_collection_and_stable_balanced_blinding(self):
+  from collect_dual_asr_results import collect
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);m={'records':[{'sample_id':str(i),'audio_sha256':str(i),'duration_s':1,'category':'negative_control' if i>=16 else 'real'} for i in range(18)]}
+   atomic(root/'manifest-private.json',m);digest=hashlib.sha256((root/'manifest-private.json').read_bytes()).hexdigest()
+   for name in ['whisper','gigaam']:
+    d=root/'results'/name;d.mkdir(parents=True)
+    atomic(d/'complete.json',{'complete':True,'results':18,'manifest_sha256':digest})
+    atomic(d/'runtime.json',{'load_seconds':1})
+    for i,source in enumerate(m['records'],1):atomic(d/f'{i:02d}.json',{**source,'success':True,'no_hints':True,'manifest_sha256':digest,'text':name+str(i),'seconds':1})
+   report,pairs=collect(root);_,again=collect(root)
+   self.assertEqual(pairs,again);self.assertEqual(report['paired_results'],36)
+   self.assertEqual(sum(p['option1_text'].startswith('whisper') for p in pairs),8)
+   self.assertNotIn('model',pairs[0]);self.assertEqual(len(pairs),16)
 if __name__=='__main__':unittest.main(verbosity=2)

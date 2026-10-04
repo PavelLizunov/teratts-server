@@ -1,15 +1,21 @@
-# Paired isolated ASR pilot — preparation checkpoint
+# Completed paired CPU ASR pilot
 
-**Not yet a completed model test.** User authorized two candidates: coriollon Whisper Russian Code-Switching and ai-sage GigaAM Multilingual Large CTC. Production Parakeetv3 unchanged. No source transcripts/audio/weights included in this backup.
+Both user-authorized candidates really executed on16fixednaturalclips117.494seconds plus1ssilence/1slow-noise: **36successfulcanonicalresponses**, pairedaudio/manifestSHA verified. ProductionParakeetv3/TTS/OCR/DSH unchanged,existingGPUworkload untouched.
 
-Pinned fixed manifest:16naturalclips117.4939375seconds (3unknownmarker,6technical,4plainlong,3short),plus1sdigitalsilence and1slownoise;18uniqueSHA. Models get onlyaudio,nooldtranscript/hotwords. CPUworkernewvenv,CUDAhidden,no sharedGPUservicechanges,offlinePrivateNetworkafterdownload,MemoryMax8GiB/CPU2cores/Nice19/RuntimeMax20min. This is recognition-quality pilot,notDeckspeed or goldWER.
+**Negative controls:** WhisperCodeSwitching output «Продолжение следует...» twice;GigaAM empty twice. Noemptyrealresponses orunknownmarkers. Does not establishoverallWER/accuracywinner;nohumangold/feedbackyet. GigaAM fasterinthisCPUsmoke,notDeckVulkanspeedproof. Historicalbaseline11oldParakeet/5Ultra mixed,nogold.
 
-WhisperCT2int8_float16artifact@bf64d2a976a268e35041f74233f889f951f0f676 usesfasterwhisper1.2.1CPUint8/beam5/temp0/noVAD/noinitialprompt/nopreviouscondition;standardno-speechfiltersretained. GigaAMLargeCTC@3905cd51c3ed4e88c8edf33f3302969ba480a327,greedyCTC/PyTorch2.10CPUfloat32,inspectionofpinnedcustomcode/hydratargets beforetrust_remote_code,torchweights_only. Runtime0.2.4Vulkannotusedforcandidates.
+Pins: Whisper@bf64d2a976a268e35041f74233f889f951f0f676 CT2weightSHAc7d582e058485b7d5d4572afad105127a3d82e85bb0bf91bf8f91f05fc15c4e2;GigaAMLargeCTC@3905cd51c3ed4e88c8edf33f3302969ba480a327 weightSHAc3fabefb50b41f08f4d7ad44e02c26c37d242882704cdcca2ebd98e45eff73d1. CPU-onlyisolatedvenvTorch2.10+cpu/FasterWhisper1.2.1CT2_4.8.2,twoCPUthreads/MemoryMax8GiB/Nice19/noGPU. Whisperbeam5/temp0/VADoff/noprompt/nohistory,standardno-speechfilters;GigaAMfloat32greedyCTC/PNCoff. Modelsneverseepriortranscript.
 
-Preparer selects snapshot from authorizedprivatecorpus;downloader verifiesLFSsize/SHAorGitblob,onlyrequiredfiles;runnervalidates immutable manifest+allmodelSHA,savesatomicprivateperclipoutput,guardsduplicateambiguousdispatch. Failedrunsnotpretendcomplete. PinnedCPUwheelsstagedofflineonlytonewvenv,notproductiondependencyedits. Three tests pass for actual WAVsource/filter/manifest/privateatomicoutput/nohint.
+Whisperload0.557s/inference108.151smedian6.008s,GigaAMload5.672s/inference18.854smedian1.005s;noMAD/qualitycampaign. GigaAMreportedcgrouppeaknotcredibletotalmmapmemory,don'tclaimtinyRAM. Exact packages/hashreceipts/privateevidence retained ModelForge artifacts only.
+
+Implementation fixes documented: officialAutoModelremote-loaderdemandedunusedpyannote;directinspectedofficialGigaAMConfig/GigaAMModellocalclassesavoidbloat,sameweights/algorithm,weights_only. WhisperPyAV19WAVmetadataAPIfailedclip1;preservedfailure,no successclaim. FinalWhisperusesexactPCMndarray,samevalidatedWAV. PreviousGigaAMrunretainedinitial,canonicalrerunwithguardscomplete.
+
+**Network bound:** systemdPrivateNetworkwasrequestedbutjournalexplicitlysaidnamespaceunsupported/proceedingwithout. NoOSfirewallisolationclaim. FinalrunnerHFoffline/localfiles+Pythonaudithookblocksconnect/getaddrinfo/bind,notnative-subprocesssecurityproof. Scopedpinnedcustomcode/Hydratargets reviewed,onlyshortlocaltranscribepathused;noaudioHTTP/cloudcalls/keys. Nativeofflinepathnotexternalprovider.
 
 ```sh
 python3 -m unittest discover -s tools/dual-asr-pilot/tests -v
 ```
 
-Current preparation:modelsverifiedharness,remoteartifacttransferongoing(resumabletaskownedrsyncafterstoppingslowSCP);runtimeimportsCPUonlyGigaAMcodeOK. No candidateoutputs yet. Full private taskrecord in ModelForge docs/specs/whisper-gigaam-dual-pilot.md. Finishboth18-clipruns,verifycontrols/crossmodelhashpairs and collectprivateevidence beforecompletionclaims. WorkerGPUmemory~14GiBoccupiedbyexistingLLM,isolationnotoptional.
+Fourtestspassed:sourcehash/syntheticfilter,uniquecontrolmanifestbounds/path/hash,privateatomicoutputs/noprompt,pairedcompletionandstableneutralbalanced8/8assignments. Neutral16pairsprivatelypreparednotdeployednewfeedbackpage;existingblindreviewhistoryunchanged. FullreportModelForge docs/whisper-gigaam-dual-pilot.md,specandprivateSummarySHA313dbaa824a508431fca987f63cee1d23ac8716bb9c7f517222a0ec4d6d93631. No rawspeech/transcripts/weights/modelmapping committed. Initialprepcheckpointsupersededbyactualcompletedtrial;noindependentreviewmodelused.
+
+Next:humanblindreviewcontents,or separatelyapprovedVADWhispernegative-controliteration. Notautomaticpromotion/newmodelinstall.
