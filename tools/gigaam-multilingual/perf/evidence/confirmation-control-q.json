@@ -1,0 +1,1 @@
+{"kind": "quality", "commit": "6a5f5b3f95e6071caa2dc8c5c0dd737e1c3781ea", "workload": "confirmation-v1", "target_id": "steamdeck-gigaam-cpu", "status": "passed", "checks": {"exact_transcript_and_segments": true}, "negative_controls": {"empty_output": true, "collapsed_timeline": true, "corrupt_boundary": true}}

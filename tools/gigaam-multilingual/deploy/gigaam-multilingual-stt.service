@@ -11,9 +11,10 @@ Environment=CUDA_VISIBLE_DEVICES=
 Environment=HF_HUB_OFFLINE=1
 Environment=TRANSFORMERS_OFFLINE=1
 Environment=HF_HOME=/home/deck/homelab/gigaam-multilingual-20261005/hf-cache
-Environment=OMP_NUM_THREADS=2
-Environment=MKL_NUM_THREADS=2
-CPUQuota=200%
+Environment=GIGAAM_THREADS=4
+Environment=OMP_NUM_THREADS=4
+Environment=MKL_NUM_THREADS=4
+CPUQuota=400%
 CPUWeight=900
 MemoryHigh=4500M
 MemoryMax=6G

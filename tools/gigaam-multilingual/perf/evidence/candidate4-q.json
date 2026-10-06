@@ -1,0 +1,1 @@
+{"kind": "quality", "commit": "70e95a90cfd31b89b4867575886ebe262882b937", "workload": "search-v1", "target_id": "steamdeck-gigaam-cpu", "status": "passed", "checks": {"exact_transcript_and_segments": true}, "negative_controls": {"empty_output": true, "collapsed_timeline": true, "corrupt_boundary": true}}

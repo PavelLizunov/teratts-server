@@ -1,0 +1,52 @@
+{
+  "type": "config",
+  "schema_version": 2,
+  "repo": "/var/lib/dsh/Project/homelab-model-forge/implementation/teratts-deep-hooks",
+  "evaluator_lock": "6a5f5b3f95e6071caa2dc8c5c0dd737e1c3781ea",
+  "manifest": "tools/gigaam-multilingual/perf/evaluator/manifest.sha256",
+  "policy_path": "tools/gigaam-multilingual/perf/evaluator/policy.json",
+  "policy": {
+    "goal": "Reduce exact GigaAM CPU decoding latency without output or segment changes",
+    "scope": "threads/quota only in tools/gigaam-multilingual/perf/runtime.json; no weights, precision or transcript edits",
+    "target": {
+      "id": "steamdeck-gigaam-cpu",
+      "description": "AMD Van Gogh 4C/8T 16GB LPDDR5; exact PyTorch 2.10 CPU Large CTC"
+    },
+    "metric": {
+      "name": "end_to_end_wall_seconds",
+      "unit": "s",
+      "direction": "lower"
+    },
+    "workloads": {
+      "search": "search-v1",
+      "confirmation": "confirmation-v1"
+    },
+    "protected_roots": [
+      "tools/gigaam-multilingual/perf/evaluator"
+    ],
+    "quality_checks": [
+      "exact_transcript_and_segments"
+    ],
+    "negative_controls": [
+      "empty_output",
+      "collapsed_timeline",
+      "corrupt_boundary"
+    ],
+    "resource_limits": {
+      "peak_rss_bytes": 0.1
+    },
+    "budget": {
+      "max_experiments": 3,
+      "lane_failure_limit": 3,
+      "global_failure_limit": 3
+    },
+    "thresholds": {
+      "min_relative_effect": 0.08,
+      "min_absolute_effect": 0.1,
+      "noise_multiplier": 2.0,
+      "noise_floor": 0.05,
+      "min_pairs": 3,
+      "max_pairs": 5
+    }
+  }
+}

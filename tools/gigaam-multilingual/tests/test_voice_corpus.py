@@ -143,7 +143,7 @@ class GatewayContractTests(unittest.TestCase):
             arg.annotation = None
         cls.code = compile(ast.fix_missing_locations(ast.Module(body=[handler], type_ignores=[])), "actual-gateway-handler", "exec")
 
-    def run_handler(self, corpus, fmt="json", mode="raw", raw="тест", corrector=None, dictionary=True, cleanup=False, backend='parakeet'):
+    def run_handler(self, corpus, fmt="json", mode="raw", raw="тест", corrector=None, dictionary=True, cleanup=False, backend='parakeet', speech_formatter=None, format=True):
         import numpy as np
         class Upload:
             async def read(self):
@@ -166,13 +166,15 @@ class GatewayContractTests(unittest.TestCase):
                "STT_METADATA": {'model':'ai-sage/GigaAM-Multilingual' if backend=='gigaam_multilingual' else 'nvidia/parakeet-tdt-0.6b-v3',
                                 'model_revision':'3905cd51c3ed4e88c8edf33f3302969ba480a327' if backend=='gigaam_multilingual' else '541d1f99c6b0c3cd0b11a95167540bb8edefd82b',
                                 'quantization':'none' if backend=='gigaam_multilingual' else 'Q8_0'},
+               "speech_formatter": speech_formatter or (lambda text: (text, {"status":"applied", "input_text":text, "segments":[]})),
+               "contextual_english": __import__('speech_formatting').contextual_english,
                "run_smart_structuring": lambda text: ("• Тест", True),
                "voice_corpus": corpus, "Response": Response, "JSONResponse": Response,
                "HTTPException": HTTPException, "stt_context": lambda request: {},
                "clean_opening": __import__('stt_dictionary').clean_opening,
                "os": os, "apply_dictionary": corrector or (lambda text,path,requested: (text,{"status":"config_disabled","changes":[]}))}
         exec(self.code, env)
-        return asyncio.run(env["transcribe_audio"](None, Upload(), "ru", fmt, mode, False, True, dictionary, cleanup))
+        return asyncio.run(env["transcribe_audio"](None, Upload(), "ru", fmt, mode, False, format, dictionary, cleanup))
 
     def test_json_and_text_contract_and_metadata(self):
         class Spy:
@@ -249,7 +251,9 @@ class GatewayContractTests(unittest.TestCase):
         self.assertEqual(spy.metadata['model'],'ai-sage/GigaAM-Multilingual')
         self.assertEqual(spy.metadata['quantization'],'none')
         self.assertEqual(r.headers['X-SAGE-Latency-Ms'],'0.0')
-        self.assertEqual(self.run_handler(spy,backend='gigaam_multilingual',mode='smart').content['text'],'• Тест')
+        self.assertEqual(self.run_handler(spy,backend='gigaam_multilingual',mode='smart').content['text'],'тест')
+        self.assertEqual(spy.metadata['formatting_status'],'applied')
+        self.assertIsNone(spy.metadata['smart_model'])
 
     def test_cleanup_default_and_provenance(self):
         class Spy:
@@ -261,6 +265,28 @@ class GatewayContractTests(unittest.TestCase):
         self.assertEqual(spy.metadata['raw_text'],raw)
         self.assertEqual(spy.metadata['pre_cleanup_text'],raw)
         self.assertEqual(result.headers['X-Cleanup-Changes'],'1')
+
+    def test_multilingual_normal_formatting_raw_and_dictionary(self):
+        from speech_formatting import Formatter
+        from stt_dictionary import apply_dictionary
+        class Spy:
+            def save(self,audio,metadata):self.metadata=metadata;return 'sample'
+        with tempfile.TemporaryDirectory() as temp:
+            config=Path(temp)/'dictionary.json';config.write_text(json.dumps({'github':True,'omarchy':True,'chatgpt':True,'plugin':True}))
+            raw='не удаляй плагин открой гитхаб это английское выражение ор нот'
+            spy=Spy()
+            response=self.run_handler(spy,backend='gigaam_multilingual',mode='default',raw=raw,
+                speech_formatter=Formatter(lambda text:(text[0].upper()+text[1:]+'.',True)),
+                corrector=lambda text,path,requested:apply_dictionary(text,config,requested))
+            self.assertEqual(response.content['text'],'Не удаляй plugin открой GitHub это английское выражение or not.')
+            self.assertEqual(spy.metadata['raw_text'],raw)
+            self.assertEqual(spy.metadata['english_spelling']['status'],'applied')
+            self.assertEqual(response.headers['X-Formatting-Status'],'applied')
+            self.assertEqual(spy.metadata['formatting']['segments'][0]['status'],'applied')
+            for kwargs in [{'mode':'raw'},{'format':False}]:
+                spy=Spy();response=self.run_handler(spy,backend='gigaam_multilingual',raw=raw,**kwargs)
+                self.assertEqual(response.content['text'],raw)
+                self.assertEqual(spy.metadata['formatting']['status'],'disabled')
 
     def test_collection_failure_does_not_break_stt(self):
         class Broken:

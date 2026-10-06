@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import socket
 import sys
@@ -45,7 +46,10 @@ class Recognizer:
     if hashlib.file_digest(stream,'sha256').hexdigest()!=sha:raise ValueError('Pinned artifact changed: '+name)
   import torch
   if torch.__version__!='2.10.0+cpu' or torch.version.cuda is not None:raise ValueError('Wrong CPU Torch runtime')
-  torch.set_num_threads(2);torch.set_num_interop_threads(1)
+  threads = int(os.environ.get('GIGAAM_THREADS', '2'))
+  if threads not in (1, 2, 3, 4): raise ValueError('Unsupported CPU thread count')
+  torch.set_num_threads(threads);torch.set_num_interop_threads(1)
+  self.metadata = dict(METADATA, cpu_threads=threads)
   spec=importlib.util.spec_from_file_location('modeling_gigaam',root/'modeling_gigaam.py')
   module=importlib.util.module_from_spec(spec);sys.modules[spec.name]=module;spec.loader.exec_module(module)
   config=module.GigaAMConfig.from_pretrained(str(root),local_files_only=True)
@@ -72,7 +76,7 @@ class Recognizer:
      encoded,encoded_len=self.model.model.forward(wav,length)
      text,_=self.model.model._decode(encoded,encoded_len,length,False)[0]
      segments.append({'start_s':start/16000,'end_s':end/16000,'text':text});start=end
-   return {'text':' '.join(s['text'].strip() for s in segments if s['text'].strip()),'segments':segments,'model':METADATA,'audio_duration_s':len(pcm)/16000}
+   return {'text':' '.join(s['text'].strip() for s in segments if s['text'].strip()),'segments':segments,'model':self.metadata,'audio_duration_s':len(pcm)/16000}
   finally:self.lock.release()
 
 
@@ -84,7 +88,7 @@ def handler(recognizer):
    encoded=json.dumps(data,ensure_ascii=False).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(encoded)));self.end_headers();self.wfile.write(encoded)
   def do_GET(self):
    if self.path!='/ready':return self.send_json(404,{'error':'not found'})
-   self.send_json(200,{'ready':recognizer.ready,'model':METADATA})
+   self.send_json(200,{'ready':recognizer.ready,'model':getattr(recognizer,'metadata',METADATA)})
   def do_POST(self):
    if self.path!='/transcribe':return self.send_json(404,{'error':'not found'})
    try:
@@ -109,4 +113,4 @@ if __name__=='__main__':
   if event=='socket.connect':raise RuntimeError('ASR does not make outbound connections')
  sys.addaudithook(audit)
  server=ThreadingHTTPServer(('127.0.0.1',a.port),handler(recognizer));server.daemon_threads=True
- print(json.dumps({'ready':True,'model':METADATA}),flush=True);server.serve_forever()
+ print(json.dumps({'ready':True,'model':recognizer.metadata}),flush=True);server.serve_forever()

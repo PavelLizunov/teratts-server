@@ -1,0 +1,19 @@
+{
+  "baseline_medians_s": {
+    "1.wav": 2.0071543550584465,
+    "2.wav": 1.5225779919419438
+  },
+  "after_initial_medians_s": {
+    "1.wav": 1.6066989649552852,
+    "2.wav": 1.072521731024608
+  },
+  "after_query_medians_s": {
+    "1.wav": 1.7022417130647227,
+    "2.wav": 1.07513622706756
+  },
+  "rows": 9,
+  "raw_bypass": true,
+  "format_false": true,
+  "dictionary_optout": true,
+  "provenance": true
+}

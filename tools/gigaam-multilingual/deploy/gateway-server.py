@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, Query, HTTPException, Response, Request
 import functools
 from gateway.stt_dictionary import apply_dictionary, clean_opening
+from gateway.speech_formatting import Formatter, contextual_english
 from fastapi.responses import JSONResponse
 import numpy as np
 from PIL import Image
@@ -61,7 +62,7 @@ def stt_context(request):
             "headers": {k: v for k, v in request.headers.items() if k.lower() in allowed}}
 
 
-# Deployment selects Parakeet; unset the variable to retain the legacy path.
+# Deployment selects the exact multilingual backend; unset retains legacy GigaAM.
 STT_BACKEND = os.environ.get("STT_BACKEND", "gigaam")
 if STT_BACKEND not in ("gigaam", "parakeet", "gigaam_multilingual"):
     raise RuntimeError("Unsupported STT_BACKEND")
@@ -71,10 +72,12 @@ if STT_BACKEND == "gigaam":
     print("Loading STT GigaAM-v3 and SAGE...")
     stt_model = transcribe_cpp.Model("/home/deck/homelab/models/gigaam/gigaam-v3-e2e-ctc-Q8_0.gguf")
     stt_session = stt_model.session()
+sage_encoder = sage_decoder = None
+if STT_BACKEND in {"gigaam", "gigaam_multilingual"}:
     sage_dir = "/home/deck/homelab/models/sage95m"
-    sage_tokenizer = AutoTokenizer.from_pretrained("ai-forever/sage-fredt5-distilled-95m")
+    sage_tokenizer = AutoTokenizer.from_pretrained("ai-forever/sage-fredt5-distilled-95m", local_files_only=True)
     ort_opts = ort.SessionOptions()
-    ort_opts.intra_op_num_threads = 4
+    ort_opts.intra_op_num_threads = 2
     ort_opts.inter_op_num_threads = 1
     sage_encoder = ort.InferenceSession(f"{sage_dir}/encoder_model_quantized.onnx", sess_options=ort_opts, providers=["CPUExecutionProvider"])
     sage_decoder = ort.InferenceSession(f"{sage_dir}/decoder_model_quantized.onnx", sess_options=ort_opts, providers=["CPUExecutionProvider"])
@@ -98,6 +101,7 @@ def run_gigaam_multilingual(audio_bytes: bytes) -> str:
             data = json.load(response)
         if not isinstance(data.get("text"), str) or data.get("model", {}).get("model_sha256") != STT_METADATA["model_sha256"]:
             raise ValueError("Unexpected decoder identity/output")
+        STT_METADATA.update(data["model"])
         return data["text"].strip()
     except urllib.error.HTTPError as error:
         status = 400 if error.code in (400, 413, 415, 422) else 503
@@ -173,9 +177,14 @@ def run_sage_correction(text: str) -> tuple[str, bool]:
         print(f"[Formatting] stage=sage reason=exception steps={steps} eos={eos_seen}", flush=True)
         return text, False
 
-# Parakeet has native punctuation; do not rewrite bilingual text with SAGE.
-if STT_BACKEND == "gigaam":
-    run_sage_correction("тест")
+# Preserve all transcript words; SAGE is used only for punctuation/case.
+speech_formatter = Formatter(run_sage_correction)
+SAGE_READY = False
+if STT_BACKEND in {"gigaam", "gigaam_multilingual"}:
+    _, warmup_meta = speech_formatter("тест")
+    SAGE_READY = warmup_meta["status"] == "applied"
+    if not SAGE_READY:
+        raise RuntimeError("Speech formatter warmup failed")
 
 # 3. LLM Smart Structuring Function (Qwen2.5-1.5B)
 SMART_FEW_SHOT = [
@@ -249,10 +258,13 @@ def health():
                 data = json.load(response)
             if not data.get("ready") or data.get("model", {}).get("model_sha256") != STT_METADATA["model_sha256"]:
                 raise ValueError("Wrong upstream")
+            STT_METADATA.update(data["model"])
         except Exception:
             raise HTTPException(status_code=503, detail="GigaAM unavailable") from None
     return {"status": "ok", "stt": "ready", "stt_backend": STT_BACKEND, "model": STT_METADATA,
-            "sage": "ready" if STT_BACKEND == "gigaam" else "bypassed", "smart_llm": "not_checked", "ocr": "ready"}
+            "sage": "ready" if STT_BACKEND in {"gigaam", "gigaam_multilingual"} and SAGE_READY else "bypassed",
+            "formatting_policy": "punctuation-case-only-v1", "english_spelling_policy": "explicit-english-context-v1",
+            "smart_llm": "bypassed" if STT_BACKEND == "gigaam_multilingual" else "not_checked", "ocr": "ready"}
 
 @app.post("/v1/audio/transcriptions")
 @retain_stt_attempt
@@ -315,9 +327,17 @@ async def transcribe_audio(
     sage_latency_ms = 0.0
     llm_latency_ms = 0.0
     formatting_status = "bypassed"
+    formatting_meta = {"status": "disabled", "policy": "punctuation-case-only-v1"}
+    english_meta = {"status": "disabled", "changes": []}
     final_text = raw_text
 
-    if STT_BACKEND in {"parakeet", "gigaam_multilingual"} and effective_mode == "smart" and raw_text:
+    if STT_BACKEND == "gigaam_multilingual" and effective_mode in {"default", "smart"} and raw_text:
+        t_sage_0 = time.perf_counter()
+        spelling_text, english_meta = contextual_english(raw_text)
+        final_text, formatting_meta = speech_formatter(spelling_text)
+        sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
+        formatting_status = formatting_meta["status"]
+    elif STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
         t_llm_0 = time.perf_counter()
         structured, smart_ok = run_smart_structuring(raw_text)
         llm_latency_ms = (time.perf_counter() - t_llm_0) * 1000.0
@@ -356,6 +376,7 @@ async def transcribe_audio(
         "X-Dictionary-Latency-Ms": f"{dictionary_latency_ms:.2f}",
         "X-Mode": effective_mode,
         "X-Formatting-Status": formatting_status,
+        "X-English-Spelling-Status": english_meta["status"],
         "X-STT-Latency-Ms": f"{stt_latency_ms:.1f}",
         "X-SAGE-Latency-Ms": f"{sage_latency_ms:.1f}",
         "X-LLM-Latency-Ms": f"{llm_latency_ms:.1f}",
@@ -371,12 +392,13 @@ async def transcribe_audio(
                 **STT_METADATA, "mode": effective_mode,
                 "language_hint": language, "raw_text": raw_text, "final_text": final_text,
                 "formatting_status": formatting_status,
+                "formatting": formatting_meta, "english_spelling": english_meta,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,
                 "pre_cleanup_text": pre_cleanup_text, "cleanup": cleanup_result,
                 "client_context": stt_context(request),
                 "smart_requested": smart, "format_requested": format,
                 "response_format": response_format,
-                "smart_model": "Spark-X2.5-1.7B-Q4_K_M" if effective_mode == "smart" else None,
+                "smart_model": "Spark-X2.5-1.7B-Q4_K_M" if effective_mode == "smart" and STT_BACKEND != "gigaam_multilingual" else None,
                 "audio_duration_s": audio_frames / framerate,
                 "sample_rate": framerate, "channels": channels, "sample_width": sampwidth,
                 "timings_ms": {"stt": stt_latency_ms, "sage": sage_latency_ms,

@@ -1,0 +1,62 @@
+{
+  "commit": "70e95a90cfd31b89b4867575886ebe262882b937",
+  "threads": 4,
+  "workload": "search-v1",
+  "control": [
+    3.393643044983037,
+    3.4164778060512617,
+    3.404286885051988
+  ],
+  "candidate": [
+    2.102796216029674,
+    2.070634185918607,
+    2.081249312032014
+  ],
+  "checks": {
+    "exact_transcript_and_segments": true
+  },
+  "negative_controls": {
+    "empty_output": true,
+    "collapsed_timeline": true,
+    "corrupt_boundary": true
+  },
+  "peak_rss_bytes": 2901028864,
+  "observations": [
+    {
+      "threads": 2,
+      "wall_s": 3.393643044983037,
+      "available_bytes": 12156583936,
+      "temperature_c": 61.0
+    },
+    {
+      "threads": 4,
+      "wall_s": 2.102796216029674,
+      "available_bytes": 12156329984,
+      "temperature_c": 70.0
+    },
+    {
+      "threads": 4,
+      "wall_s": 2.070634185918607,
+      "available_bytes": 12156329984,
+      "temperature_c": 69.0
+    },
+    {
+      "threads": 2,
+      "wall_s": 3.4164778060512617,
+      "available_bytes": 12127223808,
+      "temperature_c": 66.0
+    },
+    {
+      "threads": 2,
+      "wall_s": 3.404286885051988,
+      "available_bytes": 12147044352,
+      "temperature_c": 64.0
+    },
+    {
+      "threads": 4,
+      "wall_s": 2.081249312032014,
+      "available_bytes": 12152340480,
+      "temperature_c": 74.0
+    }
+  ]
+}

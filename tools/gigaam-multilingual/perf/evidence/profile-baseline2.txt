@@ -1,0 +1,43 @@
+         12209 function calls (10945 primitive calls) in 1.996 seconds
+
+   Ordered by: cumulative time
+   List reduced from 216 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    1.995    1.995 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/utils/_contextlib.py:120(decorate_context)
+    616/3    0.011    0.000    1.992    0.664 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/module.py:1772(_wrapped_call_impl)
+    616/3    0.005    0.000    1.992    0.664 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/module.py:1780(_call_impl)
+        1    0.000    0.000    1.990    1.990 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1806(forward)
+       24    0.015    0.001    1.974    0.082 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1613(forward)
+      192    0.001    0.000    1.645    0.009 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/linear.py:130(forward)
+        1    0.000    0.000    1.645    1.645 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1745(forward)
+      192    1.644    0.009    1.644    0.009 {built-in method torch._C._nn.linear}
+       48    0.001    0.000    1.348    0.028 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1563(forward)
+       24    0.001    0.000    0.361    0.015 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1376(forward)
+       24    0.001    0.000    0.233    0.010 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1299(forward_qkv)
+       24    0.001    0.000    0.220    0.009 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1536(forward)
+       75    0.000    0.000    0.218    0.003 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/conv.py:374(forward)
+       75    0.000    0.000    0.217    0.003 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/conv.py:356(_conv_forward)
+       75    0.217    0.003    0.217    0.003 {built-in method torch.conv1d}
+       24    0.033    0.001    0.033    0.001 {built-in method torch._C._nn.scaled_dot_product_attention}
+       72    0.000    0.000    0.020    0.000 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/activation.py:468(forward)
+       72    0.000    0.000    0.020    0.000 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/functional.py:2373(silu)
+       72    0.019    0.000    0.019    0.000 {built-in method torch._C._nn.silu}
+        1    0.000    0.000    0.014    0.014 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:1251(forward)
+      144    0.001    0.000    0.014    0.000 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/normalization.py:228(forward)
+      144    0.001    0.000    0.013    0.000 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/functional.py:2914(layer_norm)
+      144    0.012    0.000    0.012    0.000 {built-in method torch.layer_norm}
+       24    0.006    0.000    0.011    0.000 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:307(apply_rotary_pos_emb)
+       48    0.002    0.000    0.005    0.000 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:302(rtt_half)
+        1    0.000    0.000    0.004    0.004 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/autograd/grad_mode.py:293(__exit__)
+       27    0.004    0.000    0.004    0.000 {method 'masked_fill' of 'torch._C.TensorBase' objects}
+        1    0.000    0.000    0.004    0.004 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:997(decode)
+       24    0.000    0.000    0.003    0.000 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/functional.py:1735(glu)
+       48    0.003    0.000    0.003    0.000 {built-in method torch.cat}
+       24    0.003    0.000    0.003    0.000 {built-in method torch._C._nn.glu}
+        2    0.000    0.000    0.002    0.001 /home/deck/homelab/gigaam-multilingual-20261005/venv/lib/python3.13/site-packages/torch/nn/modules/container.py:248(forward)
+        2    0.000    0.000    0.002    0.001 {method 'join' of 'str' objects}
+        1    0.000    0.000    0.002    0.002 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:965(decode)
+       93    0.000    0.000    0.002    0.000 /home/deck/homelab/gigaam-multilingual-20261005/models/modeling_gigaam.py:970(<genexpr>)
+
+
