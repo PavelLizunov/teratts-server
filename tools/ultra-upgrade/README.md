@@ -1,8 +1,8 @@
 # Historical Parakeet Ultra migration: source-only backup
 
-**Current state: rolled back to old Parakeet v3 / NeMo-Speech.cpp0.1.0Vulkan after user-reported quality regression.** Files below preserve the historical experiment, not current configuration. See ../stt-dictionary/rollback/README.md. Active dictionary/corpus preserved;nounverifiednewmigration.
+**Historical state:** Ultra was rolled back to Parakeet v3 / NeMo-Speech.cpp 0.1.0 Vulkan after user-reported quality regression. A later separately approved activation now runs [GigaAM Multilingual Large CTC](<../gigaam-multilingual/README.md>). Files below preserve the Ultra experiment, not current configuration. The [Parakeet restoration](<../stt-dictionary/rollback/README.md>) remains a historical rollback snapshot; dictionary and corpus are preserved.
 
-User approved Ultra + updated compatible engine and explicitly one gateway restart/old decoder stop. Actual active runtime is **transcribe.cpp0.2.4 + ParakeetUltraQ8 Vulkan**, not NeMo0.2.0: ready-made UltraGGUF has architectureparakeet and NeMo model-info rejected it. Published converter does not support this specific safetensors source; no custom converter or relabeling. NeMo0.2.0 staged separately,never claimed successful Ultra runtime.
+User approved Ultra + updated compatible engine and explicitly one gateway restart/old decoder stop. The runtime during that experiment was **transcribe.cpp0.2.4 + ParakeetUltraQ8 Vulkan**, not NeMo0.2.0: ready-made UltraGGUF has architectureparakeet and NeMo model-info rejected it. Published converter does not support this specific safetensors source; no custom converter or relabeling. NeMo0.2.0 staged separately,never claimed successful Ultra runtime.
 
 Pinned Ultra artifactNairod785/parakeet-ultra-gguf@b03613ba size739508704 SHA283562ac9b513f39244fe23c6632738c167d32731a5f4693319a10ca498550a8. Parentmoondream/parakeet-ultra@73175eb7 distinctsourceprovenance. Native0.2.4LinuxCPU/VulkantarSHA28b22a523a25b41d59ff91147b6f79f35330663c92c22e483d15d6f4dc0cfc9a;PythonbindingSHAe4bde0002fea09dc2b573f9b18c9d5d1163630b3096392b3dc82eb5dce25be9d. Weights/nativebinaries notGit.
 

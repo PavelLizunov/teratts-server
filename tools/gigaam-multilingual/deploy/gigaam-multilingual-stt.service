@@ -1,0 +1,26 @@
+[Unit]
+Description=GigaAM Multilingual Large CTC speech decoder (CPU)
+After=network.target
+
+[Service]
+Type=simple
+Slice=voice-ai.slice
+WorkingDirectory=/home/deck/homelab/gigaam-multilingual-20261005
+ExecStart=/home/deck/homelab/gigaam-multilingual-20261005/venv/bin/python /home/deck/homelab/gigaam-multilingual-20261005/gigaam_multilingual_server.py --model-dir /home/deck/homelab/gigaam-multilingual-20261005/models --port 10002
+Environment=CUDA_VISIBLE_DEVICES=
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HOME=/home/deck/homelab/gigaam-multilingual-20261005/hf-cache
+Environment=OMP_NUM_THREADS=2
+Environment=MKL_NUM_THREADS=2
+CPUQuota=200%
+CPUWeight=900
+MemoryHigh=4500M
+MemoryMax=6G
+OOMPolicy=kill
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
