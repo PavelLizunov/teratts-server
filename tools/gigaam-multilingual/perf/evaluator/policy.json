@@ -8,13 +8,7 @@
   "metric": {
     "name": "end_to_end_wall_seconds",
     "unit": "s",
-    "direction": "lower",
-    "min_relative_effect": 0.08,
-    "min_absolute_effect": 0.1,
-    "noise_multiplier": 2.0,
-    "noise_floor": 0.05,
-    "min_pairs": 3,
-    "max_pairs": 5
+    "direction": "lower"
   },
   "workloads": {
     "search": "search-v1",
@@ -38,5 +32,13 @@
     "max_experiments": 3,
     "lane_failure_limit": 3,
     "global_failure_limit": 3
+  },
+  "thresholds": {
+    "min_relative_effect": 0.08,
+    "min_absolute_effect": 0.1,
+    "noise_multiplier": 2.0,
+    "noise_floor": 0.05,
+    "min_pairs": 3,
+    "max_pairs": 5
   }
 }
