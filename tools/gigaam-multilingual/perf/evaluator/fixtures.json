@@ -1,0 +1,25 @@
+{
+  "reference_sha256": "986ae787314c875cf695fbbe77239d998043bc837b6416709e1fce1164db15fc",
+  "fixtures": [
+    {
+      "file": "1.wav",
+      "sha256": "778cdfd3619fe5036a7fec995985f12d4db15f2f0d0e29a68025c57ba3b89df2",
+      "split": "search"
+    },
+    {
+      "file": "2.wav",
+      "sha256": "d73884dfb355ce16343c61def72ea54d9d3ae4cb0ed27b566fb5ca5aea789590",
+      "split": "search"
+    },
+    {
+      "file": "3.wav",
+      "sha256": "c48afced00e27f7272b4a0c3365aeab4bd31c56ab811194e673cbb022e5eaa28",
+      "split": "confirmation"
+    },
+    {
+      "file": "4.wav",
+      "sha256": "d38ddf846da212c00f09eac402bd0e288a1d7d022b42fdf07438f5bc628c2656",
+      "split": "confirmation"
+    }
+  ]
+}
