@@ -1,4 +1,6 @@
-# GigaAM Multilingual: active Deck source snapshot
+# GigaAM Multilingual: historical Deck trial
+
+**No longer active:** the user rejected this trial and authorized return to the exact old Parakeet pipeline. GigaAM is stopped/disabled; see the [current Parakeet restoration](<return-parakeet/README.md>). The source, timings and settings below describe the retained experiment. Reactivation requires new authorization.
 
 The user-approved speech activation runs **ai-sage/GigaAM-Multilingual, Large CTC**, revision `3905cd51c3ed4e88c8edf33f3302969ba480a327`. It is the exact model from the paired pilot, not legacy GigaAM v3, SAGE or Ultra. Runtime: Python 3.13, PyTorch/Torchaudio 2.10.0+cpu, CPU float32, four threads, greedy CTC with gateway punctuation/case restoration through SAGE ONNX. Model weights/revision remain unchanged.
 

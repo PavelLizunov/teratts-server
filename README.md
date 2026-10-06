@@ -16,7 +16,7 @@ Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache
 
 ## Steam Deck speech source snapshots
 
-The separately approved speech deployment now uses **GigaAM Multilingual Large CTC**, CPU float32 with PyTorch 2.10.0+cpu, through the existing voice gateway. The [active source snapshot](<tools/gigaam-multilingual/README.md>) records the exact model identity, measured latency, tests and limitations. It includes no model assets or private recordings. Parakeet is retained for rollback; the [Parakeet restoration](<tools/stt-dictionary/rollback/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are historical stages, not the active speech backend.
+The user rejected the GigaAM trial and requested the old pipeline back. **Parakeet TDT v3 Q8_0 / NeMo-Speech.cpp 0.1.0 Vulkan is active again**, with native punctuation and existing dictionary/corpus. See the [verified return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>). The [GigaAM experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are retained history, not active speech backends.
 
 ## Optional private voice telemetry
 
