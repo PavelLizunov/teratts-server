@@ -1,4 +1,4 @@
 {
-  "threads": 2,
-  "quota_percent": 200
+  "threads": 4,
+  "quota_percent": 400
 }
