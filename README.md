@@ -327,7 +327,9 @@ cargo test --offline --bin teratts-server installed_converter_cross_project -- -
 ## DSH client plugin
 
 `dsh-plugin/` contributes a button to `conversation.chat.assistant-actions`.
-Plugin 0.9.2 targets DSH **0.2.0-rc.1**. Pack it with
+Plugin 0.9.3 targets DSH **0.2.0-rc.2** with exact peer versions verified
+against that runtime. The 0.9.2 archive pins rc.1 peers and must not be reused
+for rc.2 profile dependency operations. Pack it with
 `npm pack ./dsh-plugin --ignore-scripts` and install the resulting archive through
 the Harness Plugin Manager (`install_bundle`); the bundle supplies the `ui-teratts`
 row. Keep the archive at a durable path: package-manager updates may need to read
@@ -390,6 +392,14 @@ RemoteResult envelope, and has no private Harness UI-module imports. Integration
 tests mount its descriptors through the real Typert Registry and Client Gateway;
 the transport is stubbed, so these tests do not establish live audio playback. Source edits do not activate a new Host plugin; deployment and
 any session-disrupting reload require a separate operation.
+
+The rc.2 recovery release 0.9.3 passed all 130 plugin tests against the actual
+rc.2 runtime. Its installed Host code also returned a valid 306,256-byte WAV
+for a short Russian check using the existing endpoint and voice. After the
+profile composition was reapplied, the Host entry and Web speech action were
+active without a DSH restart. This verifies synthesis and UI registration,
+not physical playback on the user's device. See the
+[recovery record](docs/specs/dsh-rc2-plugin-recovery-20261007.md).
 See the [scheduling security review](docs/audits/tts-scheduling-security-2026-09-27.md)
 and [bounded preprocessing experiment](docs/audits/tts-preprocessing-performance-2026-09-27.md)
 for verification evidence and limits; the latter does not measure neural inference speed.

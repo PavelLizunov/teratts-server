@@ -7,7 +7,7 @@ const manifest = JSON.parse(await readFile(new URL("../package.json", import.met
 const { Context } = await import(`${runtime}/@deepseek-ai/cordis/lib/index.js`);
 const { remoteMethods } = await import(`${runtime}/@deepseek-ai/dsh-typert-protocol/lib/index.js`);
 
-test("all declared DSH peers match the actual 0.2.0-rc.1 runtime", async () => {
+test("all declared DSH peers match the actual target runtime", async () => {
   for (const [name, expected] of Object.entries(manifest.peerDependencies)) {
     if (!name.startsWith("@deepseek-ai/dsh-")) continue;
     const installed = JSON.parse(await readFile(`${runtime}/${name}/package.json`, "utf8"));
