@@ -82,6 +82,12 @@ playback preservation on voting, local correction/export, control filters,
 mobile overflow and page errors, then closes its task browser. It does not change
 browser profiles or production services.
 
+`verify_matrix.py` checks all terminal success counts, unique clip IDs, manifest
+SHA, original WAV hashes, no-hints and zero exits without repeating inference.
+`convert_russian.py` adapts the inspected upstream Whisper converter only at the
+BF16-to-NumPy boundary and records converter/adapter/converted-file SHA. It does
+not rewrite the model architecture or replace the Russian checkpoint.
+
 The matrix includes both Qwen sizes, Nemotron 3.5, GigaAM v3 CTC/RNNT, Whisper
 stock large/turbo and Russian antony66 fine-tune, Voxtral, Canary, T-one and
 OmniASR. Cohere is inapplicable because Russian is not a declared language.
@@ -98,6 +104,6 @@ compatible implementation for a separately recorded retry.
 - Empty text on silence/noise is desirable; fluent invented text is not accuracy.
 - Inspect audio and user-corrected words before claiming omissions were fixed.
 
-Research findings and any observed run outcomes belong in
-[RESEARCH.md](RESEARCH.md). No production restart, model switch, external private
+Research findings belong in [RESEARCH.md](RESEARCH.md); the expanded matrix,
+actual decoder failures and run limitations are in [RESULTS.md](RESULTS.md). No production restart, model switch, external private
 audio upload or training is performed by these scripts.

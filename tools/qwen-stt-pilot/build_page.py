@@ -57,7 +57,7 @@ def build(base,matrix,out):
     payload=dict(manifest_sha256=sha,speech_seconds=m['speech_seconds'],generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),models=models,clips=clips)
     template=Path(__file__).with_name('page.html').read_text();encoded=json.dumps(payload,ensure_ascii=False).replace('<','\\u003c');html=template.replace('__DATA__',encoded)
     if template.count('__DATA__')!=1:raise ValueError('template payload boundary')
-    out.parent.mkdir(parents=True,exist_ok=True);out.write_text(html);out.chmod(0o600)
+    out.parent.mkdir(parents=True,exist_ok=True);temp=out.with_suffix('.part');temp.write_text(html);temp.chmod(0o600);temp.replace(out)
     print(json.dumps(dict(path=str(out),bytes=out.stat().st_size,models=len(models),complete=sum(x['status']=='complete' for x in models),pending=[x['id'] for x in models if x['status']=='pending']),ensure_ascii=False))
 
 

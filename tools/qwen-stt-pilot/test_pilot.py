@@ -11,6 +11,7 @@ from run import atomic_json, validate_record
 from collect import collect
 from run_matrix import parse_output
 from build_page import short_error
+from verify_matrix import verify
 
 
 class PilotTests(unittest.TestCase):
@@ -57,6 +58,14 @@ class PilotTests(unittest.TestCase):
     def test_long_error_not_shown_as_transcript(self):
         self.assertLess(len(short_error('UnicodeDecodeError ' + 'private log' * 200)), 150)
         self.assertLessEqual(len(short_error('some failure ' * 100)), 220)
+
+    def test_matrix_rejects_false_completed_branch(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);manifest=root/'manifest.json';manifest.write_text('{"records": []}')
+            target=root/'results'/'model';target.mkdir(parents=True)
+            (target/'summary.json').write_text('{"model_id":"model","status":"complete","completed":7}')
+            with self.assertRaises(ValueError):
+                verify(root,manifest)
 
     def test_atomic_private_receipt(self):
         with tempfile.TemporaryDirectory() as d:

@@ -29,7 +29,7 @@ def fetch(model, dest, pattern=None):
                   f['rfilename'].endswith(('.json', '.txt', '.safetensors')))]
     if not files:
         raise ValueError('No matching model files')
-    receipts = []
+    receipts = json.loads(receipt_path.read_text()).get('files', []) if receipt_path.exists() else []
     for f in files:
         rel = Path(f['rfilename'])
         if rel.is_absolute() or '..' in rel.parts:
@@ -53,6 +53,7 @@ def fetch(model, dest, pattern=None):
         digest = hashfile(target)
         if target.stat().st_size != f['size'] or (expected and digest != expected):
             raise ValueError('Existing model file does not match pinned source')
+        receipts = [r for r in receipts if r['path'] != f['rfilename']]
         receipts.append(dict(path=f['rfilename'], bytes=f['size'], sha256=digest))
         receipt_path.write_text(json.dumps(dict(model=model, revision=j['sha'], files=receipts), indent=2))
         print('VERIFIED', f['rfilename'], digest, flush=True)
