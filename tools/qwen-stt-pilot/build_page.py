@@ -15,6 +15,7 @@ def short_error(error):
     if 'UnicodeDecodeError' in error:return 'Движок выдал повреждённый UTF-8. Это ошибка реализации, не оценка качества модели.'
     if 'time_budget' in error:return 'Превышен ограниченный бюджет времени.'
     if 'memory_budget' in error:return 'Превышен лимит памяти теста.'
+    if error=='exit_1':return 'Движок завершился с ошибкой. Расшифровку не подставляем; технический журнал сохранён.'
     return error[:220]
 
 

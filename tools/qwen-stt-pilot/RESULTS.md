@@ -29,14 +29,20 @@ user-device reachability. The user approved independent port 8290.
 | T-one | official ONNX, onnx-asr, 8kHz explicit resample, greedy no LM | 7/7; not its recommended beam/LM configuration |
 | Canary 1B v2 | documented Q8_0 native conversion, explicit ru | 7/7 |
 | Whisper large-v3 turbo | mature whisper.cpp Q8_0, explicit ru, no VAD | 7/7 |
-| Whisper large-v3 | mature whisper.cpp F16 | Weights verified; bounded test queued |
-| Russian Whisper antony66 | exact original fine-tune, inspected upstream F16 conversion | Conversion verified; bounded test in progress |
-| Voxtral Mini 4B Realtime | documented native Q8_0, CPU | Weights verified; bounded test queued |
+| Whisper large-v3 | mature whisper.cpp F16 | 7/7 |
+| Russian Whisper antony66 | exact original fine-tune, inspected upstream F16 conversion | 7/7; source/converted SHA verified |
+| Voxtral Mini 4B Realtime | documented native Q8_0, CPU | 7/7; offline requests, not live streaming evaluation |
 | OmniASR CTC 300M v2 | pinned community HF F32 conversion | Attempted; cannot load unknown `omniasr_ctc` architecture in installed Transformers 5.17 |
 
 Cohere Transcribe excluded as inapplicable: Russian is not a declared language.
 Retained rejected GigaAM Multilingual and technical codeswitch Whisper are
 historical, not silently substituted for these models.
+
+Final total: 13 candidate variants represented, 12 complete (84 successful
+model/clip pairs), one genuine loader failure (OmniASR). No pending target on
+final page. The two invalid experimental Whisper-port branches are preserved
+separately and are not counted as completed candidate quality tests; their
+mature-engine replacements each completed all seven clips.
 
 ## Decoder integrity and preserved failures
 
@@ -77,6 +83,9 @@ other model substituted. Its failure is visible on the page, with no transcript.
 | T-one | empty | empty |
 | Canary | nonempty | nonempty |
 | Whisper turbo, mature engine | nonempty | nonempty |
+| Russian antony66, mature engine | nonempty | nonempty |
+| Whisper large-v3, mature engine | nonempty | nonempty |
+| Voxtral Realtime Q8_0 | empty | empty |
 
 These are finite synthetic controls without VAD, not real-world hallucination
 rates or proof a model can never work with a suitable speech gate. Real speech

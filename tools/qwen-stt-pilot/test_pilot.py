@@ -59,6 +59,19 @@ class PilotTests(unittest.TestCase):
         self.assertLess(len(short_error('UnicodeDecodeError ' + 'private log' * 200)), 150)
         self.assertLessEqual(len(short_error('some failure ' * 100)), 220)
 
+    def test_json_decoder_rejects_nonobject_output(self):
+        self.assertEqual(parse_output('json', '{"text":"привет"}'), 'привет')
+        with self.assertRaises(ValueError):
+            parse_output('json', '["not a transcript receipt"]')
+
+    def test_source_page_is_self_contained_and_private_payload_free(self):
+        template=Path(__file__).with_name('page.html').read_text()
+        self.assertEqual(template.count('__DATA__'), 1)
+        self.assertNotIn('data:audio/wav;base64,', template)
+        self.assertNotIn('https://cdn', template)
+        self.assertIn('localStorage', template)
+        self.assertIn("audio.preload='metadata'", template)
+
     def test_matrix_rejects_false_completed_branch(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);manifest=root/'manifest.json';manifest.write_text('{"records": []}')
