@@ -18,6 +18,11 @@ Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache
 
 The user rejected the GigaAM trial and requested the old pipeline back. **Parakeet TDT v3 Q8_0 / NeMo-Speech.cpp 0.1.0 Vulkan is active again**, with native punctuation and existing dictionary/corpus. See the [verified return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>). The [GigaAM experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are retained history, not active speech backends.
 
+A separate [bounded Qwen3-ASR comparison](<tools/qwen-stt-pilot/README.md>) and
+[broader Russian STT evidence review](<tools/qwen-stt-pilot/RESEARCH.md>) use
+retained private recordings without switching production. These are diagnostic
+tools, not an activated replacement backend.
+
 ## Optional private voice telemetry
 
 Telemetry is off by default. Set `VOICE_TELEMETRY_INGEST` to a private HTTP
