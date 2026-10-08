@@ -9,6 +9,8 @@ import wave
 from prepare import control_bytes, prepare
 from run import atomic_json, validate_record
 from collect import collect
+from run_matrix import parse_output
+from build_page import short_error
 
 
 class PilotTests(unittest.TestCase):
@@ -45,6 +47,16 @@ class PilotTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 collect(root)
             self.assertFalse((root / 'comparison-private.json').exists())
+
+    def test_native_text_parser_does_not_publish_run_logs(self):
+        self.assertEqual(parse_output('transcribe', 'model: test\ntext: привет\nwords: 1'), 'привет')
+        self.assertEqual(parse_output('transcribe', 'run: ok\ntext: (empty)'), '')
+        with self.assertRaises(ValueError):
+            parse_output('transcribe', 'run: ok without transcript')
+
+    def test_long_error_not_shown_as_transcript(self):
+        self.assertLess(len(short_error('UnicodeDecodeError ' + 'private log' * 200)), 150)
+        self.assertLessEqual(len(short_error('some failure ' * 100)), 220)
 
     def test_atomic_private_receipt(self):
         with tempfile.TemporaryDirectory() as d:
