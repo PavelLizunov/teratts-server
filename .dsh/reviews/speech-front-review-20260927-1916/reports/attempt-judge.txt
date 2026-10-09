@@ -1,0 +1,77 @@
+## Evaluation Summary
+
+The review campaign is methodologically sound and produces sufficient evidence to assess the health of both codebases. The five HIGH findings represent real correctness defects — three of which were independently reproduced on the live CLI — and the architectural root cause (1,166 LOC vendored fork drift) guarantees continued regression unless structurally addressed. Recommendation: **remediate** before any release that claims normalization parity between `speech-front` and `teratts-server`.
+
+---
+
+### Structured Evaluation
+
+**`sufficiency`: `sufficient`**
+
+The evidence base is robust across four dimensions:
+
+1. **Reviewer independence & diversity.** Six reviewers across two model families (Gemini × 3, Opus × 3) with context-only independence — each lane worked from a fresh context with no cross-lane leakage. The 7 duplicates (O2-02 ↔ G1-02, O2-03 ↔ G1-01, etc.) confirm cross-family convergence on the same root causes, strengthening confidence.
+
+2. **Mechanical verification.** All five checks passed at the pinned snapshot: 68 `speech-front` unit tests, 31 `teratts-server` module tests, zero clippy warnings, byte-identical lexicon, and both cross-project integration tests. The 646-line diff in check-4 quantifies the drift that causes the HIGH findings.
+
+3. **Evidence grading.** Of the 43 confirmed findings, 13 carry `source_and_reproduced` evidence (live CLI reproduction against the built binary), 30 carry `source_proven` (line-level source verification). No finding relies solely on a reviewer's assertion without a cited source location.
+
+4. **Coverage completeness.** The campaign covered all five declared vectors: change-verification, security-review, codebase-audit, ponytail-review, and ponytail-debt. The expanded findings include explicit invariant statements, evidence paths, and counterevidence — a structure that supports falsification rather than confirmation bias.
+
+**One minor gap:** The review did not exercise `speech-front serve` or `speech-front review` HTTP endpoints under load or with adversarial input (fuzzing), so the concurrency findings (O1-01, O3-01, O3-02, G3-10) are proven at the source level but not stress-tested. This is expected for a static-analysis-heavy campaign and does not reduce the sufficiency rating.
+
+---
+
+**`recommendation`: `remediate`**
+
+The five HIGH findings constitute blocking defects:
+
+| ID | Impact | Why blocking |
+|---|---|---|
+| **G1-01** | `2.5 млн` → unit abbreviation not expanded | User-facing pronunciation error on every decimal-with-unit input |
+| **G1-02** | `2026-08-12` → corrupt range output | ISO dates are common in technical/news text; complete misparse |
+| **G1-06** | URL path entries match after domains | Lexicon false-positive on every URL containing a registered path |
+| **G2-02** | `café` → `caf ` (diacritic Latin stripped) | Silent data loss on loanwords, brand names, non-ASCII Latin |
+| **G3-07** | 1,166 LOC fork drift (root cause) | Structural guarantee of future HIGH regressions until resolved |
+
+The MEDIUM concurrency cluster (G1-08, O1-01, O3-01, O3-02, G3-10) represents latent production risk but is not immediately user-facing in single-request deployments. The 27 LOW findings are genuine debt but not release-blocking.
+
+---
+
+**`limitations`:**
+
+1. No HTTP load/concurrency testing was performed against `speech-front serve` or the Axum review server; concurrency findings (O1-01, O3-01, O3-02) are source-proven only.
+2. No fuzz testing of normalization inputs — edge cases beyond the 8 reproduced CLI scenarios may exist in Unicode boundary handling, extreme-length numbers, or nested lexicon matches.
+3. The review used two model families (Gemini Flash, Claude Opus); cross-model independence is context-level, not model-level — both families share training-data overlap that could create blind spots.
+4. Token/billing counters were unavailable; reviewer effort distribution across lanes cannot be verified quantitatively.
+5. No runtime profiling was performed to validate the performance findings (G1-07 `longest_match` allocation, G2-05 per-request subprocess spawn, G3-14 N+1 SQLite queries) — these are source-proven but unquantified.
+6. The `speech-front` review server's CSRF protection, session handling, and Git publisher race conditions (O3-03, O3-07) were verified through unit tests and source inspection only — no live penetration testing.
+7. Licensing constraint between `speech-front` (proprietary) and `teratts-server` (GPL-3.0) was noted but not legally evaluated; its impact on the remediation path for G3-07 is architectural, not assessed here.
+
+---
+
+**`acceptance_conditions`:**
+
+1. **Backport the three reproduced HIGH fixes (G1-01, G1-02, G1-06) to `speech-front/src/normalize.rs`** and verify each with a new unit test that asserts the correct output. The existing check-5 CLI reproduction commands serve as regression test specifications.
+
+2. **Fix `teratts-server/src/russian_only.rs` `normalize_symbols` (G2-02)** to pass `0x00C0..=0x024F`, `0x1E00..=0x1EFF`, `0xFB00..=0xFB06`, and `0xFF21..=0xFF5A` through to `speech-front` instead of replacing them with spaces. Add a unit test for `café`, `ﬂow`, and `ＡＰＩ`.
+
+3. **Establish a mechanical drift guard for G3-07**: either (a) extract shared normalization into a common crate consumed by both projects, or (b) add a CI check that fails when `normalize.rs` and `speechfront.rs` diverge beyond an approved allowlist. The 646-line diff from check-4 must shrink to zero (option a) or to only intentional, documented differences (option b).
+
+4. **Fix the `года` duplication bug (G1-11)** in both copies: `parse_numeric_date` and `parse_iso_date` must consume trailing `года`/`год`/`г.` tokens to prevent `года года` output.
+
+5. **Address the MEDIUM concurrency cluster before multi-user deployment**: set `busy_timeout` ≥ 5000 ms in `Store::open` (O3-01), gate `Store::initialize()` migration behind a version check to avoid write transactions on read-only paths (O3-02), and replace the synchronous `Mutex` in `review.rs::decision` with a Tokio-aware lock or `spawn_blocking` (O1-01).
+
+6. **Re-run the full check suite** (checks 1–5) at the remediated snapshot and confirm: (a) all existing tests still pass, (b) new regression tests for G1-01, G1-02, G1-06, G1-11, G2-02 pass, (c) the cross-repo diff (check-4) reflects the chosen drift-guard strategy, and (d) the 8 CLI reproductions from check-5 now produce correct output.
+
+---
+
+**Architectural verdict:**
+
+The `speech-front` ↔ `teratts-server` normalization relationship is a textbook vendored-fork anti-pattern. The 646-line diff between two 1,000+ LOC files that *should* implement identical logic is the single root cause behind 6 of the 7 G1-series findings. Every fix applied to one copy without the other creates a new drift bug — and the review proves this has already happened in both directions (teratts-server added ISO dates and decimal units but dropped the `.NET` dot guard; speech-front has neither the fixes nor the regressions).
+
+The licensing mismatch (proprietary vs GPL-3.0) that originally motivated vendoring is real but does not justify indefinite manual synchronization of 1,166 lines of behavioral logic. The remediation should either extract the shared normalization into a separately-licensed common crate (preferred), or enforce mechanical parity through a CI diff-gate with an explicit allowlist for intentional divergences.
+
+The concurrency issues (SQLite busy_timeout, synchronous mutex in async context, PID-recycled cache filenames) are individually low-probability but collectively indicate that the `speech-front serve` / review-server path was designed for single-user local use and has not been hardened for concurrent or containerized deployment. If multi-user or container deployment is planned, the MEDIUM concurrency cluster should be treated as prerequisite work, not optional cleanup.
+
+The 27 LOW findings represent genuine technical debt but follow the expected distribution for a ~5,000 LOC Rust project with active development. None are individually blocking; they should be triaged into the project's normal backlog with the ponytail-debt markers already present in the codebase.

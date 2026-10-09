@@ -1,0 +1,209 @@
+{
+  "run_id": "speech-front-review-20260927-1916",
+  "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+  "profile": "strict",
+  "required_independence": "context",
+  "reviewers": [
+    {
+      "lane": "lane-g1",
+      "route": "route-gemini",
+      "family": "gemini",
+      "context_id": "b8a21c7b-6eb8-4525-9808-a1660cff8616",
+      "receipt": "session:b8a21c7b-6eb8-4525-9808-a1660cff8616:seq:379"
+    },
+    {
+      "lane": "lane-g2",
+      "route": "route-gemini",
+      "family": "gemini",
+      "context_id": "206ff0ed-8e52-46e3-afc3-4234766958a2",
+      "receipt": "session:206ff0ed-8e52-46e3-afc3-4234766958a2:seq:255"
+    },
+    {
+      "lane": "lane-g3",
+      "route": "route-gemini",
+      "family": "gemini",
+      "context_id": "8ea78f9d-31ad-4919-ac0d-62cad61f7e7a",
+      "receipt": "session:8ea78f9d-31ad-4919-ac0d-62cad61f7e7a:seq:531"
+    },
+    {
+      "lane": "lane-o1",
+      "route": "route-opus",
+      "family": "claude",
+      "context_id": "3152a503-f64c-4a3d-92ad-5026bd54f9d4",
+      "receipt": "session:3152a503-f64c-4a3d-92ad-5026bd54f9d4:seq:83"
+    },
+    {
+      "lane": "lane-o2",
+      "route": "route-opus",
+      "family": "claude",
+      "context_id": "f48edbe7-18d7-49d9-93bc-4cd90abbf8e7",
+      "receipt": "session:f48edbe7-18d7-49d9-93bc-4cd90abbf8e7:seq:157"
+    },
+    {
+      "lane": "lane-o3",
+      "route": "route-opus",
+      "family": "claude",
+      "context_id": "bd8bc81e-2e0e-4f0a-825c-860434939af3",
+      "receipt": "session:bd8bc81e-2e0e-4f0a-825c-860434939af3:seq:129"
+    }
+  ],
+  "finding_ids": [
+    "G1-01",
+    "G1-02",
+    "G1-03",
+    "G1-04",
+    "G1-05",
+    "G1-06",
+    "G1-07",
+    "G1-08",
+    "G1-09",
+    "G1-10",
+    "G1-11",
+    "G1-12",
+    "G2-01",
+    "G2-02",
+    "G2-03",
+    "G2-04",
+    "G2-05",
+    "G2-06",
+    "G2-07",
+    "G2-08",
+    "G3-01",
+    "G3-02",
+    "G3-03",
+    "G3-04",
+    "G3-05",
+    "G3-06",
+    "G3-07",
+    "G3-08",
+    "G3-09",
+    "G3-10",
+    "G3-11",
+    "G3-12",
+    "G3-13",
+    "G3-14",
+    "G3-15",
+    "O1-01",
+    "O1-02",
+    "O1-03",
+    "O1-04",
+    "O1-05",
+    "O1-06",
+    "O1-07",
+    "O1-08",
+    "O2-01",
+    "O2-02",
+    "O2-03",
+    "O2-04",
+    "O2-05",
+    "O2-06",
+    "O2-07",
+    "O3-01",
+    "O3-02",
+    "O3-03",
+    "O3-04",
+    "O3-05",
+    "O3-06",
+    "O3-07"
+  ],
+  "expanded": {
+    "G1-01": "[CONFIRMED|HIGH|source_and_reproduced] speech-front/src/normalize.rs:460-464 — speech-front skips unit expansion (млн, кг, км, тыс.) on decimal numbers due to `!decimal` guard. Invariant: Decimal quantities with known Russian unit abbreviations must expand and decline the unit into genitive singular. Evidence: Verified in speech-front/src/normalize.rs:460 (`if !decimal`) vs teratts-server/src/speechfront.rs:544 (`decimal_with_suffix`), and reproduced via CLI (`2.5 млн` -> `две целых пять десятых млн`). Counterevidence: Percentage (`%`) on decimals is handled separately at line 453; integer units work normally.",
+    "G1-02": "[CONFIRMED|HIGH|source_and_reproduced] speech-front/src/normalize.rs:214-221 — speech-front lacks `parse_iso_date`, corrupting YYYY-MM-DD dates into hyphenated numeric ranges plus `-DD`. Invariant: ISO-8601 dates must normalize as calendar dates (or preserve ISO datetimes), never split into ranges. Evidence: Verified in speech-front/src/normalize.rs:214-221 (missing `parse_iso_date`) vs teratts-server/src/speechfront.rs:373-445, and reproduced via CLI (`2026-08-12` -> `две тысячи двадцать шесть — восемь-двенадцать`). Counterevidence: Dot/slash numeric dates (`DD.MM.YYYY`) are handled by `parse_numeric_date`.",
+    "G1-06": "[CONFIRMED|HIGH|source_and_reproduced] speech-front/src/normalize.rs:183-196 — speech-front `boundaries_match` permits non-identifier-prefixed entries like `/v1/chat/completions` to match immediately after domain names (`example.com/v1/chat/completions`). Invariant: Lexicon entries starting with `/` must not match when immediately preceded by an identifier character. Evidence: Verified at speech-front/src/normalize.rs:194 (`!first.is_some_and(is_identifier_char)` is true for `'/'`, bypassing `!previous.is_some_and(...)`) and reproduced via CLI (`https://example.comви один, чат комплишнс`). Counterevidence: teratts-server/src/speechfront.rs:199 already fixed this by requiring `!previous.is_some_and(is_identifier_char)`.",
+    "G2-02": "[CONFIRMED|HIGH|source_proven] teratts-server/src/russian_only.rs:302-317 — `teratts-server` `normalize_symbols` replaces precomposed Latin letters with diacritics, ligatures, and fullwidth Latin (`café`, `ﬂow`, `ＡＰＩ`) with spaces before calling `speech-front`. Invariant: Latin characters supported by `speech-front`'s `latin(c)` NFKD deaccenting contract must not be stripped into spaces by `teratts-server`. Evidence: Verified at teratts-server/src/russian_only.rs:303,335: only `c.is_ascii_alphabetic()` is permitted for Latin, whereas speech-front/src/russian_only.rs:348-352 supports `0x00C0..=0x024F` (except `×,÷,ß,ø`), `0x1E00..=0x1EFF`, `0xFB00..=0xFB06`, `0xFF21..=0xFF5A`. Thus `café` becomes `caf ` instead of `кафе`/`кэйф`. Counterevidence: Commit d273224 intended to replace unsupported CJK/emoji with spaces, but inadvertently excluded non-ASCII Latin ranges supported by `speech-front`.",
+    "G3-07": "[CONFIRMED|HIGH|source_proven] teratts-server/src/speechfront.rs:1-1166 — 1,166 lines of normalization logic in `teratts-server/src/speechfront.rs` duplicate `speech-front/src/normalize.rs` (1,003 LOC), directly causing the 6 behavioral drift bugs found in G1-01..G1-07. Invariant: Shared normalization logic should be maintained in one authoritative source or synchronized mechanically. Evidence: Verified via `check-4-cross-repo-diff.txt` (646-line diff between the two copies) and the resulting drift bugs G1-01..G1-07. Counterevidence: The two repositories have different licenses (`speech-front` vs GPL-3.0 `teratts-server`, noted in `docs/speech-front-integration.md:82-83`), which originally motivated vendoring.",
+    "O2-02": "[DUPLICATE|HIGH|source_and_reproduced] speech-front/src/normalize.rs:214-221 — Duplicate of G1-02: `speech-front` lacks `parse_iso_date`, turning `2026-08-12` into a range. Invariant: ISO-8601 dates must normalize as dates, not numeric ranges. Evidence: Verified and reproduced in check-5; exact root-cause duplicate of G1-02. Counterevidence: Fixed in `teratts-server/src/speechfront.rs:373-422`.",
+    "O2-03": "[DUPLICATE|HIGH|source_and_reproduced] speech-front/src/normalize.rs:460-463 — Duplicate of G1-01: `speech-front` does not expand unit suffixes after decimal numbers (`2.5 км`). Invariant: Decimal numbers with unit abbreviations must expand and decline the unit. Evidence: Verified and reproduced in check-5; exact root-cause duplicate of G1-01. Counterevidence: Fixed in `teratts-server/src/speechfront.rs:544-550`."
+  },
+  "checks": [
+    {
+      "id": "check-1",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo test --locked --offline --manifest-path speech-front/Cargo.toml",
+      "environment": "linux-worker (Debian x86_64, rustc/cargo 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-1-speech-front-test.txt",
+          "sha256": "dfdc583b224bd38c496dd01141225feeec6afad0d1e12b1a70d4b2b589a6bda1"
+        }
+      ],
+      "limits": "68 passed (19 lib + 49 bin), 0 failed."
+    },
+    {
+      "id": "check-2",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo clippy --locked --offline --all-targets --manifest-path speech-front/Cargo.toml -- -D warnings",
+      "environment": "linux-worker (Debian x86_64, clippy 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-2-speech-front-clippy.txt",
+          "sha256": "5395e27801e41e33f312e6a9186023c1abb945fbc05257d07928412371a07ff9"
+        }
+      ],
+      "limits": "Zero clippy warnings across all targets in speech-front."
+    },
+    {
+      "id": "check-3",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo test --locked --offline --manifest-path teratts-server/Cargo.toml {speechfront,russian_only,lexicon_reload}",
+      "environment": "linux-worker (Debian x86_64, rustc/cargo 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-3-teratts-speechfront-test.txt",
+          "sha256": "02cdc9dd2bdcc45cf4f7aa5da016c607bcd0e213af6420432910aea7c620f126"
+        }
+      ],
+      "limits": "31 passed (13 speechfront + 12 russian_only + 6 lexicon_reload), 0 failed."
+    },
+    {
+      "id": "check-4",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "diff -u speech-front/lexicon.toml teratts-server/src/lexicon.toml && diff -u speech-front/src/normalize.rs teratts-server/src/speechfront.rs",
+      "environment": "harness-test (POSIX diff)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-4-cross-repo-diff.txt",
+          "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+        }
+      ],
+      "limits": "lexicon.toml is byte-identical (186 entries); normalize.rs vs speechfront.rs has 646 diff lines."
+    },
+    {
+      "id": "check-5",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "Cross-project ignored integration tests (cross_project_approve_reloads, installed_converter_cross_project) + live CLI reproductions",
+      "environment": "linux-worker (Debian x86_64, compiled speech-front + prepared cmudict.db)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-5-cross-project-and-repros.txt",
+          "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+        }
+      ],
+      "limits": "Both cross-project tests passed; 8 CLI normalization/conversion defects reproduced verbatim."
+    }
+  ],
+  "limitations": [
+    "Native dsh-review preset tools are not active in this session; executed as a user-approved portable sequential-review/v2 campaign via workflow.",
+    "Reviewer pool used Gemini (ninitux/gemini-flash-high-latest) and Opus (ninitux/claude-opus-latest); Opus judge runs in an isolated fresh context (context_only independence, not cross_model).",
+    "Token/billing usage counters from the upstream gateway are not exposed to the workflow runtime and are recorded as unknown.",
+    "No live Tailscale review-server browser session or remote Git push was executed; review.rs HTTP/CSRF/Git checks were verified via unit tests and static source inspection."
+  ],
+  "coverage": {
+    "change-verification": "covered",
+    "security-review": "covered",
+    "codebase-audit": "covered",
+    "ponytail-review": "covered",
+    "ponytail-debt": "covered"
+  },
+  "text": "=== System & Scope Summary ===\nTarget: speech-front (standalone Rust speech front-end and CMUDict phonetic engine, commit 2cce5ebf) and its teratts-server integration modules (`src/speechfront.rs`, `src/russian_only.rs`, `src/lexicon_reload.rs`, commit 715a117e).\nMechanical Checks: All 68 unit tests + clippy in speech-front passed; all 31 speech-front/russian_only/lexicon_reload unit tests plus both cross-project integration tests (`cross_project_approve_reloads`, `installed_converter_cross_project`) passed on linux-worker.\n\n=== Confirmed Findings Inventory (43 confirmed: 5 HIGH, 11 MEDIUM, 27 LOW; 7 duplicates; 7 rejected) ===\n- G1-01 [HIGH|source_and_reproduced] sf/normalize.rs:460-464: speech-front skips unit expansion (млн, кг, км, тыс.) on decimal numbers due to `!decimal` guard.\n- G1-02 [HIGH|source_and_reproduced] sf/normalize.rs:214-221: speech-front lacks `parse_iso_date`, corrupting YYYY-MM-DD dates into hyphenated numeric ranges plus `-DD`.\n- G1-03 [MEDIUM|source_and_reproduced] sf/normalize.rs:441-446: speech-front expands leading numbers of hyphenated technical identifiers (`64-bit`, `12-factor`, `7-zip`).\n- G1-04 [MEDIUM|source_and_reproduced] sf/normalize.rs:255-266: speech-front `parse_version` omits `attached_to_identifier`, rewriting `node-v22.23.2` into `node-вэ двадцать два...`.\n- G1-05 [LOW|source_proven] ts/speechfront.rs:195-201: teratts-server `boundaries_match` dropped the leading-dot guard (`first == Some('.')`), allowing `.NET` to match after `/` or `-` if added to lexicon.\n- G1-06 [HIGH|source_and_reproduced] sf/normalize.rs:183-196: speech-front `boundaries_match` permits non-identifier-prefixed entries like `/v1/chat/completions` to match immediately after domain names (`example.com/v1/chat/completions`).\n- G1-07 [MEDIUM|source_proven] sf/normalize.rs:159-172: speech-front `longest_match` allocates two `String`s (`to_lowercase()`) and recounts chars per entry per char position.\n- G1-08 [MEDIUM|source_proven] ts/lexicon_reload.rs:53-66: `LexiconReload::refresh` holds `self.state.lock()` while reading up to 2 MiB from disk, computing SHA-256, and parsing TOML.\n- G1-10 [LOW|source_proven] ts/lexicon_reload.rs:57-66: When an external lexicon file is corrupted, `LexiconReload::refresh` re-reads, re-hashes, and re-parses the broken TOML on every enabled request.\n- G1-11 [MEDIUM|source_and_reproduced] ts/speechfront.rs:354-371: `parse_numeric_date` and `parse_iso_date` do not consume trailing `года`/`год`/`г.`, producing duplicate `года года` or `года г.`.\n- G1-12 [LOW|source_and_reproduced] ts/speechfront.rs:481-491: Numeric range branch in `parse_number` only expands `%` suffixes and leaves standard unit suffixes (`10-20 км`) unexpanded.\n- G2-01 [MEDIUM|source_proven] ts/russian_only.rs:408-428: `teratts-server` `flatten_tags` converts non-2-letter angle-bracket tags (`<b>`, `<div>`, `<path>`) into spoken words (`div`, `path`), whereas `speech-front` rejects all unknown `<tag>` markup.\n- G2-02 [HIGH|source_proven] ts/russian_only.rs:302-317: `teratts-server` `normalize_symbols` replaces precomposed Latin letters with diacritics, ligatures, and fullwidth Latin (`café`, `ﬂow`, `ＡＰＩ`) with spaces before calling `speech-front`.\n- G2-03 [LOW|source_proven] ts/russian_only.rs:194-204: `speech-front` prints up to `MAX_SERIALIZED_BYTES` (262,144) with `println!` (+1 byte `\\n`), which exceeds `teratts-server`'s `MAX_JSON_BYTES` (262,144) by 1 byte at the exact boundary.\n- G2-04 [LOW|source_and_reproduced] sf/main.rs:114-121: `speech-front russian-only` CLI pre-strips `<ru>/<en>` tags at line 114 before `Converter::convert`, suppressing the `language_tags_removed` warning.\n- G2-05 [MEDIUM|source_proven] ts/server.rs:904-913: `teratts-server` spawns the `speech-front` subprocess and opens SQLite `cmudict.db` on every `russian_only` request even when the text is already 100% valid Russian plaintext.\n- G2-07 [LOW|source_proven] ts/russian_only.rs:232-235: When `speech-front` rejects input for `reading_limit_exceeded` (>1024 readings) or `output_limit_exceeded` (>12,000 chars), `teratts-server` maps the non-zero exit to `ConversionError::Failed` (HTTP 502) instead of `InvalidText` (HTTP 400).\n- G2-08 [LOW|source_proven] sf/pronounce/render.rs:125-135: `split_term` in `render.rs` does not split same-case Cyrillic/Latin transitions (`ТЕСТAPI`), so `Generator::suggest` misses script boundaries that `russian_only.rs` pre-splits.\n- G3-01 [LOW|source_proven] sf/normalize.rs:93-105: Ponytail ceiling breached: comment states `162 entries are tiny; use a sorted scan`, while `lexicon.toml` now has 186 entries.\n- G3-03 [LOW|source_proven] sf/pronounce/mod.rs:152: Ponytail marker `// ponytail: bounded beam of three candidates per part, not a full Cartesian product.` lacks an explicit upgrade trigger (`no-trigger`).\n- G3-04 [LOW|source_proven] ts/russian_only.rs:153: Ponytail marker `// ponytail: kill only this process; binaries spawning descendants are unsupported.` lacks an upgrade trigger (`no-trigger`).\n- G3-05 [LOW|source_proven] sf/observe.rs:1-2137: `observe.rs` (2137 LOC, including 789 LOC of tests) combines SQLite persistence, Horizon TSV/JSON import, atomic lexicon locking, and text token classification.\n- G3-06 [LOW|source_proven] sf/review.rs:343-442: `GitPublisher` (100 LOC) is embedded inside the Axum HTTP review module `review.rs` (1067 LOC).\n- G3-07 [HIGH|source_proven] ts/speechfront.rs:1-1166: 1,166 lines of normalization logic in `teratts-server/src/speechfront.rs` duplicate `speech-front/src/normalize.rs` (1,003 LOC), directly causing the 6 behavioral drift bugs found in G1-01..G1-07.\n- G3-08 [LOW|source_proven] sf/main.rs:70-94: `speech-front serve --tera-url` sets `RendererCommand` to re-invoke `speech-front render-tera` as a child process instead of calling `tera_client::render` in-process.\n- G3-10 [MEDIUM|source_proven] sf/review.rs:269-285: Preview audio cache filenames use `{pid}-{sequence}.wav` (`review.rs:270`) while `RendererCommand::render` (`review.rs:319`) errors if the target file already exists; if a restarted server reuses the same PID (e.g. PID 1 in a container or recycled OS PID), preview fails with HTTP 502.\n- G3-11 [LOW|source_proven] sf/observe.rs:488-510: `Store::approve` is marked `#[cfg(test)]` and only called by unit tests, while production uses `approve_with_context`.\n- G3-12 [LOW|source_proven] sf/review.rs:723-764: `replace_candidate_with` allocates `to_lowercase()` at every char index and `preview()` checks candidate presence by replacing with `\"\\0\"` and comparing strings.\n- G3-13 [LOW|source_and_reproduced] sf/main.rs:363-460: Hand-rolled CLI parser requires subcommand before global flags (e.g. `speech-front --lexicon PATH normalize` fails with `unknown command: --lexicon`) and treats misplaced flags like `--text` as positional text.\n- G3-14 [LOW|source_proven] sf/observe.rs:747-805: `candidates_by_kind` and `decisions` execute 4 secondary SQLite queries per row (N+1 query pattern).\n- G3-15 [LOW|source_proven] sf/review.rs:765-776: `escape_attr` is a one-line wrapper identical to `escape_html`.\n- O1-01 [MEDIUM|source_proven] sf/review.rs:131-196: `async fn decision` acquires a synchronous `std::sync::Mutex` (`state.decision_lock`) and holds it across synchronous SQLite I/O and `git commit` + `git push` subprocess execution on the Tokio worker thread.\n- O1-02 [LOW|source_proven] sf/review.rs:98-104: Review server router relies on Axum's default 2 MiB form body limit rather than setting a tighter `DefaultBodyLimit` (e.g. 16 KiB) for small decision/preview forms.\n- O1-03 [LOW|source_proven] ts/server.rs:472-473: `UnsupportedHtmlBlock` error response echoes the rejected HTML line inside JSON `{\"error\": \"unsupported HTML block: ...\"}`.\n- O1-04 [LOW|source_proven] sf/main.rs:507-513: `read_text()` for CLI `normalize` and `observe` reads stdin via `read_to_string` without a `.take()` byte cap, unlike `russian-only` which caps stdin at 48,001 bytes (`main.rs:103`).\n- O1-05 [LOW|source_proven] sf/ingest.rs:37-40: `ingest_text_path`, `ingest_conspects`, and `ingest_debriefs` call `fs::read_to_string` without checking file size metadata first.\n- O1-06 [LOW|source_proven] ts/lexicon_reload.rs:119-136: `open_regular_file` checks `fs::metadata(path)` before `options.open(path)` without `O_NOFOLLOW`.\n- O1-07 [LOW|source_proven] ts/russian_only.rs:218-244: `convert_with_deadline` polls child completion with `thread::sleep(Duration::from_millis(5))` instead of blocking on `rx.recv_timeout(...)`.\n- O3-01 [MEDIUM|source_proven] sf/observe.rs:129-133: `Store::open` configures no SQLite `busy_timeout` (default 0 ms), so any concurrent access during an active write/migration transaction immediately fails with `SQLITE_BUSY`.\n- O3-02 [MEDIUM|source_proven] sf/observe.rs:142-257: `Store::initialize()` starts a `TransactionBehavior::Immediate` write transaction on every `Store::open()`, including read-only `index()`, `preview()`, and `candidates` calls on an already-migrated v3 database.\n- O3-03 [LOW|source_proven] sf/review.rs:183-196: `publisher.publish()` runs after `approve_with_context` drops the `.speech-front.lock` file lock, allowing a concurrent CLI `approve` to modify `lexicon.toml` before `git add -- lexicon.toml`.\n- O3-06 [LOW|source_proven] sf/observe.rs:259-444: `record`, `replace_source`, and `import_horizon` use `DEFERRED` transactions, which combined with 0 ms `busy_timeout` (O3-01) can fail with `SQLITE_BUSY` on upgrade to write lock.\n- O3-07 [LOW|source_proven] sf/review.rs:386-412: `GitPublisher::publish()` verifies the active Git branch only at server startup (`new()`), not before each `git commit`.\n\n=== Key Architectural & Correctness Themes ===\n1. Cross-Repo Normalization Drift (HIGH: G1-01, G1-02, G1-06, G3-07; MEDIUM: G1-03, G1-04, G1-07, G1-11): `teratts-server/src/speechfront.rs` (1,166 LOC) is a vendored fork of `speech-front/src/normalize.rs` (1,003 LOC). Fixes added to `teratts-server` (ISO-8601 dates `2026-08-12`, decimal units `2.5 млн`, hyphenated identifiers `64-bit`/`7-zip`, `node-v22.23.2` version guard, URL path boundary `/v1/chat/completions`, and zero-allocation `longest_match`) were never backported to `speech-front/src/normalize.rs`, and were reproduced failing on the live `speech-front` CLI in check-5. Conversely, `teratts-server` dropped the `.NET` leading-dot guard (G1-05), and both copies duplicate `года` on numeric/ISO dates followed by `года`/`г.` (`12.08.2026 года` -> `...года года`, G1-11).\n2. Cross-Repo `russian-only` Contract Drift & Diacritic Bug (HIGH: G2-02; MEDIUM: G2-01, G2-05): In commit d273224, `teratts-server/src/russian_only.rs` (`normalize_symbols`) replaced unsupported CJK/emoji with spaces, but its allowlist (`plain_char(c) || c.is_ascii_alphabetic()`) omitted `speech-front`'s extended Latin ranges (`0x00C0..=0x024F`, ligatures, fullwidth Latin), turning `café` -> `caf ` and `ﬂow` -> ` ow` instead of passing them to `speech-front`'s NFKD deaccenting pipeline (G2-02). Similarly, commit 70d95e2 allowed `<placeholder>` tags in `teratts-server` `flatten_tags` by turning tag names into spoken words (including HTML `<div>` -> `div`), while `speech-front` rejects all unknown `<tag>` markup (G2-01).\n3. Concurrency, Lock & SQLite Contention (MEDIUM: G1-08, G3-10, O1-01, O3-01, O3-02): `speech-front/src/observe.rs` sets no SQLite `busy_timeout` (O3-01) and runs an `IMMEDIATE` write transaction on every `Store::open()` even for read-only views (O3-02). `review.rs` holds a synchronous `std::sync::Mutex` across blocking SQLite and `git push` inside an `async fn` (O1-01) and uses `{pid}-{seq}.wav` cache names that collide if a container/OS reuses PIDs across restarts (G3-10). In `teratts-server`, `LexiconReload::refresh` holds its mutex across synchronous disk read + SHA-256 hashing on every enabled request (G1-08).\n\n=== Evaluator Questions ===\n1. Is the evidence sufficient (`sufficient`, `limited`, or `insufficient`) to assess the health, correctness, and security of `speech-front` and its `teratts-server` integration?\n2. What is your overall recommendation (`proceed`, `remediate`, `validate_more`, or `hold`) and what concrete acceptance conditions should govern remediation?\n3. Respond directly (without calling tools) with a structured evaluation containing: `sufficiency` (`sufficient`|`limited`|`insufficient`), `recommendation` (`proceed`|`remediate`|`validate_more`|`hold`), `limitations` (non-empty list of strings), `acceptance_conditions` (non-empty list of strings), and your architectural verdict."
+}

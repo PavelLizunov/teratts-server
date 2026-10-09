@@ -1,0 +1,11 @@
+{
+  "type": "config",
+  "name": "Performance Autoresearch Campaign",
+  "metric_name": "latency_seconds",
+  "metric_unit": "s",
+  "direction": "lower",
+  "max_iterations": 25,
+  "evaluator_lock": "34599308a6bd626e790b89c597a82a26ba9b24b1",
+  "manifest": "autoresearch.manifest.sha256",
+  "timestamp": 1788535602
+}
