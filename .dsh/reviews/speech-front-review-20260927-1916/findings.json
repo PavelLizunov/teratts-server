@@ -1,0 +1,1454 @@
+[
+  {
+    "id": "G1-01",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "HIGH",
+    "basis": "source_and_reproduced",
+    "claim": "speech-front skips unit expansion (млн, кг, км, тыс.) on decimal numbers due to `!decimal` guard.",
+    "invariant": "Decimal quantities with known Russian unit abbreviations must expand and decline the unit into genitive singular.",
+    "reason": "Verified in speech-front/src/normalize.rs:460 (`if !decimal`) vs teratts-server/src/speechfront.rs:544 (`decimal_with_suffix`), and reproduced via CLI (`2.5 млн` -> `две целых пять десятых млн`).",
+    "counterevidence": "Percentage (`%`) on decimals is handled separately at line 453; integer units work normally.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "460-464"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": true,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-02",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "HIGH",
+    "basis": "source_and_reproduced",
+    "claim": "speech-front lacks `parse_iso_date`, corrupting YYYY-MM-DD dates into hyphenated numeric ranges plus `-DD`.",
+    "invariant": "ISO-8601 dates must normalize as calendar dates (or preserve ISO datetimes), never split into ranges.",
+    "reason": "Verified in speech-front/src/normalize.rs:214-221 (missing `parse_iso_date`) vs teratts-server/src/speechfront.rs:373-445, and reproduced via CLI (`2026-08-12` -> `две тысячи двадцать шесть — восемь-двенадцать`).",
+    "counterevidence": "Dot/slash numeric dates (`DD.MM.YYYY`) are handled by `parse_numeric_date`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "214-221"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": true,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-03",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_and_reproduced",
+    "claim": "speech-front expands leading numbers of hyphenated technical identifiers (`64-bit`, `12-factor`, `7-zip`).",
+    "invariant": "Numbers attached to hyphenated technical identifier tails must remain untouched.",
+    "reason": "Verified at speech-front/src/normalize.rs:443 (missing `followed_by_identifier_tail` from teratts-server/src/speechfront.rs:527,883) and reproduced via CLI (`64-bit` -> `шестьдесят четыре-bit`).",
+    "counterevidence": "Preceding identifiers like `x86_64` are guarded by `attached_to_identifier`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "441-446"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-04",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_and_reproduced",
+    "claim": "speech-front `parse_version` omits `attached_to_identifier`, rewriting `node-v22.23.2` into `node-вэ двадцать два...`.",
+    "invariant": "Version strings attached to hyphenated package names must not be expanded in isolation.",
+    "reason": "Verified at speech-front/src/normalize.rs:258 vs teratts-server/src/speechfront.rs:264 and reproduced via CLI.",
+    "counterevidence": "Direct alphanumeric prefixes without hyphens are blocked by `previous_is_identifier`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "255-266"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-05",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "teratts-server `boundaries_match` dropped the leading-dot guard (`first == Some('.')`), allowing `.NET` to match after `/` or `-` if added to lexicon.",
+    "invariant": "Punctuation-prefixed lexicon entries must not match inside URL paths or hyphenated tokens.",
+    "reason": "Verified in diff between speech-front/src/normalize.rs:188-193 and teratts-server/src/speechfront.rs:195-201.",
+    "counterevidence": "`.NET` is not currently in production `lexicon.toml`; `example.NET` is still blocked by `!previous.is_some_and(is_identifier_char)`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "195-201"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-06",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "HIGH",
+    "basis": "source_and_reproduced",
+    "claim": "speech-front `boundaries_match` permits non-identifier-prefixed entries like `/v1/chat/completions` to match immediately after domain names (`example.com/v1/chat/completions`).",
+    "invariant": "Lexicon entries starting with `/` must not match when immediately preceded by an identifier character.",
+    "reason": "Verified at speech-front/src/normalize.rs:194 (`!first.is_some_and(is_identifier_char)` is true for `'/'`, bypassing `!previous.is_some_and(...)`) and reproduced via CLI (`https://example.comви один, чат комплишнс`).",
+    "counterevidence": "teratts-server/src/speechfront.rs:199 already fixed this by requiring `!previous.is_some_and(is_identifier_char)`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "183-196"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": true,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-07",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "speech-front `longest_match` allocates two `String`s (`to_lowercase()`) and recounts chars per entry per char position.",
+    "invariant": "Hot-path lexicon scanning should avoid per-character heap allocations.",
+    "reason": "Verified at speech-front/src/normalize.rs:166-168 vs teratts-server/src/speechfront.rs:103-116,173-182 which precomputes `written_lower` and `written_char_count`.",
+    "counterevidence": "Input length in CLI/review usage is bounded and `teratts-server` already uses the zero-allocation version.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "159-172"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-08",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`LexiconReload::refresh` holds `self.state.lock()` while reading up to 2 MiB from disk, computing SHA-256, and parsing TOML.",
+    "invariant": "Snapshot mutex should only be held or contended minimally, or unchanged files should skip full read+hash.",
+    "reason": "Verified at teratts-server/src/lexicon_reload.rs:56-65.",
+    "counterevidence": "`teratts-server` admits at most 1 active synthesis + 2 waiting requests, and `TERATTS_LEXICON_PATH` is unset by default (using builtin in-memory lexicon).",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/lexicon_reload.rs",
+      "lines": "53-66"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-09",
+    "lane": "lane-g1",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Hardcoded `0x800` for `O_NONBLOCK` on Linux is non-portable to SPARC/MIPS/Alpha.",
+    "invariant": "File open flags must be valid on supported deployment targets.",
+    "reason": "Rejected as a defect: deployment target is explicitly x86_64 Debian 12 LXC (`docs/speech-front-integration.md:77-79`), and avoiding a direct `libc` crate dependency for one constant is intentional.",
+    "counterevidence": "Inline comment at lines 131-132 explicitly documents the Linux UAPI constant and scope.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/lexicon_reload.rs",
+      "lines": "128-136"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-10",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "When an external lexicon file is corrupted, `LexiconReload::refresh` re-reads, re-hashes, and re-parses the broken TOML on every enabled request.",
+    "invariant": "Unchanged invalid lexicon files should not be repeatedly parsed on every request.",
+    "reason": "Verified at teratts-server/src/lexicon_reload.rs:59-64: `state.revision` only updates on `Ok`, so a bad file triggers `parse(&bytes)` every time.",
+    "counterevidence": "Diagnostic logging is throttled to 60s, and valid snapshot fallback is preserved.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/lexicon_reload.rs",
+      "lines": "57-66"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-11",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_and_reproduced",
+    "claim": "`parse_numeric_date` and `parse_iso_date` do not consume trailing `года`/`год`/`г.`, producing duplicate `года года` or `года г.`.",
+    "invariant": "Calendar date normalizers must consume optional following year suffixes (`optional_year_suffix`) just like `parse_text_date`.",
+    "reason": "Verified in `speech-front/src/normalize.rs:347-362` and `teratts-server/src/speechfront.rs:354-371,405-422`, and reproduced via CLI (`12.08.2026 года` -> `...две тысячи двадцать шестого года года`).",
+    "counterevidence": "`parse_text_date` (`6 августа 2026 года`) already calls `optional_year_suffix`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "354-371"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G1-12",
+    "lane": "lane-g1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_and_reproduced",
+    "claim": "Numeric range branch in `parse_number` only expands `%` suffixes and leaves standard unit suffixes (`10-20 км`) unexpanded.",
+    "invariant": "Numeric ranges followed by unit abbreviations should decline the unit using the right-hand bound.",
+    "reason": "Verified at teratts-server/src/speechfront.rs:481-491 and speech-front/src/normalize.rs:398-408, and reproduced via CLI (`10-20 км` -> `десять — двадцать км`).",
+    "counterevidence": "Single numbers (`20 км`) and percentage ranges (`10-15%`) expand units normally.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "481-491"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-01",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`teratts-server` `flatten_tags` converts non-2-letter angle-bracket tags (`<b>`, `<div>`, `<path>`) into spoken words (`div`, `path`), whereas `speech-front` rejects all unknown `<tag>` markup.",
+    "invariant": "Cross-repo `russian-only` tag handling should either share a documented placeholder contract or reject HTML tags consistently.",
+    "reason": "Verified in teratts-server/src/russian_only.rs:408-425 (added in commit 70d95e2 to allow LLM placeholders like `<path>`) vs speech-front/src/russian_only.rs:260-265.",
+    "counterevidence": "Commit 70d95e2 intentionally allowed `<placeholder>` in `teratts-server` for LLM output resilience, though HTML tags like `<div>` also become spoken words and `speech-front` lacks this rule.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "408-428"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-02",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "HIGH",
+    "basis": "source_proven",
+    "claim": "`teratts-server` `normalize_symbols` replaces precomposed Latin letters with diacritics, ligatures, and fullwidth Latin (`café`, `ﬂow`, `ＡＰＩ`) with spaces before calling `speech-front`.",
+    "invariant": "Latin characters supported by `speech-front`'s `latin(c)` NFKD deaccenting contract must not be stripped into spaces by `teratts-server`.",
+    "reason": "Verified at teratts-server/src/russian_only.rs:303,335: only `c.is_ascii_alphabetic()` is permitted for Latin, whereas speech-front/src/russian_only.rs:348-352 supports `0x00C0..=0x024F` (except `×,÷,ß,ø`), `0x1E00..=0x1EFF`, `0xFB00..=0xFB06`, `0xFF21..=0xFF5A`. Thus `café` becomes `caf ` instead of `кафе`/`кэйф`.",
+    "counterevidence": "Commit d273224 intended to replace unsupported CJK/emoji with spaces, but inadvertently excluded non-ASCII Latin ranges supported by `speech-front`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "302-317"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": true,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-03",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`speech-front` prints up to `MAX_SERIALIZED_BYTES` (262,144) with `println!` (+1 byte `\\n`), which exceeds `teratts-server`'s `MAX_JSON_BYTES` (262,144) by 1 byte at the exact boundary.",
+    "invariant": "Subprocess framing must account for the trailing newline emitted by `println!`.",
+    "reason": "Verified at speech-front/src/main.rs:122 (`println!`) vs teratts-server/src/russian_only.rs:195-204 (`bytes.len() > MAX_JSON_BYTES`).",
+    "counterevidence": "Requires a conversion output of exactly 262,144 bytes, which is unreachable for typical TTS utterances.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "194-204"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-04",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_and_reproduced",
+    "claim": "`speech-front russian-only` CLI pre-strips `<ru>/<en>` tags at line 114 before `Converter::convert`, suppressing the `language_tags_removed` warning.",
+    "invariant": "CLI `russian-only` output should include `language_tags_removed` in `warnings` when `<ru>/<en>` tags were stripped, matching `Converter::convert`.",
+    "reason": "Verified at speech-front/src/main.rs:114 and reproduced via CLI (`printf '<en>API</en>' | speech-front russian-only` outputs `warnings: ['automatic_not_approved']` without `language_tags_removed`).",
+    "counterevidence": "Downstream `teratts-server` does not inspect the `language_tags_removed` warning string.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/main.rs",
+      "lines": "114-121"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-05",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`teratts-server` spawns the `speech-front` subprocess and opens SQLite `cmudict.db` on every `russian_only` request even when the text is already 100% valid Russian plaintext.",
+    "invariant": "Pure Cyrillic requests in `russian_only` mode that already satisfy `valid_plaintext` need no subprocess fork or SQLite lookup.",
+    "reason": "Verified at teratts-server/src/server.rs:904-913 and teratts-server/src/russian_only.rs:150-256.",
+    "counterevidence": "Local subprocess + SQLite open takes only a few milliseconds on Linux, well within TTS synthesis latency (~500-1500 ms).",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/server.rs",
+      "lines": "904-913"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-06",
+    "lane": "lane-g2",
+    "status": "duplicate",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "Duplicate of G1-08: `LexiconReload::refresh` locks mutex and reads/hashes `lexicon.toml` on every request.",
+    "invariant": "Unchanged lexicon files should not cause synchronous disk read + SHA-256 under a global lock on every request.",
+    "reason": "Verified at teratts-server/src/lexicon_reload.rs:53-66; root-cause duplicate of G1-08.",
+    "counterevidence": "Only active when `TERATTS_LEXICON_PATH` is explicitly configured.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/lexicon_reload.rs",
+      "lines": "53-66"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G1-08"
+  },
+  {
+    "id": "G2-07",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "When `speech-front` rejects input for `reading_limit_exceeded` (>1024 readings) or `output_limit_exceeded` (>12,000 chars), `teratts-server` maps the non-zero exit to `ConversionError::Failed` (HTTP 502) instead of `InvalidText` (HTTP 400).",
+    "invariant": "Client input expansion limit violations should map to HTTP 400 Bad Request rather than HTTP 502 Bad Gateway.",
+    "reason": "Verified at teratts-server/src/russian_only.rs:161,232-235 and src/server.rs:1164-1166.",
+    "counterevidence": "Input character count and character set are already pre-validated in `teratts-server` before spawning the child.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "232-235"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G2-08",
+    "lane": "lane-g2",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`split_term` in `render.rs` does not split same-case Cyrillic/Latin transitions (`ТЕСТAPI`), so `Generator::suggest` misses script boundaries that `russian_only.rs` pre-splits.",
+    "invariant": "Compound splitter in `render.rs` should split script transitions consistently across both `russian_only` and `suggest`.",
+    "reason": "Verified at speech-front/src/pronounce/render.rs:125-135 vs speech-front/src/russian_only.rs:156-174.",
+    "counterevidence": "`observe::detect` marks mixed-script tokens as `suspected-typo`, so they rarely enter the normal `suggest` review flow.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/pronounce/render.rs",
+      "lines": "125-135"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-01",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Ponytail ceiling breached: comment states `162 entries are tiny; use a sorted scan`, while `lexicon.toml` now has 186 entries.",
+    "invariant": "Documented ponytail ceilings should be updated or revisited when the threshold is crossed.",
+    "reason": "Verified via `grep -c '^\\[\\[entry\\]\\]' lexicon.toml` == 186 and `speech-front/src/normalize.rs:93`.",
+    "counterevidence": "186 entries is only 14.8% above 162; linear scan with precomputed lowercase (once G1-07 is ported) remains microsecond-scale.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "93-105"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-02",
+    "lane": "lane-g3",
+    "status": "duplicate",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Duplicate of G3-01 in vendored `teratts-server/src/speechfront.rs`: `162 entries` ponytail comment vs 186 actual entries.",
+    "invariant": "Documented ponytail ceilings should match current lexicon size.",
+    "reason": "Verified at teratts-server/src/speechfront.rs:94; duplicate root cause of G3-01.",
+    "counterevidence": "`teratts-server` already uses zero-allocation iterator matching.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "94-106"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G3-01"
+  },
+  {
+    "id": "G3-03",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Ponytail marker `// ponytail: bounded beam of three candidates per part, not a full Cartesian product.` lacks an explicit upgrade trigger (`no-trigger`).",
+    "invariant": "Every `ponytail:` marker must name both its ceiling and its upgrade trigger.",
+    "reason": "Verified at speech-front/src/pronounce/mod.rs:152. Note: G3's sub-claim that the beam is unpruned was refuted by coordinator inspection of `dedup(&mut next)` at line 409 (`unique.truncate(LIMIT)`), which DOES prune to 3 candidates per part; only the `no-trigger` comment tag is confirmed.",
+    "counterevidence": "`dedup(&mut next)` at lines 235 and 409 properly enforces `LIMIT = 3`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/pronounce/mod.rs",
+      "lines": "152"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-04",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Ponytail marker `// ponytail: kill only this process; binaries spawning descendants are unsupported.` lacks an upgrade trigger (`no-trigger`).",
+    "invariant": "Every `ponytail:` comment should specify when to revisit the shortcut.",
+    "reason": "Verified at teratts-server/src/russian_only.rs:153.",
+    "counterevidence": "`speech-front russian-only` is a single-process synchronous binary that never spawns child processes.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "153"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-05",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`observe.rs` (2137 LOC, including 789 LOC of tests) combines SQLite persistence, Horizon TSV/JSON import, atomic lexicon locking, and text token classification.",
+    "invariant": "Cohesive module separation improves maintainability as `speech-front` grows.",
+    "reason": "Verified line counts and responsibility boundaries in `speech-front/src/observe.rs`.",
+    "counterevidence": "1,348 lines of production Rust in one module is self-contained and well-tested (49 tests pass).",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "1-2137"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-1-speech-front-test.txt",
+        "sha256": "dfdc583b224bd38c496dd01141225feeec6afad0d1e12b1a70d4b2b589a6bda1"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-06",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`GitPublisher` (100 LOC) is embedded inside the Axum HTTP review module `review.rs` (1067 LOC).",
+    "invariant": "Separating Git CLI automation from HTTP route handlers improves modularity.",
+    "reason": "Verified at speech-front/src/review.rs:343-442.",
+    "counterevidence": "`GitPublisher` is only used by `review::serve` and is under 100 lines.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "343-442"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-07",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "HIGH",
+    "basis": "source_proven",
+    "claim": "1,166 lines of normalization logic in `teratts-server/src/speechfront.rs` duplicate `speech-front/src/normalize.rs` (1,003 LOC), directly causing the 6 behavioral drift bugs found in G1-01..G1-07.",
+    "invariant": "Shared normalization logic should be maintained in one authoritative source or synchronized mechanically.",
+    "reason": "Verified via `check-4-cross-repo-diff.txt` (646-line diff between the two copies) and the resulting drift bugs G1-01..G1-07.",
+    "counterevidence": "The two repositories have different licenses (`speech-front` vs GPL-3.0 `teratts-server`, noted in `docs/speech-front-integration.md:82-83`), which originally motivated vendoring.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "1-1166"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": true,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-08",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`speech-front serve --tera-url` sets `RendererCommand` to re-invoke `speech-front render-tera` as a child process instead of calling `tera_client::render` in-process.",
+    "invariant": "In-process rendering avoids redundant process spawn and double WAV validation.",
+    "reason": "Verified at speech-front/src/main.rs:76-88 and src/review.rs:316-339.",
+    "counterevidence": "Reusing `RendererCommand` unifies the codepath with external Python renderers, and preview clicks are manual human actions.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/main.rs",
+      "lines": "70-94"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-09",
+    "lane": "lane-g3",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "A 0-byte `.speech-front.lock` file left by a crash between `create_new` and `write_all(MARKER)` blocks subsequent approvals with `foreign or incomplete lexicon lock file`.",
+    "invariant": "Lock files must never blindly overwrite unknown or incomplete files.",
+    "reason": "Rejected as a bug: `observe::tests::foreign_lock_file_is_never_overwritten` (`observe.rs:178`) explicitly requires that any lockfile without `MARKER` (including 0-byte files) be rejected rather than overwritten.",
+    "counterevidence": "Covered by explicit unit test `foreign_lock_file_is_never_overwritten` in `check-1-speech-front-test.txt`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "1003-1055"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-1-speech-front-test.txt",
+        "sha256": "dfdc583b224bd38c496dd01141225feeec6afad0d1e12b1a70d4b2b589a6bda1"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-10",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "Preview audio cache filenames use `{pid}-{sequence}.wav` (`review.rs:270`) while `RendererCommand::render` (`review.rs:319`) errors if the target file already exists; if a restarted server reuses the same PID (e.g. PID 1 in a container or recycled OS PID), preview fails with HTTP 502.",
+    "invariant": "Preview cache filenames must not collide across server restarts into a persistent `--audio-cache` directory.",
+    "reason": "Verified at speech-front/src/review.rs:269-271 and 318-320.",
+    "counterevidence": "On bare-metal host OSes without fixed container PIDs, PID reuse across restarts is infrequent.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "269-285"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-11",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`Store::approve` is marked `#[cfg(test)]` and only called by unit tests, while production uses `approve_with_context`.",
+    "invariant": "Test suites should exercise the production `approve_with_context` API.",
+    "reason": "Verified at speech-front/src/observe.rs:488-510.",
+    "counterevidence": "`#[cfg(test)]` prevents dead code in release builds, and several tests also test `approve_with_context` directly.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "488-510"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-12",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`replace_candidate_with` allocates `to_lowercase()` at every char index and `preview()` checks candidate presence by replacing with `\"\\0\"` and comparing strings.",
+    "invariant": "String search in preview rendering can avoid per-character heap allocations.",
+    "reason": "Verified at speech-front/src/review.rs:248-256 and 736-746.",
+    "counterevidence": "Context strings are bounded to 600 chars and only run on human preview requests.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "723-764"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-13",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_and_reproduced",
+    "claim": "Hand-rolled CLI parser requires subcommand before global flags (e.g. `speech-front --lexicon PATH normalize` fails with `unknown command: --lexicon`) and treats misplaced flags like `--text` as positional text.",
+    "invariant": "CLI parsers should reject unknown flags consistently rather than silently treating them as input text.",
+    "reason": "Verified at speech-front/src/main.rs:363-460 and reproduced during check-5 setup.",
+    "counterevidence": "Documented CLI examples in README.md always place the subcommand first (`speech-front normalize --lexicon ...`).",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/main.rs",
+      "lines": "363-460"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-14",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`candidates_by_kind` and `decisions` execute 4 secondary SQLite queries per row (N+1 query pattern).",
+    "invariant": "Batching child lookups reduces query overhead for large limits.",
+    "reason": "Verified at speech-front/src/observe.rs:664-732 and 774-803.",
+    "counterevidence": "SQLite runs in-process on local disk and default review queue limit is 10.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "747-805"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "G3-15",
+    "lane": "lane-g3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`escape_attr` is a one-line wrapper identical to `escape_html`.",
+    "invariant": "Trivial duplicate wrappers can be inlined unless distinct escaping rules are needed.",
+    "reason": "Verified at speech-front/src/review.rs:774-776.",
+    "counterevidence": "`escape_html` already escapes `&`, `<`, `>`, `\"`, and `'`, which is safe for quoted HTML attributes.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "765-776"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-01",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`async fn decision` acquires a synchronous `std::sync::Mutex` (`state.decision_lock`) and holds it across synchronous SQLite I/O and `git commit` + `git push` subprocess execution on the Tokio worker thread.",
+    "invariant": "Async HTTP handlers should use `spawn_blocking` (as `preview` already does at line 273) for blocking SQLite/filesystem/network-git operations.",
+    "reason": "Verified at speech-front/src/review.rs:135-191.",
+    "counterevidence": "Review server binds to `127.0.0.1` for single-operator use.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "131-196"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-02",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Review server router relies on Axum's default 2 MiB form body limit rather than setting a tighter `DefaultBodyLimit` (e.g. 16 KiB) for small decision/preview forms.",
+    "invariant": "Explicit body limits proportional to form field bounds harden HTTP endpoints.",
+    "reason": "Verified at speech-front/src/review.rs:98-104.",
+    "counterevidence": "Axum's built-in 2 MiB default already prevents unbounded memory allocation on loopback.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "98-104"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-03",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`UnsupportedHtmlBlock` error response echoes the rejected HTML line inside JSON `{\"error\": \"unsupported HTML block: ...\"}`.",
+    "invariant": "Error messages should bound or omit echoed user input.",
+    "reason": "Verified at teratts-server/src/server.rs:472-473 and 534-535.",
+    "counterevidence": "Response is `application/json` (escaped by `serde_json`), requires Bearer auth, and input is capped at 64 KiB.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/server.rs",
+      "lines": "472-473"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-04",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`read_text()` for CLI `normalize` and `observe` reads stdin via `read_to_string` without a `.take()` byte cap, unlike `russian-only` which caps stdin at 48,001 bytes (`main.rs:103`).",
+    "invariant": "CLI stdin readers should bound input size consistently.",
+    "reason": "Verified at speech-front/src/main.rs:103 vs 507-513.",
+    "counterevidence": "`normalize` and `observe` are local operator CLI commands, not network services.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/main.rs",
+      "lines": "507-513"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-05",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`ingest_text_path`, `ingest_conspects`, and `ingest_debriefs` call `fs::read_to_string` without checking file size metadata first.",
+    "invariant": "Batch ingestion should skip or reject unexpectedly huge files before reading them into memory.",
+    "reason": "Verified at speech-front/src/ingest.rs:37,112,141.",
+    "counterevidence": "Operator selects `--source PATH`, symlinks are skipped, and only `.md`/`.txt`/`.jsonl`/`.json` files are read.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/ingest.rs",
+      "lines": "37-40"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-06",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`open_regular_file` checks `fs::metadata(path)` before `options.open(path)` without `O_NOFOLLOW`.",
+    "invariant": "Using `O_NOFOLLOW` on Linux closes the narrow TOCTOU symlink-swap window between path metadata check and open.",
+    "reason": "Verified at teratts-server/src/lexicon_reload.rs:119-136.",
+    "counterevidence": "`O_NONBLOCK` (0x800) prevents FIFO hangs on Linux, `file.metadata().is_file()` re-checks the opened descriptor at line 103, and the directory is trusted operator config (`docs/speech-front-integration.md:73-80`).",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/lexicon_reload.rs",
+      "lines": "119-136"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-07",
+    "lane": "lane-o1",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`convert_with_deadline` polls child completion with `thread::sleep(Duration::from_millis(5))` instead of blocking on `rx.recv_timeout(...)`.",
+    "invariant": "Blocking channel wait with timeout avoids 5 ms polling latency and wakeups.",
+    "reason": "Verified at teratts-server/src/russian_only.rs:218-244 (`rx.try_recv()` + `sleep(5ms)`).",
+    "counterevidence": "Total deadline is 5s and admission control limits concurrent synthesis.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "218-244"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O1-08",
+    "lane": "lane-o1",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "CSRF token in `review.rs` is generated once per server process startup (192-bit random hex) rather than rotating per request/hour.",
+    "invariant": "Loopback single-operator review server must prevent cross-origin form submission.",
+    "reason": "Rejected as a defect: a 192-bit CSPRNG per-process token combined with `127.0.0.1` binding, `frame-ancestors 'self'`, `no-referrer`, and Origin/Host validation is completely sound for a single-operator local review tool.",
+    "counterevidence": "Verified CSRF, Origin, Host, and CSP headers in `speech-front/src/review.rs`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "778-782"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O2-01",
+    "lane": "lane-o2",
+    "status": "duplicate",
+    "severity": "MEDIUM",
+    "basis": "source_and_reproduced",
+    "claim": "Duplicate of G1-03: `parse_number` in `speech-front` lacks `followed_by_identifier_tail`, expanding `7-zip`, `12-factor`, `64-bit`.",
+    "invariant": "Hyphenated number-word identifiers must not have their leading number expanded.",
+    "reason": "Verified and reproduced in check-5; exact root-cause duplicate of G1-03.",
+    "counterevidence": "Fixed in `teratts-server/src/speechfront.rs:527`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "441-444"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G1-03"
+  },
+  {
+    "id": "O2-02",
+    "lane": "lane-o2",
+    "status": "duplicate",
+    "severity": "HIGH",
+    "basis": "source_and_reproduced",
+    "claim": "Duplicate of G1-02: `speech-front` lacks `parse_iso_date`, turning `2026-08-12` into a range.",
+    "invariant": "ISO-8601 dates must normalize as dates, not numeric ranges.",
+    "reason": "Verified and reproduced in check-5; exact root-cause duplicate of G1-02.",
+    "counterevidence": "Fixed in `teratts-server/src/speechfront.rs:373-422`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "214-221"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G1-02"
+  },
+  {
+    "id": "O2-03",
+    "lane": "lane-o2",
+    "status": "duplicate",
+    "severity": "HIGH",
+    "basis": "source_and_reproduced",
+    "claim": "Duplicate of G1-01: `speech-front` does not expand unit suffixes after decimal numbers (`2.5 км`).",
+    "invariant": "Decimal numbers with unit abbreviations must expand and decline the unit.",
+    "reason": "Verified and reproduced in check-5; exact root-cause duplicate of G1-01.",
+    "counterevidence": "Fixed in `teratts-server/src/speechfront.rs:544-550`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/normalize.rs",
+      "lines": "460-463"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-5-cross-project-and-repros.txt",
+        "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G1-01"
+  },
+  {
+    "id": "O2-04",
+    "lane": "lane-o2",
+    "status": "duplicate",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Duplicate of G1-05: `teratts-server` dropped the leading-dot guard in `boundaries_match`.",
+    "invariant": "Leading-dot lexicon entries must not match after path separators.",
+    "reason": "Verified in check-4 diff; exact root-cause duplicate of G1-05.",
+    "counterevidence": "`.NET` is not currently in `lexicon.toml`.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/speechfront.rs",
+      "lines": "195-201"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-4-cross-repo-diff.txt",
+        "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "G1-05"
+  },
+  {
+    "id": "O2-05",
+    "lane": "lane-o2",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`protect_numeric_plus` inserts `\" плюс \"` unconditionally, creating transient double spaces before `clean_spacing` collapses them.",
+    "invariant": "Final normalized output must not contain double spaces.",
+    "reason": "Rejected as a defect: as O2's own counterevidence notes, `clean_spacing` collapses all whitespace runs before returning, so final output has single spaces.",
+    "counterevidence": "Unit test `protects_arithmetic_plus_without_changing_stress_or_cpp` passes.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "447-464"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-3-teratts-speechfront-test.txt",
+        "sha256": "02cdc9dd2bdcc45cf4f7aa5da016c607bcd0e213af6420432910aea7c620f126"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O2-06",
+    "lane": "lane-o2",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`normalize_symbols` converts `—` to `-` after `speechfront` range expansion.",
+    "invariant": "Range separators must remain valid input to `speech-front` and downstream TTS.",
+    "reason": "Rejected as a defect: explicitly documented at `server.rs:905` (`Number ranges can introduce typographic dashes after input preparation`) and benign.",
+    "counterevidence": "Verified in `server.rs:905` and passing `russian_only` tests.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "teratts-server/src/russian_only.rs",
+      "lines": "294"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-3-teratts-speechfront-test.txt",
+        "sha256": "02cdc9dd2bdcc45cf4f7aa5da016c607bcd0e213af6420432910aea7c620f126"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O2-07",
+    "lane": "lane-o2",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "Byte-level slicing in `russian_only.rs` relies on `char_indices()`/`len_utf8()` without a safety comment.",
+    "invariant": "String slices must fall on UTF-8 character boundaries.",
+    "reason": "Rejected as a defect: all byte offsets come directly from `char_indices()` and `len_utf8()` and are provably UTF-8 safe.",
+    "counterevidence": "Verified by O2 and coordinator source inspection.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/russian_only.rs",
+      "lines": "56-96"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-01",
+    "lane": "lane-o3",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`Store::open` configures no SQLite `busy_timeout` (default 0 ms), so any concurrent access during an active write/migration transaction immediately fails with `SQLITE_BUSY`.",
+    "invariant": "SQLite connections shared across HTTP handlers and CLI commands should set a `busy_timeout`.",
+    "reason": "Verified at speech-front/src/observe.rs:129-133: no `busy_timeout` is set in production code.",
+    "counterevidence": "Single-operator workload has low concurrency, though `index()`/`preview()` open new connections per request.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "129-133"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-02",
+    "lane": "lane-o3",
+    "status": "confirmed",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "`Store::initialize()` starts a `TransactionBehavior::Immediate` write transaction on every `Store::open()`, including read-only `index()`, `preview()`, and `candidates` calls on an already-migrated v3 database.",
+    "invariant": "Read-only operations on an up-to-date schema should not acquire a write transaction on every connection open.",
+    "reason": "Verified at speech-front/src/observe.rs:144-256: `Transaction::new_unchecked(&self.0, TransactionBehavior::Immediate)` executes before checking `PRAGMA user_version == 3`.",
+    "counterevidence": "The transaction is short-lived when `version == 3`, but amplifies `SQLITE_BUSY` risk when combined with O3-01.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "142-257"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-03",
+    "lane": "lane-o3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`publisher.publish()` runs after `approve_with_context` drops the `.speech-front.lock` file lock, allowing a concurrent CLI `approve` to modify `lexicon.toml` before `git add -- lexicon.toml`.",
+    "invariant": "Git publish commits should capture only the lexicon state approved under the lock.",
+    "reason": "Verified at speech-front/src/observe.rs:544-661 and src/review.rs:183-192.",
+    "counterevidence": "HTTP requests are serialized by `decision_lock`, and concurrent CLI + web approval by a single operator is rare.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "183-196"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-04",
+    "lane": "lane-o3",
+    "status": "duplicate",
+    "severity": "MEDIUM",
+    "basis": "source_proven",
+    "claim": "Duplicate of O1-01: `std::sync::Mutex` in `async fn decision` blocks Tokio executor thread across SQLite, file I/O, and `git push`.",
+    "invariant": "Async handlers should offload blocking I/O and subprocesses via `spawn_blocking`.",
+    "reason": "Verified at speech-front/src/review.rs:131-196; exact root-cause duplicate of O1-01.",
+    "counterevidence": "Single-operator loopback server.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "131-196"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": "O1-01"
+  },
+  {
+    "id": "O3-05",
+    "lane": "lane-o3",
+    "status": "rejected",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "OS crash/power loss between atomic `lexicon.toml` rename and SQLite commit requires manual reconciliation using `.speech-front.backup`.",
+    "invariant": "Cross-storage crash recovery boundaries must be documented and preserve backup files.",
+    "reason": "Rejected as a defect: explicitly documented in `docs/pronunciation.md:126-129` and tested by `exclusive_recovery_files_and_external_edits_are_not_overwritten`.",
+    "counterevidence": "Documented design invariant with non-destructive `.speech-front.backup` retention.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "612-656"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-1-speech-front-test.txt",
+        "sha256": "dfdc583b224bd38c496dd01141225feeec6afad0d1e12b1a70d4b2b589a6bda1"
+      },
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-06",
+    "lane": "lane-o3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`record`, `replace_source`, and `import_horizon` use `DEFERRED` transactions, which combined with 0 ms `busy_timeout` (O3-01) can fail with `SQLITE_BUSY` on upgrade to write lock.",
+    "invariant": "Write transactions in `Store` should either use `IMMEDIATE` or rely on a non-zero `busy_timeout`.",
+    "reason": "Verified at speech-front/src/observe.rs:260,313,380.",
+    "counterevidence": "SQLite rolls back cleanly on `SQLITE_BUSY`, and setting `busy_timeout` (O3-01) resolves contention.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/observe.rs",
+      "lines": "259-444"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  },
+  {
+    "id": "O3-07",
+    "lane": "lane-o3",
+    "status": "confirmed",
+    "severity": "LOW",
+    "basis": "source_proven",
+    "claim": "`GitPublisher::publish()` verifies the active Git branch only at server startup (`new()`), not before each `git commit`.",
+    "invariant": "`GitPublisher::publish` should re-verify `git branch --show-current` before committing.",
+    "reason": "Verified at speech-front/src/review.rs:369-412.",
+    "counterevidence": "`git push` uses explicit refspec `HEAD:refs/heads/{branch}`, and the checkout is dedicated.",
+    "location": {
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "path": "speech-front/src/review.rs",
+      "lines": "386-412"
+    },
+    "evidence_refs": [
+      {
+        "path": "evidence/check-6-source-excerpts.txt",
+        "sha256": "c4c835a4b8343f025778a76ec30630db268cd5467a407850270b7b0228286d90"
+      }
+    ],
+    "decision_critical": false,
+    "canonical_id": null
+  }
+]

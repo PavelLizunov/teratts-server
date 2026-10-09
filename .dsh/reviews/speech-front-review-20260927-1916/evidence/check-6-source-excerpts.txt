@@ -1,0 +1,19 @@
+=== Coordinator Source Inspection & Ponytail Debt Scan ===
+1. speech-front/lexicon.toml & teratts-server/src/lexicon.toml entry count:
+   186 [[entry]] blocks (identical SHA-256 across both repos).
+2. Ponytail markers across both repositories:
+   - speech-front/src/normalize.rs:93: // ponytail: 162 entries are tiny; use a sorted scan until profiling justifies a matcher dependency. (BREACHED: 186 entries)
+   - teratts-server/src/speechfront.rs:94: // ponytail: 162 entries are tiny; use a sorted scan until profiling justifies a matcher dependency. (BREACHED: 186 entries)
+   - speech-front/src/pronounce/mod.rs:152: // ponytail: bounded beam of three candidates per part, not a full Cartesian product. (no-trigger; note dedup() at line 409 DOES call unique.truncate(LIMIT))
+   - teratts-server/src/russian_only.rs:153: // ponytail: kill only this process; binaries spawning descendants are unsupported. (no-trigger)
+   - speech-front/scripts/pre-agent.ps1:9 & post-agent.ps1:15: # ponytail: keep both hooks standalone; extract these two helpers only if a third script needs the same Git/GitHub plumbing. (valid)
+3. Source verification of key findings:
+   - G1-01..G1-07: teratts-server/src/speechfront.rs (1166 LOC) received fixes in commits 72d69fc..9b5e4fd (ISO dates, decimal units, hyphenated tech identifiers, version prefix guard, URL path left-boundary, zero-alloc longest_match) that were never backported to speech-front/src/normalize.rs (1003 LOC).
+   - G1-05: teratts-server/src/speechfront.rs:195-201 dropped the `first == Some('.')` guard present in speech-front/src/normalize.rs:188-193.
+   - G1-08 / G1-10: teratts-server/src/lexicon_reload.rs:53-66 holds `self.state.lock()` across `read_regular_file(path)`, `Sha256::digest(&bytes)`, and `parse(&bytes)`, and does not cache failed revisions.
+   - G2-01: teratts-server/src/russian_only.rs:408-425 (commit 70d95e2) rewrites `<tag>` -> `tag` for any non-2-letter ASCII identifier tag so LLM placeholders like `<path>` synthesize instead of failing HTTP 400, but diverges from speech-front/src/russian_only.rs:260-265 which rejects all unknown `<tag>` markup, and also synthesizes HTML tags like `<div>` as "див".
+   - G2-02: teratts-server/src/russian_only.rs:302-317 (commit d273224) replaces non-ASCII Latin characters (e.g. `é`, `ﬂ`, fullwidth Latin) with spaces because `plain_char(c) || c.is_ascii_alphabetic()` omits speech-front's `latin(c)` ranges (`0x00C0..=0x024F`, `0x1E00..=0x1EFF`, `0xFB00..=0xFB06`, `0xFF21..=0xFF5A`), breaking NFKD deaccenting in `teratts-server`.
+   - G2-03: speech-front/src/main.rs:122 uses `println!` (appending `\n`), so a 262,144-byte JSON payload becomes 262,145 bytes on stdout and fails `bytes.len() > MAX_JSON_BYTES` in teratts-server/src/russian_only.rs:199,358.
+   - G2-04: speech-front/src/main.rs:114 strips `<ru>/<en>` tags before calling `Converter::convert`, suppressing the `"language_tags_removed"` warning on CLI invocations.
+   - G2-05: teratts-server/src/server.rs:904-913 invokes `converter.convert` subprocess even when input text contains zero Latin characters.
+   - O1-01 / O3-01 / O3-02 / O3-03: speech-front/src/review.rs:135 holds `std::sync::Mutex` across synchronous SQLite + Git push on async runtime; `observe.rs:129-144` sets no `busy_timeout` and starts an `IMMEDIATE` write transaction on every `Store::open()` (even read-only index/preview requests); `publisher.publish()` runs after `_lock` is dropped.

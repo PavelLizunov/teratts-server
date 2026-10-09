@@ -1,0 +1,54 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/main.rs (teratts-server/target/debug/deps/teratts_server-f40a4c50f3ac798a)
+
+running 13 tests
+test speechfront::tests::approved_term_numeric_suffix_is_not_a_negative_number ... ok
+test speechfront::tests::cleans_unicode_and_whitespace ... ok
+test speechfront::tests::handles_grouping_ranges_and_unit_case ... ok
+test speechfront::tests::normalizes_core_number_forms ... ok
+test speechfront::tests::normalizes_decimal_units_regression ... ok
+test speechfront::tests::normalizes_iso_date_regression ... ok
+test speechfront::tests::longest_lexicon_match_is_protected_from_numbers ... ok
+test speechfront::tests::preserves_hyphenated_technical_identifiers ... ok
+test speechfront::tests::preserves_invalid_date_and_time_tokens ... ok
+test speechfront::tests::preserves_unknown_identifiers ... ok
+test speechfront::tests::does_not_eat_technical_sentence ... ok
+test speechfront::tests::enforces_lexicon_left_boundary_for_url_path_regression ... ok
+test speechfront::tests::production_lexicon_keeps_horizon_migration_baseline ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 0.05s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running unittests src/main.rs (teratts-server/target/debug/deps/teratts_server-f40a4c50f3ac798a)
+
+running 13 tests
+test russian_only::tests::flatten_preserves_all_spans_and_rejects_bad_markup ... ok
+test russian_only::tests::installed_converter_cross_project ... ignored, requires operator-installed speech-front binary and CMUDICT database
+test russian_only::tests::protects_arithmetic_plus_without_changing_stress_or_cpp ... ok
+test russian_only::tests::input_allowlist_and_symbol_bounds_do_not_relax_output_validation ... ok
+test russian_only::tests::rejects_bad_json_and_unsupported_plaintext ... ok
+test server::tests::russian_only_approved_plus_forms_precede_arithmetic_protection ... ok
+test server::tests::russian_only_request_flags_and_voice_guards ... ok
+test russian_only::tests::configuration_requires_both_paths_and_probes_before_models ... ok
+test server::tests::russian_only_lexicon_precedes_conversion_and_false_still_converts ... ok
+test server::tests::russian_only_unknown_symbols_and_expansion_fail_before_converter ... ok
+test server::tests::russian_only_symbol_normalization_reaches_converter_after_approved_lexicon ... ok
+test server::tests::russian_only_symbols_normalize_before_conversion_and_model_validation ... ok
+test russian_only::tests::bounded_child_protocol_and_failure_cases ... ok
+
+test result: ok. 12 passed; 0 failed; 1 ignored; 0 measured; 130 filtered out; finished in 0.11s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running unittests src/main.rs (teratts-server/target/debug/deps/teratts_server-f40a4c50f3ac798a)
+
+running 7 tests
+test lexicon_reload::tests::cross_project_approve_reloads ... ignored, requires SPEECH_FRONT_TEST_BIN pointing to the speech-front CLI
+test lexicon_reload::tests::bounds_reads_and_rejects_nonregular_files ... ok
+test lexicon_reload::tests::fifo_is_rejected_without_a_writer ... ok
+test lexicon_reload::tests::atomic_approval_and_same_length_revision_replace_snapshot ... ok
+test lexicon_reload::tests::rejects_entire_invalid_initial_file_without_echoing_input ... ok
+test lexicon_reload::tests::corrupted_or_missing_update_retains_reports_and_recovers ... ok
+test lexicon_reload::tests::unset_uses_builtin_without_external_files ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 136 filtered out; finished in 0.02s
+

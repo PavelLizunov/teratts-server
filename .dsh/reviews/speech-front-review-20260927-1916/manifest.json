@@ -1,0 +1,394 @@
+{
+  "version": "sequential-review/v2",
+  "run_id": "speech-front-review-20260927-1916",
+  "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+  "scope": "Full multi-vector review of /var/lib/dsh/Project/speech-front (all src/*.rs, src/pronounce/*.rs, lexicon.toml) and its /var/lib/dsh/teratts-server integration modules (src/speechfront.rs, src/russian_only.rs, src/lexicon_reload.rs).",
+  "approval_ref": "user:turn-3:ask_user_question:Portable sequential-review/v2 campaign + Gemini/Opus pool + Both repos & mechanical checks",
+  "profile": "strict",
+  "required_lenses": [
+    "change-verification",
+    "security-review",
+    "codebase-audit",
+    "ponytail-review",
+    "ponytail-debt"
+  ],
+  "routes": [
+    {
+      "id": "route-gemini",
+      "provider": "ninitux",
+      "model": "gemini-flash-high-latest",
+      "family": "gemini",
+      "failure_domain": "ninitux-ai-gateway",
+      "route_ref": "workflow:phase:Gemini workers"
+    },
+    {
+      "id": "route-opus",
+      "provider": "ninitux",
+      "model": "claude-opus-latest",
+      "family": "claude",
+      "failure_domain": "ninitux-ai-gateway",
+      "route_ref": "workflow:phase:Opus workers"
+    }
+  ],
+  "lanes": [
+    {
+      "id": "lane-g1",
+      "lenses": [
+        "change-verification",
+        "codebase-audit"
+      ],
+      "primary": "route-gemini",
+      "fallback": "route-opus",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-g1"
+    },
+    {
+      "id": "lane-g2",
+      "lenses": [
+        "change-verification",
+        "codebase-audit"
+      ],
+      "primary": "route-gemini",
+      "fallback": "route-opus",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-g2"
+    },
+    {
+      "id": "lane-g3",
+      "lenses": [
+        "codebase-audit",
+        "ponytail-review",
+        "ponytail-debt"
+      ],
+      "primary": "route-gemini",
+      "fallback": "route-opus",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-g3"
+    },
+    {
+      "id": "lane-o1",
+      "lenses": [
+        "security-review"
+      ],
+      "primary": "route-opus",
+      "fallback": "route-gemini",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-o1"
+    },
+    {
+      "id": "lane-o2",
+      "lenses": [
+        "change-verification"
+      ],
+      "primary": "route-opus",
+      "fallback": "route-gemini",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-o2"
+    },
+    {
+      "id": "lane-o3",
+      "lenses": [
+        "change-verification",
+        "codebase-audit"
+      ],
+      "primary": "route-opus",
+      "fallback": "route-gemini",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-o3"
+    },
+    {
+      "id": "lane-judge",
+      "lenses": [],
+      "primary": "route-opus",
+      "fallback": "route-gemini",
+      "primary_unavailable_ref": null,
+      "selected": "attempt-judge"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "attempt-g1",
+      "lane": "lane-g1",
+      "route": "route-gemini",
+      "context_id": "b8a21c7b-6eb8-4525-9808-a1660cff8616",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.931000Z",
+      "ended_at": "2026-09-27T16:30:59.118000Z",
+      "receipt": "session:b8a21c7b-6eb8-4525-9808-a1660cff8616:seq:379",
+      "report": {
+        "path": "reports/attempt-g1.json",
+        "sha256": "5c057ad177a70217437ff89869e2b4b73ec9418b8efa08a31fe60d3095ac86dc"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-g2",
+      "lane": "lane-g2",
+      "route": "route-gemini",
+      "context_id": "206ff0ed-8e52-46e3-afc3-4234766958a2",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.932000Z",
+      "ended_at": "2026-09-27T16:29:57.009000Z",
+      "receipt": "session:206ff0ed-8e52-46e3-afc3-4234766958a2:seq:255",
+      "report": {
+        "path": "reports/attempt-g2.json",
+        "sha256": "1507ad42f1c10b01fa56ad29e06813b88a9249eb73d4c02b8378f1c55d6ef3a6"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-g3",
+      "lane": "lane-g3",
+      "route": "route-gemini",
+      "context_id": "8ea78f9d-31ad-4919-ac0d-62cad61f7e7a",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.932000Z",
+      "ended_at": "2026-09-27T16:32:06.431000Z",
+      "receipt": "session:8ea78f9d-31ad-4919-ac0d-62cad61f7e7a:seq:531",
+      "report": {
+        "path": "reports/attempt-g3.json",
+        "sha256": "0cd699dbdd15ba563e37f4b5ac181dbe9c82c5aaf707fba6733e36eb0e98403c"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-o1",
+      "lane": "lane-o1",
+      "route": "route-opus",
+      "context_id": "3152a503-f64c-4a3d-92ad-5026bd54f9d4",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.933000Z",
+      "ended_at": "2026-09-27T16:27:27.446000Z",
+      "receipt": "session:3152a503-f64c-4a3d-92ad-5026bd54f9d4:seq:83",
+      "report": {
+        "path": "reports/attempt-o1.json",
+        "sha256": "a1a41a8138365a1b3bb75e78e707265c07e57987e3652d3c186aba9c88b18521"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-o2",
+      "lane": "lane-o2",
+      "route": "route-opus",
+      "context_id": "f48edbe7-18d7-49d9-93bc-4cd90abbf8e7",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.933000Z",
+      "ended_at": "2026-09-27T16:38:23.585000Z",
+      "receipt": "session:f48edbe7-18d7-49d9-93bc-4cd90abbf8e7:seq:157",
+      "report": {
+        "path": "reports/attempt-o2.json",
+        "sha256": "a8e3d8b63fc15c959fc0aef60f5c8e1528d1e44a828ed4dda39c560b74a95e9e"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-o3",
+      "lane": "lane-o3",
+      "route": "route-opus",
+      "context_id": "bd8bc81e-2e0e-4f0a-825c-860434939af3",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:23:27.933000Z",
+      "ended_at": "2026-09-27T16:36:57.676000Z",
+      "receipt": "session:bd8bc81e-2e0e-4f0a-825c-860434939af3:seq:129",
+      "report": {
+        "path": "reports/attempt-o3.json",
+        "sha256": "6990d0c4830cb47ce6c6f1b49c68e899f9c15f5e03f2ca8b787c605979cd8a3c"
+      },
+      "rerun_reason": null
+    },
+    {
+      "id": "attempt-judge",
+      "lane": "lane-judge",
+      "route": "route-opus",
+      "context_id": "e7071e0d-a6eb-442f-a081-1a1b168d849f",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "state": "completed",
+      "failure": null,
+      "failure_scope": "route",
+      "started_at": "2026-09-27T16:58:17.731000Z",
+      "ended_at": "2026-09-27T16:59:31.551000Z",
+      "receipt": "session:e7071e0d-a6eb-442f-a081-1a1b168d849f:seq:17",
+      "report": {
+        "path": "reports/attempt-judge.txt",
+        "sha256": "a5645b2e541482f0fb3096c399a80831d32550cfad3811c60d299daec3c0d1d6"
+      },
+      "rerun_reason": null
+    }
+  ],
+  "budget": {
+    "max_attempts": 21,
+    "deadline": "2026-09-27T21:00:00Z",
+    "usage": "unknown"
+  },
+  "findings": {
+    "path": "findings.json",
+    "sha256": "43ba7016f357b6f51004202deeb96dcc8ce094507267f3120ec848dd69ae3e88"
+  },
+  "checks": [
+    {
+      "id": "check-1",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo test --locked --offline --manifest-path speech-front/Cargo.toml",
+      "environment": "linux-worker (Debian x86_64, rustc/cargo 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-1-speech-front-test.txt",
+          "sha256": "dfdc583b224bd38c496dd01141225feeec6afad0d1e12b1a70d4b2b589a6bda1"
+        }
+      ],
+      "limits": "68 passed (19 lib + 49 bin), 0 failed."
+    },
+    {
+      "id": "check-2",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo clippy --locked --offline --all-targets --manifest-path speech-front/Cargo.toml -- -D warnings",
+      "environment": "linux-worker (Debian x86_64, clippy 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-2-speech-front-clippy.txt",
+          "sha256": "5395e27801e41e33f312e6a9186023c1abb945fbc05257d07928412371a07ff9"
+        }
+      ],
+      "limits": "Zero clippy warnings across all targets in speech-front."
+    },
+    {
+      "id": "check-3",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "cargo test --locked --offline --manifest-path teratts-server/Cargo.toml {speechfront,russian_only,lexicon_reload}",
+      "environment": "linux-worker (Debian x86_64, rustc/cargo 1.98.0)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-3-teratts-speechfront-test.txt",
+          "sha256": "02cdc9dd2bdcc45cf4f7aa5da016c607bcd0e213af6420432910aea7c620f126"
+        }
+      ],
+      "limits": "31 passed (13 speechfront + 12 russian_only + 6 lexicon_reload), 0 failed."
+    },
+    {
+      "id": "check-4",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "diff -u speech-front/lexicon.toml teratts-server/src/lexicon.toml && diff -u speech-front/src/normalize.rs teratts-server/src/speechfront.rs",
+      "environment": "harness-test (POSIX diff)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-4-cross-repo-diff.txt",
+          "sha256": "b3b0853e11f60c14cec34684592fc7520a04cf0b3ff3ee429230f175297b04d2"
+        }
+      ],
+      "limits": "lexicon.toml is byte-identical (186 entries); normalize.rs vs speechfront.rs has 646 diff lines."
+    },
+    {
+      "id": "check-5",
+      "snapshot": "speech-front@2cce5ebf98b1b69274ccea5acc8126c08b66ba39+teratts-server@715a117e622e3d5fc83a5a4689852f83b762a105",
+      "procedure": "Cross-project ignored integration tests (cross_project_approve_reloads, installed_converter_cross_project) + live CLI reproductions",
+      "environment": "linux-worker (Debian x86_64, compiled speech-front + prepared cmudict.db)",
+      "status": "passed",
+      "exit_code": 0,
+      "evidence_refs": [
+        {
+          "path": "evidence/check-5-cross-project-and-repros.txt",
+          "sha256": "7ca369fd30701df845c7c78913b8bcd41b54fee394bd07e0d657a39c52ee3c29"
+        }
+      ],
+      "limits": "Both cross-project tests passed; 8 CLI normalization/conversion defects reproduced verbatim."
+    }
+  ],
+  "limitations": [
+    "Native dsh-review preset tools are not active in this session; executed as a user-approved portable sequential-review/v2 campaign via workflow.",
+    "Reviewer pool used Gemini (ninitux/gemini-flash-high-latest) and Opus (ninitux/claude-opus-latest); Opus judge runs in an isolated fresh context (context_only independence, not cross_model).",
+    "Token/billing usage counters from the upstream gateway are not exposed to the workflow runtime and are recorded as unknown.",
+    "No live Tailscale review-server browser session or remote Git push was executed; review.rs HTTP/CSRF/Git checks were verified via unit tests and static source inspection."
+  ],
+  "checkpoint": "Completed all 6 reviewer lanes (G1-G3, O1-O3), 5 mechanical check suites, candidate reconciliation (57 candidates), and independent Opus judge evaluation (lane-judge). No remaining review lanes.",
+  "packet": {
+    "path": "packet.json",
+    "sha256": "5b46a117515bd791d7cd8d9c4d81e7469fd1d069ec3cf88e8e6377f2ae6a82ec"
+  },
+  "judge_lane": "lane-judge",
+  "judge_independence": "context",
+  "judge": {
+    "attempt_id": "attempt-judge",
+    "input_sha256": "5b46a117515bd791d7cd8d9c4d81e7469fd1d069ec3cf88e8e6377f2ae6a82ec",
+    "response_sha256": "a5645b2e541482f0fb3096c399a80831d32550cfad3811c60d299daec3c0d1d6",
+    "sufficiency": "sufficient",
+    "recommendation": "remediate",
+    "limitations": [
+      "No HTTP load/concurrency testing was performed against speech-front serve or the Axum review server; concurrency findings (O1-01, O3-01, O3-02) are source-proven only.",
+      "No fuzz testing of normalization inputs — edge cases beyond the 8 reproduced CLI scenarios may exist in Unicode boundary handling, extreme-length numbers, or nested lexicon matches.",
+      "The review used two model families (Gemini Flash, Claude Opus); cross-model independence is context-level, not model-level — both families share training-data overlap that could create blind spots.",
+      "Token/billing counters were unavailable; reviewer effort distribution across lanes cannot be verified quantitatively.",
+      "No runtime profiling was performed to validate the performance findings (G1-07 longest_match allocation, G2-05 per-request subprocess spawn, G3-14 N+1 SQLite queries) — these are source-proven but unquantified.",
+      "The speech-front review server's CSRF protection, session handling, and Git publisher race conditions (O3-03, O3-07) were verified through unit tests and source inspection only — no live penetration testing.",
+      "Licensing constraint between speech-front (proprietary) and teratts-server (GPL-3.0) was noted but not legally evaluated; its impact on the remediation path for G3-07 is architectural, not assessed here."
+    ],
+    "acceptance_conditions": [
+      "Backport the three reproduced HIGH fixes (G1-01, G1-02, G1-06) to speech-front/src/normalize.rs and verify each with a new unit test that asserts the correct output.",
+      "Fix teratts-server/src/russian_only.rs normalize_symbols (G2-02) to pass 0x00C0..=0x024F, 0x1E00..=0x1EFF, 0xFB00..=0xFB06, and 0xFF21..=0xFF5A through to speech-front instead of replacing them with spaces; add a unit test for café, ﬂow, and ＡＰＩ.",
+      "Establish a mechanical drift guard for G3-07: either extract shared normalization into a common crate consumed by both projects, or add a CI check that fails when normalize.rs and speechfront.rs diverge beyond an approved allowlist.",
+      "Fix the года duplication bug (G1-11) in both copies: parse_numeric_date and parse_iso_date must consume trailing года/год/г. tokens to prevent года года output.",
+      "Address the MEDIUM concurrency cluster before multi-user deployment: set busy_timeout >= 5000 ms in Store::open (O3-01), gate Store::initialize() migration behind a version check to avoid write transactions on read-only paths (O3-02), and replace the synchronous Mutex in review.rs::decision with a Tokio-aware lock or spawn_blocking (O1-01).",
+      "Re-run the full check suite (checks 1-5) at the remediated snapshot and confirm all existing tests pass, new regression tests for G1-01, G1-02, G1-06, G1-11, G2-02 pass, and the 8 CLI reproductions from check-5 produce correct output."
+    ]
+  },
+  "delivery": {
+    "status": "complete",
+    "coverage": {
+      "change-verification": "covered",
+      "security-review": "covered",
+      "codebase-audit": "covered",
+      "ponytail-review": "covered",
+      "ponytail-debt": "covered"
+    },
+    "profile_fidelity": "exact",
+    "independence": "context_only",
+    "sufficiency": "sufficient",
+    "recommendation": "remediate",
+    "limitations": [
+      "Native dsh-review preset tools are not active in this session; executed as a user-approved portable sequential-review/v2 campaign via workflow.",
+      "Reviewer pool used Gemini (ninitux/gemini-flash-high-latest) and Opus (ninitux/claude-opus-latest); Opus judge runs in an isolated fresh context (context_only independence, not cross_model).",
+      "Token/billing usage counters from the upstream gateway are not exposed to the workflow runtime and are recorded as unknown.",
+      "No live Tailscale review-server browser session or remote Git push was executed; review.rs HTTP/CSRF/Git checks were verified via unit tests and static source inspection.",
+      "No HTTP load/concurrency testing was performed against speech-front serve or the Axum review server; concurrency findings (O1-01, O3-01, O3-02) are source-proven only.",
+      "No fuzz testing of normalization inputs — edge cases beyond the 8 reproduced CLI scenarios may exist in Unicode boundary handling, extreme-length numbers, or nested lexicon matches.",
+      "The review used two model families (Gemini Flash, Claude Opus); cross-model independence is context-level, not model-level — both families share training-data overlap that could create blind spots.",
+      "Token/billing counters were unavailable; reviewer effort distribution across lanes cannot be verified quantitatively.",
+      "No runtime profiling was performed to validate the performance findings (G1-07 longest_match allocation, G2-05 per-request subprocess spawn, G3-14 N+1 SQLite queries) — these are source-proven but unquantified.",
+      "The speech-front review server's CSRF protection, session handling, and Git publisher race conditions (O3-03, O3-07) were verified through unit tests and source inspection only — no live penetration testing.",
+      "Licensing constraint between speech-front (proprietary) and teratts-server (GPL-3.0) was noted but not legally evaluated; its impact on the remediation path for G3-07 is architectural, not assessed here."
+    ],
+    "acceptance_conditions": [
+      "Backport the three reproduced HIGH fixes (G1-01, G1-02, G1-06) to speech-front/src/normalize.rs and verify each with a new unit test that asserts the correct output.",
+      "Fix teratts-server/src/russian_only.rs normalize_symbols (G2-02) to pass 0x00C0..=0x024F, 0x1E00..=0x1EFF, 0xFB00..=0xFB06, and 0xFF21..=0xFF5A through to speech-front instead of replacing them with spaces; add a unit test for café, ﬂow, and ＡＰＩ.",
+      "Establish a mechanical drift guard for G3-07: either extract shared normalization into a common crate consumed by both projects, or add a CI check that fails when normalize.rs and speechfront.rs diverge beyond an approved allowlist.",
+      "Fix the года duplication bug (G1-11) in both copies: parse_numeric_date and parse_iso_date must consume trailing года/год/г. tokens to prevent года года output.",
+      "Address the MEDIUM concurrency cluster before multi-user deployment: set busy_timeout >= 5000 ms in Store::open (O3-01), gate Store::initialize() migration behind a version check to avoid write transactions on read-only paths (O3-02), and replace the synchronous Mutex in review.rs::decision with a Tokio-aware lock or spawn_blocking (O1-01).",
+      "Re-run the full check suite (checks 1-5) at the remediated snapshot and confirm all existing tests pass, new regression tests for G1-01, G1-02, G1-06, G1-11, G2-02 pass, and the 8 CLI reproductions from check-5 produce correct output."
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+=== Cross-project test 1: lexicon_reload::tests::cross_project_approve_reloads ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src/main.rs (teratts-server/target/debug/deps/teratts_server-f40a4c50f3ac798a)
+
+running 1 test
+test lexicon_reload::tests::cross_project_approve_reloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 142 filtered out; finished in 0.07s
+
+=== Cross-project test 2: russian_only::tests::installed_converter_cross_project ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/main.rs (teratts-server/target/debug/deps/teratts_server-f40a4c50f3ac798a)
+
+running 1 test
+test russian_only::tests::installed_converter_cross_project ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 142 filtered out; finished in 0.08s
+
+=== Live Reproductions of Candidate Findings ===
+[Repro G1-01 / O2-03] speech-front normalize "Население 2.5 млн и вес 1.5 кг":
+Население две целых пять десятых млн и вес одна целая пять десятых кг
+[Repro G1-02 / O2-02] speech-front normalize "Релиз 2026-08-12 и 2026-08-12T14:30:00":
+Релиз две тысячи двадцать шесть — восемь-двенадцать и две тысячи двадцать шесть — восемь-12T14:30:00
+[Repro G1-03 / O2-01] speech-front normalize "Система 64-bit, 12-factor и 7-zip":
+Система шестьдесят четыре-bit, двенадцать-factor и семь-zip
+[Repro G1-04] speech-front normalize "Пакет node-v22.23.2":
+Пакет node-вэ двадцать два точка двадцать три точка два
+[Repro G1-06] speech-front normalize "Запрос на https://example.com/v1/chat/completions":
+Запрос на https://example.comви один, чат комплишнс
+[Repro G1-11] speech-front normalize "Дата 12.08.2026 года и 12.08.2026 г.":
+Дата двенадцатого августа две тысячи двадцать шестого года года и двенадцатого августа две тысячи двадцать шестого года г.
+[Repro G1-12] speech-front normalize "Дистанция 10-20 км":
+Дистанция десять — двадцать км
+[Repro G2-04] speech-front russian-only with <en>API</en>:
+{"text":"эй пи ай","readings":[{"written":"API","text":"эй пи ай","source":"profile_exception","warnings":["ambiguous_pronunciation_first_selected"]}],"warnings":["automatic_not_approved"]}

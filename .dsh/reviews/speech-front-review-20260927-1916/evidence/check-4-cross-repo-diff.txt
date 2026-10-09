@@ -1,0 +1,646 @@
+=== diff lexicon.toml ===
+IDENTICAL (exit 0)
+=== diff normalize.rs vs speechfront.rs ===
+--- /var/lib/dsh/Project/speech-front/src/normalize.rs	2026-09-08 22:48:22.759037768 +0000
++++ /var/lib/dsh/teratts-server/src/speechfront.rs	2026-09-20 11:51:51.587535754 +0000
+@@ -1,13 +1,8 @@
+ use std::collections::{BTreeMap, HashSet};
+-use std::error::Error;
+-use std::fs;
+-use std::io;
+-use std::ops::Range;
+-use std::path::Path;
+ 
+ use chislo::{
+-    Gender, USD, decimal_to_words_precision, decline, int_to_words, int_to_words_gender,
+-    money_from_str, percent, percent_decimal_precision, time_to_words, year_to_words,
++    decimal_to_words_precision, decline, int_to_words, int_to_words_gender, money_from_str,
++    percent, percent_decimal_precision, time_to_words, year_to_words, Gender, USD,
+ };
+ use serde::Deserialize;
+ use unicode_normalization::UnicodeNormalization;
+@@ -15,11 +10,11 @@
+ #[derive(Deserialize)]
+ struct LexiconFile {
+     schema_version: u32,
+-    entry: Vec<LexiconEntry>,
++    entry: Vec<RawLexiconEntry>,
+ }
+ 
+ #[derive(Deserialize)]
+-struct LexiconEntry {
++struct RawLexiconEntry {
+     written: String,
+     language: String,
+     spoken: String,
+@@ -31,18 +26,24 @@
+     engines: BTreeMap<String, String>,
+ }
+ 
++struct LexiconEntry {
++    written: String,
++    written_lower: String,
++    written_char_count: usize,
++    spoken: String,
++}
++
+ pub struct Normalizer {
+     entries: Vec<LexiconEntry>,
+ }
+ 
+ impl Normalizer {
+-    pub fn from_path(path: &Path) -> Result<Self, Box<dyn Error>> {
+-        let source = fs::read_to_string(path)?;
+-        Self::from_toml(&source)
+-            .map_err(|message| io::Error::new(io::ErrorKind::InvalidData, message).into())
++    /// Normalizer over the vendored approved lexicon (compile-time embedded).
++    pub fn builtin() -> Result<Self, String> {
++        Self::from_toml(include_str!("lexicon.toml"))
+     }
+ 
+-    pub(crate) fn from_toml(source: &str) -> Result<Self, String> {
++    pub fn from_toml(source: &str) -> Result<Self, String> {
+         let mut lexicon: LexiconFile = toml::from_str(source).map_err(|error| error.to_string())?;
+         if lexicon.schema_version != 1 {
+             return Err(format!(
+@@ -99,20 +100,40 @@
+                 .count()
+                 .cmp(&left.written.chars().count())
+         });
+-        Ok(Self {
+-            entries: lexicon.entry,
+-        })
++        let entries = lexicon
++            .entry
++            .into_iter()
++            .map(|e| {
++                let written_char_count = e.written.chars().count();
++                let written_lower = e.written.to_lowercase();
++                LexiconEntry {
++                    written: e.written,
++                    written_lower,
++                    written_char_count,
++                    spoken: e.spoken,
++                }
++            })
++            .collect();
++        Ok(Self { entries })
+     }
+ 
++    #[cfg(test)]
+     pub fn entry_count(&self) -> usize {
+         self.entries.len()
+     }
+ 
+     pub fn normalize(&self, text: &str) -> String {
+-        self.normalize_with_gap(text, str::to_string)
++        self.normalize_with_gap(text, normalize_segment)
+     }
+ 
+-    pub fn normalize_with_gap(&self, text: &str, prepare: impl Fn(&str) -> String) -> String {
++    /// Protect arithmetic only in unmatched gaps, never in approved lexicon forms/readings.
++    pub fn normalize_russian_only(&self, text: &str) -> String {
++        self.normalize_with_gap(text, |gap| {
++            normalize_segment(&crate::russian_only::protect_numeric_plus(gap))
++        })
++    }
++
++    fn normalize_with_gap(&self, text: &str, normalize_gap: impl Fn(&str) -> String) -> String {
+         let text: String = text.nfc().collect();
+         let mut output = String::with_capacity(text.len());
+         let mut gap_start = 0;
+@@ -120,51 +141,42 @@
+ 
+         while position < text.len() {
+             if let Some((end, entry)) = self.longest_match(&text, position) {
+-                output.push_str(&normalize_segment(&prepare(&text[gap_start..position])));
++                output.push_str(&normalize_gap(&text[gap_start..position]));
+                 output.push_str(&entry.spoken);
+                 position = end;
+                 gap_start = end;
+-                if let Some(suffix) = text[end..].strip_prefix('-')
+-                    && let Some((used, parts)) = dotted_parts(suffix, 1)
+-                    && !next_is_identifier(&text, end + 1 + used)
+-                    && let Some(spoken) = speak_version_parts(&parts)
+-                {
+-                    output.push(' ');
+-                    output.push_str(&spoken);
+-                    position = end + 1 + used;
+-                    gap_start = position;
++                if let Some(suffix) = text[end..].strip_prefix('-') {
++                    if let Some((used, parts)) = dotted_parts(suffix, 1) {
++                        if !next_is_identifier(&text, end + 1 + used) {
++                            if let Some(spoken) = speak_version_parts(&parts) {
++                                output.push(' ');
++                                output.push_str(&spoken);
++                                position = end + 1 + used;
++                                gap_start = position;
++                            }
++                        }
++                    }
+                 }
+             } else {
+                 position += text[position..].chars().next().map_or(1, char::len_utf8);
+             }
+         }
+-        output.push_str(&normalize_segment(&prepare(&text[gap_start..])));
++        output.push_str(&normalize_gap(&text[gap_start..]));
+         clean_spacing(&output)
+     }
+ 
+-    pub(crate) fn approved_ranges(&self, text: &str) -> Vec<Range<usize>> {
+-        let mut ranges = Vec::new();
+-        let mut position = 0;
+-        while position < text.len() {
+-            if let Some((end, _)) = self.longest_match(text, position) {
+-                ranges.push(position..end);
+-                position = end;
+-            } else {
+-                position += text[position..].chars().next().map_or(1, char::len_utf8);
+-            }
+-        }
+-        ranges
+-    }
+-
+     fn longest_match<'a>(
+         &'a self,
+         text: &str,
+         position: usize,
+     ) -> Option<(usize, &'a LexiconEntry)> {
+         self.entries.iter().find_map(|entry| {
+-            let end = end_after_chars(text, position, entry.written.chars().count())?;
++            let end = end_after_chars(text, position, entry.written_char_count)?;
+             let candidate = &text[position..end];
+-            (candidate.to_lowercase() == entry.written.to_lowercase()
++            (candidate
++                .chars()
++                .flat_map(char::to_lowercase)
++                .eq(entry.written_lower.chars())
+                 && boundaries_match(text, position, end, &entry.written))
+             .then_some((end, entry))
+         })
+@@ -181,17 +193,10 @@
+ }
+ 
+ fn boundaries_match(text: &str, start: usize, end: usize, written: &str) -> bool {
+-    let first = written.chars().next();
+     let last = written.chars().next_back();
+     let previous = text[..start].chars().next_back();
+     let next = text[end..].chars().next();
+-    // A leading dot is part of identifiers such as .NET, not permission to match a domain suffix.
+-    if first == Some('.')
+-        && previous.is_some_and(|c| is_identifier_char(c) || ".-/\\\\:@".contains(c))
+-    {
+-        return false;
+-    }
+-    (!first.is_some_and(is_identifier_char) || !previous.is_some_and(is_identifier_char))
++    !previous.is_some_and(is_identifier_char)
+         && (!last.is_some_and(is_identifier_char) || !next.is_some_and(is_identifier_char))
+ }
+ 
+@@ -216,6 +221,7 @@
+         .or_else(|| parse_version(text, position))
+         .or_else(|| parse_text_date(text, position))
+         .or_else(|| parse_numeric_date(text, position))
++        .or_else(|| parse_iso_date(text, position))
+         .or_else(|| parse_time(text, position))
+         .or_else(|| parse_number(text, position))
+ }
+@@ -254,7 +260,10 @@
+ 
+ fn parse_version(text: &str, position: usize) -> Option<(usize, String)> {
+     let rest = &text[position..];
+-    if !matches!(rest.chars().next(), Some('v' | 'V')) || previous_is_identifier(text, position) {
++    if !matches!(rest.chars().next(), Some('v' | 'V'))
++        || previous_is_identifier(text, position)
++        || attached_to_identifier(text, position)
++    {
+         return None;
+     }
+     let (used, parts) = dotted_parts(&rest[1..], 2)?;
+@@ -361,6 +370,80 @@
+     Some((used, spoken_date(day, month_name(month)?, year)))
+ }
+ 
++fn parse_iso_date(text: &str, position: usize) -> Option<(usize, String)> {
++    if previous_is_identifier(text, position) {
++        return None;
++    }
++    let rest = &text[position..];
++    let year_len = ascii_digits(rest);
++    if year_len != 4 {
++        return None;
++    }
++    let separator = rest[year_len..].chars().next()?;
++    if !matches!(separator, '-' | '−') {
++        return None;
++    }
++    let month_start = year_len + separator.len_utf8();
++    let month_len = ascii_digits(&rest[month_start..]);
++    if !(1..=2).contains(&month_len) {
++        return None;
++    }
++    let second_separator = rest[month_start + month_len..].chars().next()?;
++    if second_separator != separator {
++        return None;
++    }
++    let day_start = month_start + month_len + separator.len_utf8();
++    let day_len = ascii_digits(&rest[day_start..]);
++    if !(1..=2).contains(&day_len) {
++        return None;
++    }
++    let year = rest[..year_len].parse::<u32>().ok()?;
++    let month = rest[month_start..month_start + month_len]
++        .parse::<u32>()
++        .ok()?;
++    let day = rest[day_start..day_start + day_len].parse::<u32>().ok()?;
++    let used = day_start + day_len;
++    if let Some(time_len) = iso_time_suffix_len(&rest[used..]) {
++        let total = used + time_len;
++        if next_is_identifier(text, position + total) {
++            return None;
++        }
++        // Preserve a complete ISO datetime as one token instead of allowing
++        // numeric range/negative-number parsers to tear it apart.
++        return Some((total, rest[..total].to_string()));
++    }
++    if next_is_identifier(text, position + used) {
++        return None;
++    }
++    if !valid_date(year, month, day) {
++        return Some((used, rest[..used].to_string()));
++    }
++    Some((used, spoken_date(day, month_name(month)?, year)))
++}
++
++fn iso_time_suffix_len(text: &str) -> Option<usize> {
++    if !text.starts_with('T') {
++        return None;
++    }
++    let hour_len = ascii_digits(&text[1..]);
++    if hour_len != 2 || !text[3..].starts_with(':') {
++        return None;
++    }
++    let minute_len = ascii_digits(&text[4..]);
++    if minute_len != 2 {
++        return None;
++    }
++    let mut used = 6;
++    if text[used..].starts_with(':') {
++        let seconds_len = ascii_digits(&text[used + 1..]);
++        if seconds_len != 2 {
++            return None;
++        }
++        used += 3;
++    }
++    Some(used)
++}
++
+ fn parse_time(text: &str, position: usize) -> Option<(usize, String)> {
+     if previous_is_identifier(text, position) {
+         return None;
+@@ -395,16 +478,16 @@
+     }
+     let rest = &text[position..];
+ 
+-    if let Some((used, spoken, right)) = parse_range(rest)
+-        && !next_is_identifier(text, position + used)
+-    {
+-        let spaces = ascii_spaces(&rest[used..]);
+-        let suffix_start = used + spaces;
+-        if rest[suffix_start..].starts_with('%') {
+-            let unit = decline(right, "процент", "процента", "процентов");
+-            return Some((suffix_start + 1, format!("{spoken} {unit}")));
++    if let Some((used, spoken, right)) = parse_range(rest) {
++        if !next_is_identifier(text, position + used) {
++            let spaces = ascii_spaces(&rest[used..]);
++            let suffix_start = used + spaces;
++            if rest[suffix_start..].starts_with('%') {
++                let unit = decline(right, "процент", "процента", "процентов");
++                return Some((suffix_start + 1, format!("{spoken} {unit}")));
++            }
++            return Some((used, spoken));
+         }
+-        return Some((used, spoken));
+     }
+ 
+     if let Some((number_len, value)) = spaced_grouped_integer(rest) {
+@@ -431,16 +514,17 @@
+     if digits_len == 0 {
+         return None;
+     }
+-    if sign_len == 0
+-        && let Some((used, parts)) = dotted_parts(rest, 3)
+-        && !next_is_identifier(text, position + used)
+-    {
+-        return Some((used, speak_version_parts(&parts)?));
++    if sign_len == 0 {
++        if let Some((used, parts)) = dotted_parts(rest, 3) {
++            if !next_is_identifier(text, position + used) {
++                return Some((used, speak_version_parts(&parts)?));
++            }
++        }
+     }
+ 
+     let (number_len, decimal) = ascii_number(rest)?;
+     let number_end = position + number_len;
+-    if next_is_identifier(text, number_end) {
++    if next_is_identifier(text, number_end) || followed_by_identifier_tail(rest, number_len) {
+         return None;
+     }
+     let value = &rest[..number_len];
+@@ -457,8 +541,11 @@
+         return Some((suffix_start + 1, spoken));
+     }
+ 
+-    if !decimal && let Some((suffix_len, spoken)) = number_with_suffix(value, &rest[suffix_start..])
+-    {
++    if decimal {
++        if let Some((suffix_len, spoken)) = decimal_with_suffix(value, &rest[suffix_start..]) {
++            return Some((suffix_start + suffix_len, spoken));
++        }
++    } else if let Some((suffix_len, spoken)) = number_with_suffix(value, &rest[suffix_start..]) {
+         return Some((suffix_start + suffix_len, spoken));
+     }
+ 
+@@ -486,47 +573,81 @@
+     ))
+ }
+ 
++struct UnitVariant {
++    written: &'static str,
++    gender: Gender,
++    forms: [&'static str; 3],
++    tail: &'static str,
++}
++
++const UNIT_VARIANTS: &[UnitVariant] = &[
++    UnitVariant {
++        written: "км/ч",
++        gender: Gender::Masculine,
++        forms: ["километр", "километра", "километров"],
++        tail: " в час",
++    },
++    UnitVariant {
++        written: "км",
++        gender: Gender::Masculine,
++        forms: ["километр", "километра", "километров"],
++        tail: "",
++    },
++    UnitVariant {
++        written: "кг",
++        gender: Gender::Masculine,
++        forms: ["килограмм", "килограмма", "килограммов"],
++        tail: "",
++    },
++    UnitVariant {
++        written: "тыс.",
++        gender: Gender::Feminine,
++        forms: ["тысяча", "тысячи", "тысяч"],
++        tail: "",
++    },
++    UnitVariant {
++        written: "тыс",
++        gender: Gender::Feminine,
++        forms: ["тысяча", "тысячи", "тысяч"],
++        tail: "",
++    },
++    UnitVariant {
++        written: "млн",
++        gender: Gender::Masculine,
++        forms: ["миллион", "миллиона", "миллионов"],
++        tail: "",
++    },
++    UnitVariant {
++        written: "млрд",
++        gender: Gender::Masculine,
++        forms: ["миллиард", "миллиарда", "миллиардов"],
++        tail: "",
++    },
++];
++
+ fn number_with_suffix(value: &str, suffix: &str) -> Option<(usize, String)> {
+     let value = parse_i64(value)?;
+-    let variants = [
+-        (
+-            "км/ч",
+-            Gender::Masculine,
+-            ["километр", "километра", "километров"],
+-            " в час",
+-        ),
+-        (
+-            "км",
+-            Gender::Masculine,
+-            ["километр", "километра", "километров"],
+-            "",
+-        ),
+-        (
+-            "кг",
+-            Gender::Masculine,
+-            ["килограмм", "килограмма", "килограммов"],
+-            "",
+-        ),
+-        ("тыс.", Gender::Feminine, ["тысяча", "тысячи", "тысяч"], ""),
+-        ("тыс", Gender::Feminine, ["тысяча", "тысячи", "тысяч"], ""),
+-        (
+-            "млн",
+-            Gender::Masculine,
+-            ["миллион", "миллиона", "миллионов"],
+-            "",
+-        ),
+-        (
+-            "млрд",
+-            Gender::Masculine,
+-            ["миллиард", "миллиарда", "миллиардов"],
+-            "",
+-        ),
+-    ];
+-    variants.iter().find_map(|(written, gender, forms, tail)| {
+-        starts_with_word_case_insensitive(suffix, written).then(|| {
+-            let number = int_to_words_gender(value, *gender);
+-            let unit = decline(value, forms[0], forms[1], forms[2]);
+-            (written.len(), format!("{number} {unit}{tail}"))
++    UNIT_VARIANTS.iter().find_map(|unit| {
++        starts_with_word_case_insensitive(suffix, unit.written).then(|| {
++            let number = int_to_words_gender(value, unit.gender);
++            let declined_unit = decline(value, unit.forms[0], unit.forms[1], unit.forms[2]);
++            (
++                unit.written.len(),
++                format!("{number} {declined_unit}{}", unit.tail),
++            )
++        })
++    })
++}
++
++fn decimal_with_suffix(value: &str, suffix: &str) -> Option<(usize, String)> {
++    let precision = fractional_digits(value) as u32;
++    let number = decimal_to_words_precision(&normalize_decimal(value), precision).ok()?;
++    UNIT_VARIANTS.iter().find_map(|unit| {
++        starts_with_word_case_insensitive(suffix, unit.written).then(|| {
++            (
++                unit.written.len(),
++                format!("{number} {}{}", unit.forms[1], unit.tail),
++            )
+         })
+     })
+ }
+@@ -759,6 +880,11 @@
+         .any(|character| character.is_alphabetic() || character == '_')
+ }
+ 
++fn followed_by_identifier_tail(text: &str, position: usize) -> bool {
++    let mut chars = text[position..].chars();
++    matches!(chars.next(), Some('-' | '/' | '.')) && chars.next().is_some_and(is_identifier_char)
++}
++
+ fn is_identifier_char(character: char) -> bool {
+     character.is_alphanumeric() || character == '_'
+ }
+@@ -838,6 +964,7 @@
+ ];
+ 
+ #[cfg(test)]
++#[allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+ mod tests {
+     use super::Normalizer;
+ 
+@@ -862,20 +989,6 @@
+     }
+ 
+     #[test]
+-    fn russian_only_math_preserves_approved_priority() {
+-        let normalizer = Normalizer::from_toml(&FIXTURE.replace("GPT-4", "GPT+4")).unwrap();
+-        assert_eq!(
+-            normalizer
+-                .normalize_with_gap("GPT+4 и 42+7", crate::russian_only::protect_math_symbols),
+-            "короткое и сорок два плюс семь"
+-        );
+-        assert_eq!(
+-            normalizer.normalize_with_gap("GPT+4.1", crate::russian_only::protect_math_symbols),
+-            "длинное"
+-        );
+-    }
+-
+-    #[test]
+     fn longest_lexicon_match_is_protected_from_numbers() {
+         assert_eq!(
+             normalizer().normalize("GPT-4.1 и GPT-4 выросли на 15%."),
+@@ -953,46 +1066,96 @@
+     }
+ 
+     #[test]
+-    fn dot_net_entry_does_not_rewrite_domains_or_paths() {
+-        let normalizer = Normalizer::from_toml(
+-            r#"schema_version=1
+-[[entry]]
+-written=".NET"
+-spoken="дот нет"
+-language="ru-RU"
+-match="word"
+-"#,
+-        )
+-        .unwrap();
++    fn preserves_unknown_identifiers() {
++        assert_eq!(
++            normalizer().normalize("Win11 x86_64 UnseenTool GPT-5.6"),
++            "Win11 x86_64 UnseenTool GPT-5.6"
++        );
++    }
++
++    #[test]
++    fn cleans_unicode_and_whitespace() {
+         assert_eq!(
+-            normalizer.normalize("Используй .NET, не example.NET; https://example.NET"),
+-            "Используй дот нет, не example.NET; https://example.NET"
++            normalizer().normalize("маи\u{306}\n\n  5%"),
++            "май пять процентов"
+         );
++    }
++
++    #[test]
++    fn does_not_eat_technical_sentence() {
++        let normalizer = Normalizer::builtin().unwrap_or_else(|error| panic!("{error}"));
++        let input =
++            "Релиз v0.8.0 (b11b631) ускорил синтез в 2.3 раза, INT8 отклонён, качество прежнее.";
++        let out = normalizer.normalize(input);
+         assert_eq!(
+-            normalizer.normalize("/.NET foo-.NET (.NET)"),
+-            "/.NET foo-.NET (дот нет)"
++            out,
++            "Релиз вэ ноль точка восемь точка ноль (b11b631) ускорил синтез в две целых три десятых раза, INT8 отклонён, качество прежнее."
+         );
+     }
+ 
+     #[test]
+-    fn preserves_unknown_identifiers() {
++    fn normalizes_iso_date_regression() {
++        let normalizer = normalizer();
+         assert_eq!(
+-            normalizer().normalize("Win11 x86_64 UnseenTool GPT-5.6"),
+-            "Win11 x86_64 UnseenTool GPT-5.6"
++            normalizer.normalize("Релиз 2026-08-12 состоялся."),
++            "Релиз двенадцатого августа две тысячи двадцать шестого года состоялся."
++        );
++        assert_eq!(
++            normalizer.normalize("2026-02-31 и 2020-2025"),
++            "2026-02-31 и две тысячи двадцать — две тысячи двадцать пять"
++        );
++        assert_eq!(
++            normalizer.normalize("Метка 2026-08-12T14:30:00 сохранена."),
++            "Метка 2026-08-12T14:30:00 сохранена."
+         );
+     }
+ 
+     #[test]
+-    fn cleans_unicode_and_whitespace() {
++    fn preserves_hyphenated_technical_identifiers() {
++        let normalizer = normalizer();
+         assert_eq!(
+-            normalizer().normalize("маи\u{306}\n\n  5%"),
+-            "май пять процентов"
++            normalizer.normalize("node-v22.23.2, 64-bit, 12-factor и 7-zip"),
++            "node-v22.23.2, 64-bit, 12-factor и 7-zip"
++        );
++    }
++
++    #[test]
++    fn normalizes_decimal_units_regression() {
++        let normalizer = normalizer();
++        assert_eq!(
++            normalizer.normalize("Население 2.5 млн человек."),
++            "Население две целых пять десятых миллиона человек."
++        );
++        assert_eq!(
++            normalizer.normalize("Масса 1.5 кг."),
++            "Масса одна целая пять десятых килограмма."
++        );
++        assert_eq!(
++            normalizer.normalize("Дистанция 10,5 км, скорость 60.5 км/ч, рост 2.5 тыс. человек."),
++            "Дистанция десять целых пять десятых километра, скорость шестьдесят целых пять десятых километра в час, рост две целых пять десятых тысячи человек."
++        );
++    }
++
++    #[test]
++    fn enforces_lexicon_left_boundary_for_url_path_regression() {
++        let normalizer = Normalizer::builtin().unwrap_or_else(|error| panic!("{error}"));
++        assert_eq!(
++            normalizer.normalize("Эндпоинт /v1/chat/completions активен."),
++            "Эндпоинт ви один, чат комплишнс активен."
++        );
++        assert_eq!(
++            normalizer.normalize("Запрос на https://example.com/v1/chat/completions успешен."),
++            "Запрос на https://example.com/v1/chat/completions успешен."
++        );
++        assert_eq!(
++            normalizer.normalize("example.com/v1/chat/completions"),
++            "example.com/v1/chat/completions"
+         );
+     }
+ 
+     #[test]
+     fn production_lexicon_keeps_horizon_migration_baseline() {
+-        let lexicon = include_str!("../lexicon.toml");
++        let lexicon = include_str!("lexicon.toml");
+         let normalizer = Normalizer::from_toml(lexicon).unwrap_or_else(|error| panic!("{error}"));
+         assert!(normalizer.entry_count() >= 162);
+         assert_eq!(
