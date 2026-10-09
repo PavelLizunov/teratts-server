@@ -74,5 +74,24 @@ class Tests(unittest.TestCase):
             p=Path(tmp)/'r.json';p.write_text('{"chatgpt":true,"plugin":true}')
             self.assertEqual(apply_dictionary('чат джибити про и плагины',p)[0],'ChatGPT Pro и plugin')
             self.assertEqual(apply_dictionary('чат джибити про',p,False)[0],'чат джибити про')
+    def test_approved_config_aliases_exact_complaints(self):
+        p=ROOT/'deploy/stt-dictionary.json'
+        text='чат-джипти, чат-джипти, дпти чат, чат-джиптипро. Чар Джи Пяти про. Амарче, Амарчи, Марчи, Амарчик. plug in.'
+        out,meta=apply_dictionary(text,p)
+        self.assertEqual(out,'ChatGPT, ChatGPT, ChatGPT, ChatGPT Pro. ChatGPT Pro. Omarchy, Omarchy, Omarchy, Omarchy. plugin.')
+        self.assertEqual(meta['rule'],'personal-spelling-v5')
+        self.assertEqual(meta['status'],'applied')
+        self.assertEqual(apply_dictionary(out,p)[0],out)
+        self.assertEqual(apply_dictionary(text,p,False)[0],text)
+    def test_alias_protected_false_positive_and_switches(self):
+        p=ROOT/'deploy/stt-dictionary.json'
+        for text in ['Мария купила мерч и марки','GPT Pro','джипти','Амарчинский','`чат-джипти`','/tmp/амарчи','https://test/чат-джипти','амарчи_api','[чат-джипти](https://example.org)','chat-джипти-file']:
+            self.assertEqual(apply_dictionary(text,p)[0],text)
+        with tempfile.TemporaryDirectory() as tmp:
+            config=json.loads(p.read_text());config['chatgpt']=False
+            q=Path(tmp)/'r.json';q.write_text(json.dumps(config,ensure_ascii=False))
+            self.assertEqual(apply_dictionary('чат-джипти Амарчи',q)[0],'чат-джипти Omarchy')
+            config['aliases']['новое имя']='Omarchy';q.write_text(json.dumps(config,ensure_ascii=False))
+            self.assertEqual(apply_dictionary('новое имя',q)[0],'Omarchy')
     def test_empty_input(self):self.assertEqual(normalize_github(""),("",[]))
 if __name__=="__main__":unittest.main(verbosity=2)

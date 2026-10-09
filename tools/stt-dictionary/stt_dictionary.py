@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 import re
 
-RULE_ID = "personal-spelling-v4"
+RULE_ID = "personal-spelling-v5"
 BOUND_LEFT=r"(?<![\w/@.\\+\-])"
 BOUND_RIGHT=r"(?![\w/@\\+\-]|\.[\w])"
 GITHUB=re.compile(BOUND_LEFT+r"(?:github|git[ \t]+hub|гитхап|гитхаба?|гетхаб|гитха|гетха|гит[ \t]+хаб)"+BOUND_RIGHT,re.I)
@@ -14,6 +14,7 @@ CHATGPT_BASE=r"(?:chat[ \t]*gpt|чат[ \t-]*(?:gpt|гпт|джи[ \t-]*пи[ \t
 CHATGPT=re.compile(BOUND_LEFT+CHATGPT_BASE+r"(?:[ \t]+(?:pro|про))?"+BOUND_RIGHT,re.I)
 PROTECTED = re.compile(
     r"```[\s\S]*?(?:```|\Z)|`[^`\n]*(?:`|\n|\Z)"
+    r"|\[[^\]\n]*\]\([^\)\n]*\)"
     r"|https?://[^\s<>]+|[\w.+-]+@[\w.-]+"
     r"|(?:[A-Za-z]:[\\/]|(?<!\w)[./~])[\w./\\+@:-]+"
     r"|\b[\w-]+(?:[./\\][\w.-]+)+", re.IGNORECASE)
@@ -53,6 +54,31 @@ def normalize_chatgpt(text):
     return CHATGPT.sub(replace,text),changes
 
 
+CANONICAL_RULES={"GitHub":"github","Omarchy":"omarchy","plugin":"plugin","ChatGPT":"chatgpt","ChatGPT Pro":"chatgpt"}
+
+def normalize_aliases(text,config):
+    """Exact user-approved aliases; literal strings only, never fuzzy patterns."""
+    aliases=config.get("aliases",{})
+    if not isinstance(aliases,dict) or len(aliases)>256:return text,[]
+    replacements={}
+    for surface,canonical in aliases.items():
+        if (not isinstance(surface,str) or not 1<=len(surface)<=80 or
+            not isinstance(canonical,str) or canonical not in CANONICAL_RULES or
+            config.get(CANONICAL_RULES[canonical]) is not True or
+            not re.fullmatch(r"[\w \t-]+",surface)):
+            continue
+        replacements[surface.casefold()]=canonical
+    if not replacements:return text,[]
+    pattern=re.compile(BOUND_LEFT+r"(?:"+"|".join(re.escape(s) for s in sorted(replacements,key=len,reverse=True))+r")"+BOUND_RIGHT,re.I)
+    protected=[m.span() for m in PROTECTED.finditer(text)];changes=[]
+    def replace(match):
+        canonical=replacements[match.group().casefold()]
+        if match.group()==canonical or any(a<match.end() and b>match.start() for a,b in protected):return match.group()
+        changes.append({"rule":"approved-exact-alias-v1","start":match.start(),"end":match.end(),"before":match.group(),"after":canonical,"offset_basis":"text_before_this_rule"})
+        return canonical
+    return pattern.sub(replace,text),changes
+
+
 def apply_dictionary(text,config_path,requested=True):
     if not requested:return text,{"status":"request_disabled","rule":RULE_ID,"changes":[]}
     try:
@@ -61,7 +87,7 @@ def apply_dictionary(text,config_path,requested=True):
         data=path.read_bytes();config=json.loads(data)
         if not isinstance(config,dict):raise ValueError("Invalid config")
     except (OSError,ValueError,TypeError):return text,{"status":"config_unavailable","rule":RULE_ID,"changes":[]}
-    active=[];changes=[]
+    active=[];text,changes=normalize_aliases(text,config)
     for name,normalizer in [("github",normalize_github),("omarchy",normalize_omarchy),("plugin",normalize_plugin),("chatgpt",normalize_chatgpt)]:
         if config.get(name) is True:
             active.append(name);text,updates=normalizer(text);changes.extend(updates)
