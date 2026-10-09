@@ -101,6 +101,15 @@ class Tests(unittest.TestCase):
         self.assertEqual(apply_dictionary('Линокс и линоксе',p)[0],'Linux и Linux')
         for text in ['Джефф и Мария купили мерч','Клауд и облако','API и git','джипти','`Квен`','/tmp/квен','[Квен](https://x.test)','Квен_name']:
             self.assertEqual(apply_dictionary(text,p)[0],text)
+    def test_context_review_exact_proper_names(self):
+        p=ROOT/'deploy/stt-dictionary.json'
+        text='Клод код, Колод код, клауд коду. Стеллскейл. Дженкингс и Дженкинс. Дипсик Харнес и дипсик харнесом.'
+        expected='Claude Code, Claude Code, Claude Code. Tailscale. Jenkins и Jenkins. DeepSeek Harness и DeepSeek Harness.'
+        self.assertEqual(apply_dictionary(text,p)[0],expected)
+        self.assertEqual(apply_dictionary(expected,p)[0],expected)
+        for text in ['дипсик и харнес', 'Клод', 'код', 'дженкинсовский', 'Стеллскейл_api', '`Клод код`', '/tmp/дженкинс', '[Стеллскейл](https://x.test)']:
+            self.assertEqual(apply_dictionary(text,p)[0],text)
+        self.assertEqual(apply_dictionary(text,p,False)[0],text)
     def test_extra_canonical_validation_and_toggle(self):
         p=ROOT/'deploy/stt-dictionary.json'
         with tempfile.TemporaryDirectory() as tmp:
