@@ -93,5 +93,21 @@ class Tests(unittest.TestCase):
             self.assertEqual(apply_dictionary('чат-джипти Амарчи',q)[0],'чат-джипти Omarchy')
             config['aliases']['новое имя']='Omarchy';q.write_text(json.dumps(config,ensure_ascii=False))
             self.assertEqual(apply_dictionary('новое имя',q)[0],'Omarchy')
+    def test_corpus_derived_technical_names(self):
+        p=ROOT/'deploy/stt-dictionary.json'
+        out,meta=apply_dictionary('Квен, Джеминай, клауд-код, тейл скейл, проксмакс, бансай, Стимдэ, Тмукс, Линуксе, Джев.',p)
+        self.assertEqual(out,'Qwen, Gemini, Claude Code, Tailscale, Proxmox, Bonsai, Steam Deck, tmux, Linux, Jev.')
+        self.assertEqual(apply_dictionary(out,p)[0],out)
+        self.assertEqual(apply_dictionary('Линокс и линоксе',p)[0],'Linux и Linux')
+        for text in ['Джефф и Мария купили мерч','Клауд и облако','API и git','джипти','`Квен`','/tmp/квен','[Квен](https://x.test)','Квен_name']:
+            self.assertEqual(apply_dictionary(text,p)[0],text)
+    def test_extra_canonical_validation_and_toggle(self):
+        p=ROOT/'deploy/stt-dictionary.json'
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg=json.loads(p.read_text());cfg['extra_names']=False
+            q=Path(tmp)/'config.json';q.write_text(json.dumps(cfg,ensure_ascii=False))
+            self.assertEqual(apply_dictionary('Квен Амарчи',q)[0],'Квен Omarchy')
+            cfg['extra_names']=True;cfg['canonical_names'].append('not;code');cfg['aliases']['опасное имя']='not;code';q.write_text(json.dumps(cfg,ensure_ascii=False))
+            self.assertEqual(apply_dictionary('опасное имя',q)[0],'опасное имя')
     def test_empty_input(self):self.assertEqual(normalize_github(""),("",[]))
 if __name__=="__main__":unittest.main(verbosity=2)

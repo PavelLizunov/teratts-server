@@ -60,11 +60,17 @@ def normalize_aliases(text,config):
     """Exact user-approved aliases; literal strings only, never fuzzy patterns."""
     aliases=config.get("aliases",{})
     if not isinstance(aliases,dict) or len(aliases)>256:return text,[]
+    extra=config.get("canonical_names",[])
+    if not isinstance(extra,list) or len(extra)>64:extra=[]
+    allowed=dict(CANONICAL_RULES)
+    for name in extra:
+        if isinstance(name,str) and 1<=len(name)<=80 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 -]*",name):
+            allowed.setdefault(name,"extra_names")
     replacements={}
     for surface,canonical in aliases.items():
         if (not isinstance(surface,str) or not 1<=len(surface)<=80 or
-            not isinstance(canonical,str) or canonical not in CANONICAL_RULES or
-            config.get(CANONICAL_RULES[canonical]) is not True or
+            not isinstance(canonical,str) or canonical not in allowed or
+            config.get(allowed[canonical]) is not True or
             not re.fullmatch(r"[\w \t-]+",surface)):
             continue
         replacements[surface.casefold()]=canonical
