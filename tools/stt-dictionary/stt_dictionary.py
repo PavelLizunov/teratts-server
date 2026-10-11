@@ -64,7 +64,7 @@ def normalize_aliases(text,config):
     if not isinstance(extra,list) or len(extra)>64:extra=[]
     allowed=dict(CANONICAL_RULES)
     for name in extra:
-        if isinstance(name,str) and 1<=len(name)<=80 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 -]*",name):
+        if isinstance(name,str) and 1<=len(name)<=80 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 +#-]*",name):
             allowed.setdefault(name,"extra_names")
     replacements={}
     for surface,canonical in aliases.items():
@@ -89,7 +89,7 @@ def apply_dictionary(text,config_path,requested=True):
     if not requested:return text,{"status":"request_disabled","rule":RULE_ID,"changes":[]}
     try:
         path=Path(config_path)
-        if path.stat().st_size>4096:raise ValueError("Oversized config")
+        if path.stat().st_size>65536:raise ValueError("Oversized config")
         data=path.read_bytes();config=json.loads(data)
         if not isinstance(config,dict):raise ValueError("Invalid config")
     except (OSError,ValueError,TypeError):return text,{"status":"config_unavailable","rule":RULE_ID,"changes":[]}
