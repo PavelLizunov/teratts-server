@@ -26,6 +26,12 @@ The review bank historically collected preferences/candidates but did not activa
 
 Live acceptance: replayed the three exact retained complaint WAVs. Default produced four ChatGPT corrections including preserved Pro, one ChatGPT Pro from Чар Джи Пяти про, and four Omarchy corrections. `dictionary=false` returned the exact prior uncorrected text. Dictionary overhead0.60–1.82ms, no LLM/second ASR.16 scoped tests plus14 project mirror regressions pass. ParakeetPID3132587 unchanged; gateway alone restartedPID3989971; backups/receipts private. No original corpus or review feedback deleted. See [repair record](repair-spec.md).
 
+## Requested GPT, language and skill spelling iteration
+
+The hot-read configuration now covers mixed Latin/Cyrillic spellings such as `чат G Pти`, `G Pt`, `G P T`, standalone `джипти` and their explicit Pro variants. Standalone forms become GPT; chat-prefixed forms become ChatGPT; the explicit Pro forms retain ChatGPT Pro. The previously misleading standalone `джи пити` → ChatGPT alias is corrected to GPT. Exact programming-language forms cover Python, TypeScript, JavaScript, Rust, Java, Kotlin, Golang and PHP. Full skill names cover anti-slop, ponytail, homelab, opendesign, gemini-swarm, opus-swarm and sequential-review. AI accepts only эй ай/эй-ай/эйай, never the ordinary conjunction и. Generic си/го/свифт remain unchanged; раст is an explicitly enabled standalone Rust spelling, not a stem match.
+
+This iteration changes only the existing JSON, compacted to fit the active4096-byte limit (4069 bytes,117 aliases,29 extra canonical names). No adapter or recognizer change/restart, no new test campaign or quality claim. Missing acoustic words still cannot be recovered by these aliases.
+
 ## Corpus-derived technical names
 
 The additional alias set was deployed after the separately approved gateway reload. Twelve extra Latin canonical names (Qwen, Gemini, Claude Code, Tailscale, Proxmox, Bonsai, Steam Deck, tmux, Linux, Jev, Jenkins and DeepSeek Harness) are enabled by `extra_names`. `canonical_names` accepts at most64 distinct names,80 characters each, with Latin letters, digits, spaces and hyphens; aliases remain literal, bounded and longest-first. Existing family toggles still apply. Only multiword Claude Code forms are enabled, not ambiguous standalone cloud/Клауд. Exact reviewed плаги/плагинок and missing existing-name forms now have configured aliases; Maria/merch/git/API/Джефф remain unchanged.
