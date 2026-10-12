@@ -220,6 +220,22 @@ global attention are **not validated language-switch timestamps**. A successful
 aggregation check establishes implementation consistency, not localization
 quality. Downloading or running it does not by itself solve the ASR requirement.
 
+Observed LID on both intact recordings: all1193frames favor Russian; maximum
+EN pair-conditional probabilities0.00131017/0.000479798. Mean frame logits
+reproduce the official global output within1.44e-6. Thus extraction is
+consistent, but the signal is not useful as switch guidance here. It was NOT
+applied to ASR. Local process42.545/37.043s, RSS4051.430/4074.781MiB; no Deck run.
+
+`diagnose_original.py --root PRIVATE_ARTIFACT_ROOT --output NEW_JSON` reads the
+pinned original checkpoint with `weights_only=True`, compares preprocessing on
+the retained whole WAVs using its saved window/mel bank, and matches the FP32
+ONNX initializers to original tensors. It requires task-local Torch and ONNX1.17;
+it runs no ASR model and writes exclusive JSON/NPZ evidence. Observed feature
+maximum differences are7.546e-5/4.143e-5;575/609export tensors match exactly.
+The remaining34depthwise-convolution tensors correspond to analytic BatchNorm
+folding (separate retained diagnostic, maximum difference3.815e-6). This excludes
+large observed feature/weight mismatches, not every possible graph/operator bug.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

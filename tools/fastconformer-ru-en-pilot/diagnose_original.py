@@ -94,7 +94,28 @@ def main(args):
                                      'total_tensors': len(rows),
                                      'matched_elements': sum(x['elements'] for x in rows if x['exact_original_matches']),
                                      'total_elements': sum(x['elements'] for x in rows)}
-    result['limitation'] = 'Unmatched may be folded constants; matched weights do not prove ONNX operator parity. No ASR rerun.'
+    # Remaining tensors were observed to be the 17 depthwise Conv+BN pairs.
+    # NeMo ConformerConvolution uses nn.BatchNorm1d with default eps=1e-5.
+    exported = {t.name: numpy_helper.to_array(t) for t in model.graph.initializer}
+    folded = []
+    for layer in range(17):
+        p = f'encoder.layers.{layer}.conv.'
+        scale = weights[p + 'batch_norm.weight'] / torch.sqrt(weights[p + 'batch_norm.running_var'] + 1e-5)
+        conv_weight = (weights[p + 'depthwise_conv.weight'] * scale[:, None, None]).numpy()
+        conv_bias = ((weights[p + 'depthwise_conv.bias'] - weights[p + 'batch_norm.running_mean'])
+                     * scale + weights[p + 'batch_norm.bias']).numpy()
+        nodes = [n for n in model.graph.node if n.op_type == 'Conv'
+                 and n.name.endswith('/depthwise_conv/Conv') and f'/layers.{layer}/' in n.name]
+        if len(nodes) != 1:
+            raise ValueError('Ambiguous original/export convolution correspondence')
+        for index, array in ((1, conv_weight), (2, conv_bias)):
+            target = nodes[0].input[index]
+            delta = array.astype(np.float64) - exported[target]
+            folded.append({'layer': layer, 'export_name': target,
+                           'max_abs_difference': float(np.abs(delta).max()),
+                           'rms_difference': float(np.sqrt(np.mean(delta ** 2)))})
+    result['folded_batchnorm_correspondence'] = folded
+    result['limitation'] = 'Parameter correspondence does not prove ONNX operator parity. No ASR rerun.'
     save(out, result)
     print(json.dumps({k: v for k, v in result.items() if k != 'onnx_initializers'}, ensure_ascii=False), flush=True)
     print('unmatched', json.dumps([x for x in rows if not x['exact_original_matches']], ensure_ascii=False), flush=True)
