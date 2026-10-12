@@ -19,7 +19,7 @@ from mms_pair import digest, save, LANGS, HINTS
 from run import Guard
 
 
-def search(arrays, vocab, score, check, hint_case='lower'):
+def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=False):
     tokens, language, local, boundaries, delimiters, by_head = {}, {}, {}, set(), set(), {}
     offset = 0
     offsets = {}
@@ -44,6 +44,11 @@ def search(arrays, vocab, score, check, hint_case='lower'):
     paths = [[offsets[lang] + vocab[lang]['|'],
               *[vocab['eng']['|' if c == ' ' else c] for c in (h.lower() if hint_case == 'lower' else h.upper())]]
              for h in HINTS for lang in LANGS]
+    if whole_word_context:
+        # Leading delimiter still enables partial credit during search. A right
+        # boundary is mandatory to finish; an EOS acts as a virtual delimiter.
+        # This refunds CHATGPT credit if its next label extends CHATGPTA.
+        paths = [path + [vocab['eng']['|']] for path in paths]
     graph = ContextBias(paths if score else (), score)
     context_tokens = set(t for path in graph.paths for t in path)
 
@@ -95,13 +100,17 @@ def search(arrays, vocab, score, check, hint_case='lower'):
     results = []
     for (prefix, active), masses in current.items():
         value, state = credit(prefix)
-        context = value + graph.finalize(state)
+        if whole_word_context and active == 'eng':
+            ending, state = graph.step(state, vocab['eng']['|'])
+            context = value + ending + graph.finalize(state)
+        else:
+            context = value + graph.finalize(state)
         acoustic = logadd(*masses)
         if not math.isfinite(acoustic):
             continue
         violations = [i for i in range(1, len(prefix))
                       if language[prefix[i]] != language[prefix[i-1]] and prefix[i-1] not in boundaries]
-        if violations or context > score * len(prefix) + 1e-8:
+        if violations or context > score * (len(prefix) + int(whole_word_context)) + 1e-8:
             raise ValueError('Word/head or context-budget violation')
         text = ''.join(tokens[t] for t in prefix).replace('|', ' ').strip()
         results.append({'token_ids': list(prefix), 'raw_text': text, 'postprocessed_text': text,
@@ -109,7 +118,8 @@ def search(arrays, vocab, score, check, hint_case='lower'):
                         'within_word_head_switch_violations': violations,
                         'head_counts': {lang: sum(language[t] == lang for t in prefix) for lang in LANGS}})
     return {'hypotheses': sorted(results, key=lambda h: h['total_score'], reverse=True)[:5],
-            'beam': 32, 'score': score, 'context_paths': paths if score else [],
+            'beam': 32, 'score': score, 'whole_word_context': whole_word_context,
+            'context_paths': paths if score else [],
             'head_offsets': offsets, 'head_blank_local_ids': {lang: vocab[lang]['<pad>'] for lang in LANGS}}
 
 

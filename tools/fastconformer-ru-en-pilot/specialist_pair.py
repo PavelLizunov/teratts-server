@@ -155,6 +155,36 @@ def cell(args):
         save(output, result)
 
 
+def replay(args):
+    import numpy as np
+    parent, output = Path(args.receipt), Path(args.output)
+    if output.exists():
+        raise FileExistsError('Consumed whole-word decoder cell')
+    original = json.loads(parent.read_text())
+    arrays, vocabs = {}, {}
+    for lang in LANGS:
+        path = parent.with_name(parent.stem + '-' + lang + '.npz')
+        if digest(path) != original['heads'][lang]['retained_logits_sha256']:
+            raise ValueError('Retained specialist logits changed')
+        vocab = original['heads'][lang]['vocab']
+        vocabs[lang] = vocab
+        with np.load(path) as file:
+            adjusted = file['log_probs'].astype(np.float64)
+        adjusted[:, [vocab['<s>'], vocab['</s>'], vocab['<unk>']]] = -np.inf
+        adjusted -= np.logaddexp.reduce(adjusted, axis=1, keepdims=True)
+        arrays[lang] = adjusted
+    guard = Guard(180, 1536)
+    before = time.monotonic()
+    value = search(arrays, vocabs, 2.5, guard.check, hint_case='upper', whole_word_context=True)
+    value.update(decode_s=time.monotonic() - before, parent_sha256=digest(parent),
+                 source_commit=subprocess.check_output(['git', '-C', str(Path(__file__).parent), 'rev-parse', 'HEAD'], text=True).strip(),
+                 encoder_rerun=False, audio_sha256=original['audio_sha256'],
+                 peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+                 guard=guard.receipt())
+    save(output, value)
+    print(value['hypotheses'][0]['raw_text'], flush=True)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='mode', required=True)
@@ -163,6 +193,10 @@ if __name__ == '__main__':
         c.add_argument('--' + key, required=True)
     p = sub.add_parser('pilot')
     p.add_argument('manifest')
+    r = sub.add_parser('replay')
+    r.add_argument('--receipt', required=True)
+    r.add_argument('--output', required=True)
     args = parser.parse_args()
     if args.mode == 'cell': cell(args)
+    elif args.mode == 'replay': replay(args)
     else: supervise(args, cell_script=__file__)
