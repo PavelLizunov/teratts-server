@@ -117,7 +117,7 @@ def final_decode(cfg,clip,out,guard):
     events.extend({'head':'rus','native_frame':i,'center_s':i*.04+model.prepared['nominal_origin_s']} for i in range(encoded.shape[-1]));events.sort(key=lambda e:e['center_s'])
     start=time.monotonic();selected,alignment=align_phrases(events,sequence,guard.check);align_s=time.monotonic()-start
     alignment.update(audio_sha256=clip['sha256'],label_path=sequence,proposal_words=words);save(out.with_name(stem+'-alignment.json'),alignment)
-    start=time.monotonic();value=search(selected,encoded,lp,model,rules,2.5,guard.check,rnnt_head='rus',ctc_beam=32)
+    start=time.monotonic();value=search(selected,encoded,lp,model,rules,2.5,guard.check,rnnt_head='rus',ctc_beam=32,context_banks=cfg.get('context_banks',False))
     if not value['hypotheses']:raise ValueError('No finite bilingual path')
     return {'audio_sha256':clip['sha256'],'alignment_s':align_s,'decode_s':time.monotonic()-start,'search':value,'formatting':rules.formatting,
             'alignment_sha256':digest(out.with_name(stem+'-alignment.json')),'input_receipt_sha256':{k:digest(folder/(stem+'-'+k+'.json')) for k in results}}

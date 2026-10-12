@@ -22,7 +22,7 @@ from run import Guard
 from subword_pair import BOUNDARY, RU_OFFSET, TokenRules
 
 
-def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng', ctc_beam=4, observe_pruning=None):
+def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng', ctc_beam=4, observe_pruning=None, context_banks=False):
     import numpy as np
     if rnnt_head not in ('eng','rus'):raise ValueError('Unknown trained RNNT head')
     ctc_head='rus' if rnnt_head=='eng' else 'eng'
@@ -43,10 +43,25 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
         _,state=prediction(local_ids[:-1])
         return model.predict(local_ids[-1],state)
     def rnnt_prefix(prefix):return tuple(rules.heads[rnnt_head][t] for t in prefix if t in rules.heads[rnnt_head])
+    bank_stats={'max_states':0,'overflow_events':0}
     def prune(masses,width=4):
         ranked=sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)
         if observe_pruning is not None:observe_pruning(event_index,event,ranked,masses,context,width)
-        return {p:masses[p] for p in ranked[:width]}
+        selected=ranked[:width]
+        if context_banks and bonus and event['head']==ctc_head:
+            representatives={}
+            for p in ranked:representatives.setdefault(context(p)[1],p)
+            bank_stats['max_states']=max(bank_stats['max_states'],len(representatives))
+            bank_stats['overflow_events']+=int(len(representatives)>width)
+            selected=list(representatives.values())[:width]
+            ordinary=representatives.get(())
+            if ordinary is not None and ordinary not in selected:
+                selected=selected[:width-1]+[ordinary]
+            seen=set(selected)
+            for p in ranked:
+                if len(selected)>=width:break
+                if p not in seen:selected.append(p);seen.add(p)
+        return {p:masses[p] for p in selected}
     def add(target,prefix,pb=NEG,pnb=NEG):
         a,b=target.get(prefix,(NEG,NEG));target[prefix]=logadd(a,pb),logadd(b,pnb)
     current={(): (0.,NEG)};cap_paths=0
@@ -105,7 +120,7 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
                        'raw_text':raw,'postprocessed_text':raw,'mixed_acoustic_logsum':acoustic,
                        'context_credit':credit,'total_score':acoustic+credit,**formatting})
     return {'hypotheses':sorted(result,key=lambda h:h['total_score'],reverse=True)[:4],
-            'beam':4,'ctc_beam':ctc_beam,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
+            'beam':4,'ctc_beam':ctc_beam,'context_banks':context_banks,'context_bank_stats':bank_stats,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
             'context_score':bonus,'hint_paths':rules.hint_receipts if bonus else [],
             'rnnt_head':rnnt_head,'ctc_head':ctc_head,('english' if rnnt_head=='eng' else 'russian')+'_predictor_persistent':True,'prediction_cache':prediction.cache_info()._asdict()}
 
