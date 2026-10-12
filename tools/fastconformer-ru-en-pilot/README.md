@@ -587,6 +587,58 @@ LM weight grid or production switch followed. The256MiB KV setting is a retentio
 target; transient cache peaks were258.35/260.01MiB before eviction. No guard stop
 or sampled swap growth occurred.
 
+## Russian RNNT and native word-state repair
+
+`giga_transducer.py prepare --model MODEL_DIR` verifies the separate
+[GigaAM-v3 RNNT checkpoint](https://huggingface.co/ai-sage/GigaAM-v3/tree/c7f128b8accdd9624df905e5c2d7b7a48c27c0d8)
+and [pinned ONNX export](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-transducer-giga-am-v3-russian-2025-12-16/tree/0424d62637b37d8b7b1eb0f75a04d78dec55fdcc).
+This is not the earlier Russian CTC checkpoint. It has a40ms native encoder,
+33 Russian characters plus blank33, one320-wide LSTM predictor and a34-class
+joint. The encoder is int8; predictor and joint are FP32. Preparation matched370
+unquantized encoder tensors and178 quantized tensors within0.500004 quantization
+steps of original weights, plus exact predictor/joint parameters after required
+ONNX LSTM gate and bias permutation. This does not prove full operator parity.
+
+Runtime-generated frontend buffers differed from the original checkpoint by up
+to0.0019513. Preparation preserves the actual original window/mel buffers and
+inference loads those bytes, instead of silently accepting the difference.
+`giga_transducer.py pilot MANIFEST` takes the same `model`, `results_directory`,
+and `recordings[{id,wav,sha256}]` component manifest as other whole-audio runners.
+One intact-audio pass per clip completed in3.504/4.004s, RSS837.945/852.465MiB.
+Native encoder arrays are retained. Original greedy max10-symbol semantics are
+used; publisher-example appended silence and single-symbol limits are not.
+
+`russian_mixed.py pilot MANIFEST` uses retained Russian RNNT encodings and English
+Parakeet CTC scores in the existing shared beam, with no acoustic rerun. Its
+manifest uses the task `root`, Russian RNNT `model`, `results_directory` and
+`recordings[{id,receipt,context_receipt}]`: the receipt is the Russian component,
+and context_receipt is the frozen English phrase-guided alignment. English IDs
+and global Russian offset1025 remain unchanged. The Russian predictor consumes
+only its own real emitted IDs and persists through English events. This initial
+configuration truncated output because the global word rule demanded a second
+Russian space after an English insertion, although the native Russian predictor
+had already emitted its own word-ending space.
+
+`russian_boundary.py pilot MANIFEST` repairs that state mismatch. An RU→EN switch
+requires an actually emitted Russian word-closing token; returning EN→RU can
+continue from that still-closed native Russian state without another acoustic
+space. No fake token is sent to the predictor. A context-only boundary marker
+closes a hint at the accepted switch. Literal `raw_piece_text`, original token
+IDs and `raw_text` are retained; `postprocessed_text` may add a separator only
+where two trained-head words would otherwise touch. Inserted positions are
+explicit in `formatting_only_inserted_space_before_token_indices`. This is
+formatting, not a claim of no postprocessing or semantic transcript repair.
+
+The completed two-sided correction recovered all four technical names across
+the two recordings, retained the Russian continuation and restored a previously
+missing Russian phrase. It is the first substantially coherent paired-head
+result here. Residual Russian spelling errors remain, and no human gold/WER or
+new-recording generalization evidence exists. Beam4, max10 and context0/2.5 were
+unchanged; the LM scorer is not used. Final process time, including both decoder
+variants, was6.008/28.542s, RSS178.309/386.285MiB; the context search alone took
+3.702/15.072s. These timings exclude encoders and auxiliary Whisper inference.
+No whole-pipeline or Deck measurement is claimed. No production switch followed.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
