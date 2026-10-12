@@ -264,6 +264,24 @@ on RU/EN text is not acoustic bilingual training and is not a replacement for
 the original numerical token constraint. No quality result is implied by this
 implementation or by successfully loading its weights.
 
+Observed repaired LM fusion: short top output still misses ChatGPT Pro (the
+third hypothesis contains it), long top output contains DSH but corrupts ChatGPT
+and ordinary Russian. All numerical restrictions hold; cached LM sums match
+direct scores within1.71e-5. Local wall88.126/195.777s including both hint modes,
+RSS1453.191/1920.980MiB. No Deck run; not a replacement recommendation. The
+failed initialization and deferred-word-cost outputs are preserved separately.
+
+`rnnt_ilm.py --root PRIVATE_ROOT --output NEW_JSON` diagnoses language preference
+along historical RNNT token paths, not a new transcription. A derived task-local
+ONNX joiner removes the complete projected acoustic term including its bias;
+learned weights remain unchanged. It reads retained encoder arrays and replays
+the stored predictor path. Observed English pair fraction averages0.427/0.385
+without acoustics, but falls below1e-18 with acoustics. This does not support
+subtracting a dominant Russian internal language prior. Separate original-FP32
+predictor/joint observations show2/62 and7/146changed token rankings on the same
+path; quantized tensor maps and gate order are verified. Full FP32 decoding is
+still unobserved; historical-path differences do not establish better accuracy.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
