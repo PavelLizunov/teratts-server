@@ -14,7 +14,7 @@ from run import Guard
 from subword_pair import TokenRules, RU_OFFSET
 
 
-def cell(args, rules_type=TokenRules, english_model='parakeet-english-ctc', english_results='results-parakeet-english-v1'):
+def cell(args, rules_type=TokenRules, english_model='parakeet-english-ctc', english_results='results-parakeet-english-v1', ctc_beam=4):
     import numpy as np
     import sentencepiece as spm
     root,rm,rp,ap,output=map(Path,(args.root,args.model,args.receipt,args.context_receipt,args.output))
@@ -49,7 +49,7 @@ def cell(args, rules_type=TokenRules, english_model='parakeet-english-ctc', engl
         result.update(audio_sha256=ru['audio_sha256'],russian_receipt_sha256=digest(rp),english_receipt_sha256=digest(ep),alignment_sha256=digest(ap),
                       trained_head_offsets={'eng':0,'rus':RU_OFFSET},russian_prepared_sha256=digest(rm/'prepared.json'),load_s=time.monotonic()-start)
         for name,bonus in (('no-context',0.),('context',2.5)):
-            before=time.monotonic();value=search(alignment['selected_events'],encoded,elp,model,rules,bonus,guard.check,rnnt_head='rus');value['decode_s']=time.monotonic()-before
+            before=time.monotonic();value=search(alignment['selected_events'],encoded,elp,model,rules,bonus,guard.check,rnnt_head='rus',ctc_beam=ctc_beam);value['decode_s']=time.monotonic()-before
             if not value['hypotheses']:raise ValueError('No finite mixed Russian RNNT path')
             save(output.with_name(output.stem+'-'+name+'.json'),value);result['variants'][name]=value
             print(name,value['hypotheses'][0]['raw_text'],flush=True)

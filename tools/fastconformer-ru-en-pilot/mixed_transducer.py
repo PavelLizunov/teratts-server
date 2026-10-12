@@ -22,7 +22,7 @@ from run import Guard
 from subword_pair import BOUNDARY, RU_OFFSET, TokenRules
 
 
-def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng'):
+def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng', ctc_beam=4):
     import numpy as np
     if rnnt_head not in ('eng','rus'):raise ValueError('Unknown trained RNNT head')
     ctc_head='rus' if rnnt_head=='eng' else 'eng'
@@ -43,8 +43,8 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
         _,state=prediction(local_ids[:-1])
         return model.predict(local_ids[-1],state)
     def rnnt_prefix(prefix):return tuple(rules.heads[rnnt_head][t] for t in prefix if t in rules.heads[rnnt_head])
-    def prune(masses):
-        return {p:masses[p] for p in sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)[:4]}
+    def prune(masses,width=4):
+        return {p:masses[p] for p in sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)[:width]}
     def add(target,prefix,pb=NEG,pnb=NEG):
         a,b=target.get(prefix,(NEG,NEG));target[prefix]=logadd(a,pb),logadd(b,pnb)
     current={(): (0.,NEG)};cap_paths=0
@@ -87,7 +87,7 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
                 # Use the fixed symbol cap rather than unsafe score stopping:
                 # unfinished context may still borrow additional credit.
             following=prune(following)
-        current=prune(following)
+        current=prune(following,ctc_beam if event['head']==ctc_head else 4)
         if not current:raise ValueError('Empty mixed acoustic beam')
     result=[]
     for prefix,masses in current.items():
@@ -102,7 +102,7 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
                        'raw_text':raw,'postprocessed_text':raw,'mixed_acoustic_logsum':acoustic,
                        'context_credit':credit,'total_score':acoustic+credit,**formatting})
     return {'hypotheses':sorted(result,key=lambda h:h['total_score'],reverse=True)[:4],
-            'beam':4,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
+            'beam':4,'ctc_beam':ctc_beam,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
             'context_score':bonus,'hint_paths':rules.hint_receipts if bonus else [],
             'rnnt_head':rnnt_head,'ctc_head':ctc_head,('english' if rnnt_head=='eng' else 'russian')+'_predictor_persistent':True,'prediction_cache':prediction.cache_info()._asdict()}
 
