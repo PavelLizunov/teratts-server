@@ -17,8 +17,9 @@ from proposal_support import labels
 from run import Guard
 
 
-def align(events, sequence, blank, delimiter, check):
+def align(events, sequence, blank, delimiter, check, stride_weights=None, switch_indices=None):
     import numpy as np
+    stride_weights = stride_weights or {'rus': 2., 'eng': 1.}
     states = [{'head': sequence[0][0], 'token': blank[sequence[0][0]],
                'label': None, 'kind': 'initial_blank', 'predecessors': []}]
     last_label, last_blank = None, 0
@@ -29,7 +30,8 @@ def align(events, sequence, blank, delimiter, check):
             if (lang, token) != (old_lang, old_token):
                 predecessors.append(last_label)
             if lang != old_lang:
-                if old_token != delimiter[old_lang]:
+                allowed_switch = index in switch_indices if switch_indices is not None else old_token == delimiter[old_lang]
+                if not allowed_switch:
                     raise ValueError('Auxiliary head switch inside a word')
                 states.append({'head': lang, 'token': blank[lang], 'label': None,
                                'kind': 'entry_blank', 'predecessors': [last_label, last_blank]})
@@ -48,7 +50,7 @@ def align(events, sequence, blank, delimiter, check):
         check()
         following = best.copy()
         parents[frame] = np.arange(count)
-        factor = 2. if event['head'] == 'rus' else 1.
+        factor = stride_weights[event['head']]
         for state_id, state in enumerate(states):
             if state['head'] != event['head']:
                 continue  # Inactive native head is neither repeated nor scored.
@@ -69,7 +71,7 @@ def align(events, sequence, blank, delimiter, check):
         source = int(parents[frame, state_id])
         if state['head'] == event['head']:
             selected.append(event)
-            weighted = (2. if event['head'] == 'rus' else 1.)*float(event['log_probs'][state['token']])
+            weighted = stride_weights[event['head']]*float(event['log_probs'][state['token']])
             checked_score += weighted
             trace.append({'union_event': frame, 'head': event['head'], 'native_frame': event['native_frame'],
                           'center_s': event['center_s'], 'local_token': state['token'], 'kind': state['kind'],
@@ -99,7 +101,7 @@ def align(events, sequence, blank, delimiter, check):
                              'old_last_center_s': old['center_s'], 'new_first_center_s': new['center_s'],
                              'new_kind': new['kind'], 'source_state': new['source_state'], 'state': new['state']})
     return selected, {'objective': 'duration-weighted composite Viterbi, not calibrated probability',
-                      'stride_weights': {'rus': 2., 'eng': 1.}, 'score': score,
+                      'stride_weights': stride_weights, 'score': score,
                       'backtrace_score_error': abs(score-checked_score), 'states': states,
                       'selected_events': trace, 'ignored_inactive_events': len(events)-len(selected),
                       'label_union_event_spans': [[min(x), max(x)] for x in label_frames], 'switches': switches}
