@@ -110,6 +110,18 @@ The bounded FP32 observation recovered names only in the short clip but mixed
 Latin pieces into Russian words and inserted an unwanted longer name in the
 long clip. The method is retained for diagnosis, **not recommended for use**.
 
+Context scoring now credits the union of covered token positions, so nested
+hints such as ChatGPT and ChatGPT Pro no longer double-credit their shared
+prefix. Optional `--word-language-continuity` enforces original tokenizer
+branch continuity inside each word, allowing changes at SentencePiece word
+boundaries or punctuation, without restricting ordinary open-subword paths.
+Unknown IDs cannot create a boundary. The one observed combined repair removed
+the unwanted Pro and had no within-word branch violations, but ordinary words
+remained damaged and DSH was missed. It is still not a quality replacement.
+Scores retain their adjusted-acoustic/context split; the old failed outputs
+remain unchanged. The existing overlap-check expectation was updated to union
+coverage; checks were not executed after the earlier platform denial.
+
 `whisper_diagnostic.py pilot MANIFEST` is a **different, non-pair-constrained
 quality diagnostic**, not an activated backend. It loads the pinned code-switch
 fine-tune `coriollon/whisper-large-v3-turbo-russian-codeswitch` at revision
