@@ -17,7 +17,14 @@ def align_phrases(events,sequence,check):
             if previous!='eng':phrases.append([])
             phrases[-1].append(token)
         previous=lang
-    if not phrases:raise ValueError('No auxiliary English phrase')
+    if not phrases:
+        selected=[event for event in events if event['head']=='rus']
+        return selected,{'objective':'no auxiliary English phrase; retain all native Russian events',
+                         'english_phrases':[],'english_phrase_intervals':[],'english_trace':[],
+                         'labels_covered':0,'russian_words_forced':False,
+                         'selected_events':[{k:e[k] for k in ('head','native_frame','center_s')} for e in selected],
+                         'ignored_inactive_events':len(events)-len(selected),
+                         'native_rows':{'eng':0,'rus':len(selected)}}
     native=[e for e in events if e['head']=='eng']
     # Each state owns the observation it emits, including a wildcard gap frame.
     states=[{'kind':'gap','phrase':None,'token':None,'label':None,'predecessors':[]}]
