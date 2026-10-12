@@ -14,7 +14,7 @@ from run import Guard
 from subword_pair import TokenRules, RU_OFFSET
 
 
-def cell(args):
+def cell(args, rules_type=TokenRules):
     import numpy as np
     import sentencepiece as spm
     root,rm,rp,ap,output=map(Path,(args.root,args.model,args.receipt,args.context_receipt,args.output))
@@ -35,7 +35,8 @@ def cell(args):
         with np.load(rp.with_suffix('.npz')) as file:encoded=file['encoded']
         with np.load(ep.with_suffix('.npz')) as file:elp=file['log_probs'].astype(np.float64)
         elp[:,0]=-np.inf;elp-=np.logaddexp.reduce(elp,axis=1,keepdims=True)
-        model=Model(rm);rules=TokenRules({int(k):v for k,v in prepared['vocab'].items()},{int(k):v for k,v in model.prepared['tokens'].items()},spm.SentencePieceProcessor(model_file=str(em/'tokenizer.model')),prepared['english_case'])
+        model=Model(rm);rules=rules_type({int(k):v for k,v in prepared['vocab'].items()},{int(k):v for k,v in model.prepared['tokens'].items()},spm.SentencePieceProcessor(model_file=str(em/'tokenizer.model')),prepared['english_case'])
+        result['postprocessing']=getattr(rules,'formatting','none')
         for event in alignment['selected_events']:
             head,index=event['head'],event['native_frame'];center=index*(.04 if head=='rus' else .08)+(model.prepared['nominal_origin_s'] if head=='rus' else 0.)
             if abs(center-event['center_s'])>1e-9 or not 0<=index<(encoded.shape[-1] if head=='rus' else len(elp)):raise ValueError('Changed native event clock')

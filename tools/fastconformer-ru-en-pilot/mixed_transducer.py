@@ -33,7 +33,8 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
     def context(prefix):
         if not prefix:return 0.,()
         score,state=context(prefix[:-1])
-        for symbol in rules.symbols(prefix[-1]):
+        symbols=rules.path_symbols(prefix) if hasattr(rules,'path_symbols') else rules.symbols(prefix[-1])
+        for symbol in symbols:
             delta,state=graph.step(state,symbol);score+=delta
         return score,state
     @lru_cache(maxsize=4096)
@@ -96,9 +97,10 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
         credit+=delta+graph.finalize(state)
         if any(not rules.allows(prefix[:i],t) for i,t in enumerate(prefix)):raise ValueError('Invalid mixed head word path')
         raw=rules.text(prefix)
+        formatting=rules.formatting_receipt(prefix) if hasattr(rules,'formatting_receipt') else {}
         result.append({'token_ids':list(prefix),'raw_pieces':[rules.tokens[t] for t in prefix],
                        'raw_text':raw,'postprocessed_text':raw,'mixed_acoustic_logsum':acoustic,
-                       'context_credit':credit,'total_score':acoustic+credit})
+                       'context_credit':credit,'total_score':acoustic+credit,**formatting})
     return {'hypotheses':sorted(result,key=lambda h:h['total_score'],reverse=True)[:4],
             'beam':4,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
             'context_score':bonus,'hint_paths':rules.hint_receipts if bonus else [],
