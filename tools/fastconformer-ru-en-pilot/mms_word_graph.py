@@ -20,7 +20,7 @@ from run import Guard
 
 
 def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=False,
-           prefix_scorer=None):
+           prefix_scorer=None, frame_heads=None):
     tokens, language, local, boundaries, delimiters, by_head = {}, {}, {}, set(), set(), {}
     offset = 0
     offsets = {}
@@ -61,6 +61,8 @@ def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=Fa
         delta, state = graph.step(state, prefix[-1])
         return before + delta, state
 
+    if frame_heads is not None and (len(frame_heads) != len(arrays['eng']) or any(h not in LANGS for h in frame_heads)):
+        raise ValueError('Invalid externally guided frame-head schedule')
     current = {((), lang): (-math.log(2), NEG) for lang in LANGS}
     for frame in range(len(arrays['eng'])):
         check()
@@ -78,6 +80,8 @@ def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=Fa
             for target in (LANGS if closed else (active,)):
                 eligible = candidates[target] | ({last} if last is not None and language[last] == target else set())
                 for token in eligible:
+                    if frame_heads is not None and target != frame_heads[frame] and token not in delimiters:
+                        continue
                     lp = float(arrays[target][frame, local[token]])
                     if target == active and token == last:
                         # Same CTC frame label does not emit a new token.
@@ -134,6 +138,7 @@ def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=Fa
         results.append(hypothesis)
     return {'hypotheses': sorted(results, key=lambda h: h['total_score'], reverse=True)[:5],
             'beam': 32, 'score': score, 'whole_word_context': whole_word_context,
+            'external_frame_head_guidance': frame_heads is not None,
             'context_paths': paths if score else [],
             'head_offsets': offsets, 'head_blank_local_ids': {lang: vocab[lang]['<pad>'] for lang in LANGS}}
 
