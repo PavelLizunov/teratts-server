@@ -10,6 +10,8 @@ class NativeWordRules(TokenRules):
     formatting='explicit separator at accepted native-head word switch only; raw_piece_text preserved'
 
     def allows(self,prefix,token):
+        if (token in self.tokens and prefix and self.language[prefix[-1]]=='rus'
+                and self.language[token]=='eng' and prefix[-1] not in self.closes):return False
         if super().allows(prefix,token):return True
         if token not in self.tokens or self.language[token]!='rus' or not prefix or self.language[prefix[-1]]!='eng':return False
         previous=next((t for t in reversed(prefix) if self.language[t]=='rus'),None)
