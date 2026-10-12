@@ -19,7 +19,7 @@ from mms_pair import digest, save, LANGS, HINTS
 from run import Guard
 
 
-def search(arrays, vocab, score, check):
+def search(arrays, vocab, score, check, hint_case='lower'):
     tokens, language, local, boundaries, delimiters, by_head = {}, {}, {}, set(), set(), {}
     offset = 0
     offsets = {}
@@ -39,8 +39,10 @@ def search(arrays, vocab, score, check):
         offset += len(vocab[lang])
     # A name may follow a delimiter emitted by either trained head. The name
     # itself uses English numerical IDs; no duplicated string lookup occurs.
+    if hint_case not in ('lower', 'upper'):
+        raise ValueError('Unsupported published hint casing')
     paths = [[offsets[lang] + vocab[lang]['|'],
-              *[vocab['eng']['|' if c == ' ' else c] for c in h.lower()]]
+              *[vocab['eng']['|' if c == ' ' else c] for c in (h.lower() if hint_case == 'lower' else h.upper())]]
              for h in HINTS for lang in LANGS]
     graph = ContextBias(paths if score else (), score)
     context_tokens = set(t for path in graph.paths for t in path)

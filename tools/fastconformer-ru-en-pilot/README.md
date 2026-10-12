@@ -304,6 +304,25 @@ within0.001 before saving a FP32 encoder array compatible with `rnnt_fp32.py`.
 This is a numerical reconstruction, not a new encoder pass or bit-identical
 claim. All2561classes participate in inversion, not the later RU/EN mask.
 
+## Separately trained Russian and English specialists
+
+`specialist_pair.py pilot MANIFEST` runs pinned `bond005/wav2vec2-large-ru-golos`
+and `facebook/wav2vec2-large-960h-lv60-self` sequentially on each whole recording.
+Both use the same convolution frame geometry (20ms stride,400sample receptive
+field); no frame interpolation or waveform segmentation is used. Original
+checkpoints load with `weights_only=True`, an exact legacy positional-weight
+name migration, strict complete keys and unchanged tensor values. All raw head
+probabilities are retained before reserved tokens are masked.
+
+The existing head-state word graph allows EN IDs0–31 and RU IDs32–68 by trained
+model origin, with a separate local blank0 per head; specials1/2/3 cannot emit.
+A head persists inside each word, including blank frames. Search is beam32,
+context0/2.5. Published English character IDs are uppercase; only hint encoding
+uses uppercase, not postprocessing. Head scores are not calibrated language
+probabilities. This is two monolingual models, not a jointly bilingual checkpoint.
+Local600s/RSS8192MiB supervision comes from the existing MMS runner; no Deck
+readiness or quality claim follows from downloading the models.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
