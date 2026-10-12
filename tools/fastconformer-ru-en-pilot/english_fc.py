@@ -20,17 +20,20 @@ ORIGINAL_SHA = 'ad9953401a4080e501fe86b36159f94d2bb84da3f07b5613fb0f99057e40d0c2
 EXPORT_SHA = 'c07e9b3809e1dae5f3e376ce0dc5b7593ba8180bf7dc5a78fd522582e7191d1f'
 
 
-def prepare(args):
+def prepare(args, original_sha=ORIGINAL_SHA, export_sha=EXPORT_SHA, external_sha=None, english_case='original'):
     import numpy as np
     import onnx
     from onnx import numpy_helper
     import sentencepiece as spm
     import torch
     import yaml
+    torch.set_num_threads(2)
     root = Path(args.model)
     if (root/'prepared.json').exists(): raise FileExistsError('Prepared assets already exist')
-    if digest(root/'original.nemo') != ORIGINAL_SHA or digest(root/'model.onnx') != EXPORT_SHA:
+    if digest(root/'original.nemo') != original_sha or digest(root/'model.onnx') != export_sha:
         raise ValueError('Published asset digest mismatch')
+    if external_sha and digest(root/'model.onnx.data') != external_sha:
+        raise ValueError('Published external tensor digest mismatch')
     with tarfile.open(root/'original.nemo') as archive:
         config = yaml.safe_load(archive.extractfile('./model_config.yaml'))
         name = './'+config['tokenizer']['model_path'].removeprefix('nemo:')
@@ -38,7 +41,9 @@ def prepare(args):
         with archive.extractfile('./model_weights.ckpt') as file:
             weights = torch.load(file, map_location='cpu', weights_only=True)
     processor = spm.SentencePieceProcessor(model_proto=serialized)
-    vocab = config['aux_ctc']['decoder']['vocabulary']
+    head_config = config['aux_ctc']['decoder'] if 'aux_ctc' in config else config['decoder']
+    vocab = head_config['vocabulary']
+    head_prefix = 'ctc_decoder' if 'aux_ctc' in config else 'decoder'
     exported_tokens = {int(line.rsplit(' ',1)[1]):line.rsplit(' ',1)[0] for line in (root/'vocab.txt').read_text().splitlines()}
     if len(vocab)!=1024 or processor.get_piece_size()!=1024 or any(processor.id_to_piece(i)!=piece or exported_tokens[i]!=piece for i,piece in enumerate(vocab)) or exported_tokens[1024]!='<blk>':
         raise ValueError('Original tokenizer, CTC head and export ID mismatch')
@@ -47,8 +52,21 @@ def prepare(args):
     cfg=config['preprocessor']
     expected={'sample_rate':16000,'normalize':'per_feature','window_size':.025,'window_stride':.01,'window':'hann','features':80,'n_fft':512,'frame_splicing':1,'pad_to':0}
     if any(cfg.get(k)!=v for k,v in expected.items()):raise ValueError('Unsupported original frontend')
-    model=onnx.load(root/'model.onnx')
-    arrays={t.name:numpy_helper.to_array(t) for t in model.graph.initializer}
+    model=onnx.load(root/'model.onnx',load_external_data=False)
+    arrays={}
+    for tensor in model.graph.initializer:
+        if tensor.data_location == onnx.TensorProto.EXTERNAL:
+            metadata={e.key:e.value for e in tensor.external_data}
+            if not external_sha or metadata['location']!='model.onnx.data' or tensor.data_type!=onnx.TensorProto.FLOAT:
+                raise ValueError('Unexpected external tensor storage')
+            if int(metadata['length'])!=int(np.prod(tensor.dims))*4:raise ValueError('External tensor length mismatch')
+            arrays[tensor.name]=np.memmap(root/'model.onnx.data',dtype='<f4',mode='r',offset=int(metadata['offset']),shape=tuple(tensor.dims))
+        else:arrays[tensor.name]=numpy_helper.to_array(tensor)
+    if config['encoder']['subsampling_factor']!=8 or config['encoder'].get('causal_downsampling',False):
+        raise ValueError('Unsupported native time geometry')
+    native_convs=[node for node in model.graph.node if node.op_type=='Conv' and node.name.startswith('/pre_encode/') and any(a.name=='strides' and list(a.ints)==[2,2] for a in node.attribute)]
+    if len(native_convs)!=3 or any({a.name:list(a.ints) for a in node.attribute}.get('pads')!=[1,1,1,1] for node in native_convs):
+        raise ValueError('Unexpected native origin or downsampling')
     checked,folds,unmatched=[],[],[]
     for name,array in arrays.items():
         if name in weights and tuple(weights[name].shape)==array.shape and np.array_equal(weights[name].numpy(),array):checked.append(name)
@@ -73,15 +91,15 @@ def prepare(args):
         if matches:checked.append({'export':name,'transpose_original':matches})
         else:remaining.append({'name':name,'shape':list(array.shape)})
     if remaining:raise ValueError('Unaccounted exported learned parameters: '+repr(remaining))
-    for key in ('ctc_decoder.decoder_layers.0.weight','ctc_decoder.decoder_layers.0.bias'):
+    for key in (head_prefix+'.decoder_layers.0.weight',head_prefix+'.decoder_layers.0.bias'):
         if key not in checked:raise ValueError('Unverified original CTC output head')
     with (root/'tokenizer.model').open('xb') as file:file.write(serialized)
     with (root/'frontend.npz').open('xb') as file:np.savez_compressed(file,window=window.numpy(),bank=bank.numpy())
-    receipt={'original_sha256':ORIGINAL_SHA,'export_sha256':EXPORT_SHA,'preprocessor':cfg,'vocab':exported_tokens,'blank_id':1024,'unknown_id':0,
+    receipt={'original_sha256':original_sha,'export_sha256':export_sha,'external_sha256':external_sha,'english_case':english_case,'preprocessor':cfg,'vocab':exported_tokens,'blank_id':1024,'unknown_id':0,
              'tokenizer_sha256':digest(root/'tokenizer.model'),'frontend_sha256':digest(root/'frontend.npz'),
              'direct_or_transpose_parameter_matches':checked,'folded_parameters':folds,'unmatched_parameters':remaining,
              'all_export_parameters_accounted':True,'full_operator_equivalence':False,'native_stride_s':.08,'nominal_origin_s':0.,
-             'hint_ids':{hint:processor.encode(hint) for hint in ('ChatGPT','ChatGPT Pro','DSH','Oracle')}}
+             'hint_ids':{hint:processor.encode(hint.lower() if english_case=='lower' else hint) for hint in ('ChatGPT','ChatGPT Pro','DSH','Oracle')}}
     save(root/'prepared.json',receipt)
     print(json.dumps({k:v for k,v in receipt.items() if k not in ('vocab','direct_or_transpose_parameter_matches','folded_parameters')},indent=2))
 
@@ -99,6 +117,7 @@ def cell(args):
         torch.set_num_threads(2);torch.set_num_interop_threads(1)
         receipt=json.loads((root/'prepared.json').read_text())
         if digest(root/'model.onnx')!=receipt['export_sha256'] or digest(root/'frontend.npz')!=receipt['frontend_sha256'] or digest(root/'tokenizer.model')!=receipt['tokenizer_sha256']:raise ValueError('Prepared model changed')
+        if receipt.get('external_sha256') and digest(root/'model.onnx.data')!=receipt['external_sha256']:raise ValueError('External model tensors changed')
         if digest(args.wav)!=args.audio_sha256:raise ValueError('Original audio changed')
         with wave.open(args.wav,'rb') as file:
             if (file.getnchannels(),file.getsampwidth(),file.getframerate(),file.getcomptype())!=(1,2,16000,'NONE'):raise ValueError('Original mono16PCM required')

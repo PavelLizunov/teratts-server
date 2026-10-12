@@ -23,7 +23,7 @@ RU_OFFSET = 1025
 BOUNDARY = -1  # Context-only symbol, never an acoustic/output token.
 
 
-def auxiliary_labels(text, processor, ru_vocab):
+def auxiliary_labels(text, processor, ru_vocab, english_case='original'):
     words, pending = [], ''
     for c in text:
         if c.isspace() or (unicodedata.category(c)[0] in 'PZS' and c != "'"):
@@ -35,8 +35,9 @@ def auxiliary_labels(text, processor, ru_vocab):
     for word in words:
         ru_word = word.lower()
         ru_ok = all(c in ru_vocab and c != ' ' for c in ru_word)
-        en_ids = processor.encode(word)
-        en_ok = bool(en_ids) and 0 not in en_ids and processor.decode(en_ids) == word
+        en_word = word.lower() if english_case == 'lower' else word
+        en_ids = processor.encode(en_word)
+        en_ok = bool(en_ids) and 0 not in en_ids and processor.decode(en_ids) == en_word
         if ru_ok == en_ok:
             raise ValueError('Word not uniquely representable by current trained heads: '+word)
         lang = 'rus' if ru_ok else 'eng'
@@ -57,7 +58,7 @@ def auxiliary_labels(text, processor, ru_vocab):
 
 
 class TokenRules:
-    def __init__(self, en_tokens, ru_tokens, processor):
+    def __init__(self, en_tokens, ru_tokens, processor, english_case='original'):
         self.tokens = {i:p for i,p in en_tokens.items() if 0 < i < 1024}
         self.tokens.update({RU_OFFSET+i:p for i,p in ru_tokens.items() if i != 33})
         self.heads = {'eng':{i:i for i in self.tokens if i<RU_OFFSET},
@@ -68,7 +69,7 @@ class TokenRules:
         self.paths = []
         self.hint_receipts = []
         for hint in HINTS:
-            ids = processor.encode(hint)
+            ids = processor.encode(hint.lower() if english_case == 'lower' else hint)
             if 0 in ids: raise ValueError('Unrepresentable name hint')
             symbols = [s for token in ids for s in self.symbols(token)] + [BOUNDARY]
             self.paths.append(symbols)
@@ -163,7 +164,9 @@ def main(args):
         if digest(rm/'download-receipt.json')!=ru['asset_receipt_sha256'] or digest(rm/'tokens.txt')!=next(r['sha256'] for r in assets['files'] if r['name']=='tokens.txt'):raise ValueError('Changed trained Russian map')
         ru_tokens={int(s.rsplit(' ',1)[1]):s.rsplit(' ',1)[0] for s in (rm/'tokens.txt').read_text().splitlines()}
         ru_vocab={p:i for i,p in ru_tokens.items() if i!=33}
-        sequence,words,switches=auxiliary_labels(proposal['variants']['name-context']['hypotheses'][0]['raw_text'],processor,ru_vocab)
+        english_case=prepared.get('english_case','original')
+        if english_case not in ('original','lower'):raise ValueError('Unsupported trained tokenizer case convention')
+        sequence,words,switches=auxiliary_labels(proposal['variants']['name-context']['hypotheses'][0]['raw_text'],processor,ru_vocab,english_case)
         with np.load(rp.with_suffix('.npz')) as file:rlp=file['log_probs'].astype(np.float64)
         with np.load(ep.with_suffix('.npz')) as file:elp=file['log_probs'].astype(np.float64)
         elp[:,0]=-np.inf;elp-=np.logaddexp.reduce(elp,axis=1,keepdims=True)
@@ -171,14 +174,14 @@ def main(args):
         for lang,array,stride,origin in (('eng',elp,1280,0.),('rus',rlp,640,159.5)):
             for i,row in enumerate(array):events.append({'head':lang,'native_frame':i,'center_s':(stride*i+origin)/16000,'log_probs':row})
         events.sort(key=lambda e:e['center_s'])
-        selected,alignment=align(events,sequence,{'eng':1024,'rus':33},{'eng':25,'rus':0},guard.check,
+        selected,alignment=align(events,sequence,{'eng':1024,'rus':33},{'eng':processor.piece_to_id('▁'),'rus':0},guard.check,
                                  stride_weights={'eng':2.,'rus':1.},switch_indices=switches)
         result.update(audio_sha256=ru['audio_sha256'],russian_receipt_sha256=digest(rp),english_receipt_sha256=digest(ep),
                       proposals_sha256=digest(pp),fixed_proposal_selection='name-context rank1',
                       trained_head_offsets={'eng':0,'rus':RU_OFFSET},native_rows={l:sum(e['head']==l for e in selected) for l in ('eng','rus')})
         alignment.update(label_path=sequence,proposal_words=words,**{k:v for k,v in result.items() if k not in ('status','variants')})
         save(alignment_path,alignment);result.update(alignment_sha256=digest(alignment_path),alignment_s=time.monotonic()-start)
-        rules=TokenRules(en_tokens,ru_tokens,processor)
+        rules=TokenRules(en_tokens,ru_tokens,processor,english_case)
         for name,bonus in (('no-context',0.),('context',2.5)):
             before=time.monotonic();value=decode(selected,rules,bonus,guard.check)
             if not value['hypotheses']:raise ValueError('No finite open path')

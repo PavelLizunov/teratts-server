@@ -523,6 +523,28 @@ alignment0.282/1.895s. Names and omissions remained: changing this routing alone
 was not sufficient. This is another consumed negative method, not an unfinished
 alignment implementation or permission to rerun the same encoder.
 
+## Larger English Parakeet CTC component
+
+`parakeet_english.py prepare --model MODEL_DIR` and `parakeet_english.py pilot
+MANIFEST` reuse the whole-recording English component runner for the distinct
+[`nvidia/parakeet-ctc-0.6b`](https://huggingface.co/nvidia/parakeet-ctc-0.6b),
+revision `ad09ba1cc62743fbc9814de5d2016fca9096485a` (CC-BY-4.0).
+This English-only CTC model is not production multilingual Parakeet TDT0.6Bv3.
+Its card reports64K hours of English training; that is not a claim of Russian
+accent or code-switch quality. Direct NeMo export:
+[`istupakov/parakeet-ctc-0.6b-onnx`](https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx),
+revision `658f956396c5a6e41f23ed50838bdb7d1d1b6056`.
+
+Preparation verifies the original archive, FP32 ONNX graph and external tensor
+file independently; external arrays are memory-mapped for parameter matching.
+The native architecture has24 layers, width1024 and80ms output stride. The
+published1024-token vocabulary uses lowercase English. Auxiliary English labels
+and hint tokenization follow that convention, explicitly recorded in the prepared
+receipt; final recognized text is not case-rewritten or replaced. The existing
+`subword_pair.py` consumes the new receipt plus retained GigaAM scores; its
+beam32/context0,2.5, native event clocks and trained-head offsets are unchanged.
+Preparation/inference results must be read before calling this candidate useful.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
