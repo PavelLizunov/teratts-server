@@ -1,7 +1,7 @@
 """Open CTC shallow fusion with a frozen probability-only language model.
 
 Only acoustic RU/EN token paths can appear in output; LM has no generate call.
-Score completed whitespace-delimited prefixes during search and EOS at finish.
+Score full provisional prefixes during search and EOS at finish.
 """
 import argparse
 from collections import OrderedDict, defaultdict
@@ -101,18 +101,22 @@ class LanguageScorer:
         visible = ''.join(self.pieces[t] for t in prefix).replace('▁', ' ').lstrip()
         if final:
             return visible.rstrip()
-        # Exclude the unfinished last word; trailing whitespace commits it.
-        boundary = max((i for i, c in enumerate(visible) if c.isspace()), default=-1)
-        return visible[:boundary].rstrip() if boundary >= 0 else ''
+        # Provisional LM cost is essential: postponing unfinished-word cost
+        # rewards unspaced strings during beam pruning. Re-tokenize full text.
+        return visible
 
     def estimate(self, prefix):
         # Acoustic prebeam can use only known scores; an unseen word inherits
         # its scored text ancestor, then receives its true LM penalty below.
+        while (self.text(prefix), False) not in self.text_scores:
+            prefix = prefix[:-1]
         text = self.text(prefix)
-        while (text, False) not in self.text_scores:
-            text = text.rsplit(' ', 1)[0] if ' ' in text else ''
-        score, words = self.text_scores[(text, False)]
-        return self.alpha * score + self.beta * words
+        score, _ = self.text_scores[(text, False)]
+        return self.alpha * score + self.beta * self.word_count(text, False)
+
+    @staticmethod
+    def word_count(text, final):
+        return max(0, len(text.split()) - (0 if final or not text or text[-1].isspace() else 1))
 
     def score_texts(self, texts, final):
         torch = self.torch
@@ -164,8 +168,9 @@ class LanguageScorer:
         self.score_texts([self.text(p, final) for p in prefixes], final)
 
     def credit(self, prefix, final=False):
-        score, words = self.text_scores[(self.text(prefix, final), final)]
-        return self.alpha * score + self.beta * words
+        text = self.text(prefix, final)
+        score, _ = self.text_scores[(text, final)]
+        return self.alpha * score + self.beta * self.word_count(text, final)
 
     def receipt(self, prefix):
         text = self.text(prefix, True)

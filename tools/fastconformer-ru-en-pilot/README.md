@@ -246,8 +246,11 @@ never calls `generate`: only allowed numerical RU/EN acoustic paths can appear.
 Fixed diagnostic parameters are beam32, prebeam64, LM weight0.3, completed-word
 bonus1.0 and context0/2.5. The existing prior equalization and word-language
 continuity remain. The prebeam is an explicit bounded approximation; not all
-possible paths receive LM scoring. Completed whitespace-delimited prefixes are
-scored during search, with full text+EOS at finish. Full-prefix byte-BPE
+possible paths receive LM scoring. Full provisional prefixes are scored during
+search, with text+EOS at finish. Scoring only completed words was observed to
+reward unspaced paths until an end-of-decode penalty; this mechanism is repaired
+without changing coefficients. The word bonus counts completed words only.
+Full-prefix byte-BPE
 retokenization and cached common ancestors handle token merges. LM scores and
 CTC masses remain separate. A direct teacher-forced score of each best output
 checks the actual cached-score calculation without rerunning audio or ASR.
