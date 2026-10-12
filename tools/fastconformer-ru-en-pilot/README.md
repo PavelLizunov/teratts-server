@@ -202,6 +202,24 @@ process including both head passes and original mixture search took 31.04/48.06s
 with high-water RSS4160.09/4466.41MiB. Subsequent word-state decoding took
 4.04/15.47s separately; these are not Deck or persistent-endpoint timings.
 
+## Independent language contributions
+
+`mms_lid.py pilot MANIFEST` uses independent `facebook/mms-lid-126` at
+`53da6e311f3ce48f324fe335924216187e3109a4`, with the same manifest schema,
+verified safetensors, offline runtime and local-host external guards as MMS ASR.
+There are no words/hints or transcript input. One official whole-recording
+forward is observed; a projector hook retains temporal vectors. Applying the
+published linear classifier per frame should average to the official global
+logits, and the runner checks that identity without a second encoder pass.
+
+The NPZ stores all126class contributions, RU/EN pair probabilities and exact
+convolutional frame-center times. No waveform splitting or padding is used.
+RU ID26 and EN ID2 come from the trained classifier map. This model was trained
+for whole-utterance language identification, so time-local contributions with
+global attention are **not validated language-switch timestamps**. A successful
+aggregation check establishes implementation consistency, not localization
+quality. Downloading or running it does not by itself solve the ASR requirement.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

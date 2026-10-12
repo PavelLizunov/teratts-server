@@ -41,6 +41,30 @@ def save(path, value):
         json.dump(value, file, ensure_ascii=False, indent=2)
 
 
+def repair_weight_names(model, loading, model_root):
+    """Migrate only the observed legacy weight_norm key pair, never values."""
+    import torch
+    prefix = 'wav2vec2.encoder.pos_conv_embed.conv.'
+    migration = {prefix + 'weight_g': prefix + 'parametrizations.weight.original0',
+                 prefix + 'weight_v': prefix + 'parametrizations.weight.original1'}
+    if (set(loading.get('missing_keys', [])) == set(migration.values())
+            and set(loading.get('unexpected_keys', [])) == set(migration)
+            and not loading.get('mismatched_keys') and not loading.get('error_msgs')):
+        from safetensors import safe_open
+        with safe_open(Path(model_root) / 'model.safetensors', framework='pt', device='cpu') as file:
+            renamed = {new: file.get_tensor(old) for old, new in migration.items()}
+        model.load_state_dict(renamed, strict=False, assign=True)
+        actual = model.state_dict()
+        if any(not torch.equal(actual[key], tensor) for key, tensor in renamed.items()):
+            raise ValueError('Legacy weight-normalization migration changed tensor values')
+        return {'mapping': migration, 'tensor_values_equal': True, 'training': False,
+                'remaining_missing_keys': []}
+    if (loading.get('missing_keys') or loading.get('unexpected_keys')
+            or loading.get('mismatched_keys') or loading.get('error_msgs')):
+        raise ValueError('Model loader reports incomplete or unexpected acoustic weights')
+    return {'mapping': {}, 'remaining_missing_keys': []}
+
+
 def collapse(ids, vocab):
     pieces = {i: p for p, i in vocab.items()}
     kept, previous = [], None
@@ -153,28 +177,7 @@ def cell(args):
                                                        low_cpu_mem_usage=True, torch_dtype=torch.float32,
                                                        attn_implementation='sdpa', output_loading_info=True)
         result['loading_info'] = loading
-        # Published MMS uses legacy weight_norm names. Torch's parametrization
-        # API gives the SAME g/v tensors different state-dict names; older
-        # Transformers low-memory loading does not migrate them automatically.
-        prefix = 'wav2vec2.encoder.pos_conv_embed.conv.'
-        migration = {prefix + 'weight_g': prefix + 'parametrizations.weight.original0',
-                     prefix + 'weight_v': prefix + 'parametrizations.weight.original1'}
-        if (set(loading.get('missing_keys', [])) == set(migration.values())
-                and set(loading.get('unexpected_keys', [])) == set(migration)
-                and not loading.get('mismatched_keys') and not loading.get('error_msgs')):
-            from safetensors import safe_open
-            with safe_open(model_root / 'model.safetensors', framework='pt', device='cpu') as file:
-                renamed = {new: file.get_tensor(old) for old, new in migration.items()}
-            model.load_state_dict(renamed, strict=False, assign=True)
-            actual = model.state_dict()
-            if any(not torch.equal(actual[key], tensor) for key, tensor in renamed.items()):
-                raise ValueError('Legacy weight-normalization migration changed tensor values')
-            result['weight_name_migration'] = {'mapping': migration, 'tensor_values_equal': True,
-                                               'training': False, 'remaining_missing_keys': []}
-            del actual, renamed
-        elif (loading.get('missing_keys') or loading.get('unexpected_keys')
-              or loading.get('mismatched_keys') or loading.get('error_msgs')):
-            raise ValueError('Model loader reports incomplete or unexpected acoustic weights')
+        result['weight_name_migration'] = repair_weight_names(model, loading, model_root)
         model.eval()
         result['runtime_model_source_sha256'] = digest(sys.modules[model.__class__.__module__].__file__)
         result['load_and_frontend_s'] = time.monotonic() - start
@@ -211,7 +214,7 @@ def cell(args):
         print(json.dumps({k: v for k, v in result.items() if k not in ('variants', 'numeric_token_provenance', 'allowed_ids')}, ensure_ascii=False), flush=True)
 
 
-def supervise(args):
+def supervise(args, cell_script=None):
     path = Path(args.manifest)
     manifest = json.loads(path.read_text())
     root = Path(manifest['results_directory'])
@@ -219,7 +222,7 @@ def supervise(args):
     baseline = memory_snapshot()
     for clip in manifest['recordings']:
         output = root / (clip['id'] + '.json')
-        command = [sys.executable, str(Path(__file__).resolve()), 'cell', '--model', manifest['model'],
+        command = [sys.executable, str(Path(cell_script or __file__).resolve()), 'cell', '--model', manifest['model'],
                    '--wav', clip['wav'], '--audio-sha256', clip['sha256'], '--output', str(output)]
         start, peak, reason, samples = time.monotonic(), 0, None, []
         env = dict(os.environ, OPENBLAS_NUM_THREADS='2', OMP_NUM_THREADS='2', HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
