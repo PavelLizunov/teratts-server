@@ -19,7 +19,8 @@ from mms_pair import digest, save, LANGS, HINTS
 from run import Guard
 
 
-def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=False):
+def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=False,
+           prefix_scorer=None):
     tokens, language, local, boundaries, delimiters, by_head = {}, {}, {}, set(), set(), {}
     offset = 0
     offsets = {}
@@ -95,9 +96,19 @@ def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=Fa
                     # acoustic frame. Boundary symbols keep the current head.
                     transition = -math.log(2) if closed and token not in boundaries else 0.
                     add(((*prefix, token), target), pnb=total + transition + lp)
-        rank = lambda key: logadd(*following[key]) + credit(key[0])[0]
-        current = {key: following[key] for key in sorted(following, key=rank, reverse=True)[:32]}
+        base_rank = lambda key: logadd(*following[key]) + credit(key[0])[0]
+        eligible_keys = list(following)
+        if prefix_scorer is not None:
+            # Head-state mass stays separate from deterministic prefix LM score.
+            eligible_keys = sorted(eligible_keys,
+                                   key=lambda key: base_rank(key) + prefix_scorer.estimate(key[0]),
+                                   reverse=True)[:prefix_scorer.prebeam]
+            prefix_scorer.prepare([key[0] for key in eligible_keys])
+        rank = lambda key: base_rank(key) + (prefix_scorer.credit(key[0]) if prefix_scorer else 0.0)
+        current = {key: following[key] for key in sorted(eligible_keys, key=rank, reverse=True)[:32]}
     results = []
+    if prefix_scorer is not None:
+        prefix_scorer.prepare([key[0] for key in current], final=True)
     for (prefix, active), masses in current.items():
         value, state = credit(prefix)
         if whole_word_context and active == 'eng':
@@ -113,10 +124,14 @@ def search(arrays, vocab, score, check, hint_case='lower', whole_word_context=Fa
         if violations or context > score * (len(prefix) + int(whole_word_context)) + 1e-8:
             raise ValueError('Word/head or context-budget violation')
         text = ''.join(tokens[t] for t in prefix).replace('|', ' ').strip()
-        results.append({'token_ids': list(prefix), 'raw_text': text, 'postprocessed_text': text,
-                        'head_graph_score': acoustic, 'context_credit': context, 'total_score': acoustic + context,
-                        'within_word_head_switch_violations': violations,
-                        'head_counts': {lang: sum(language[t] == lang for t in prefix) for lang in LANGS}})
+        hypothesis = {'token_ids': list(prefix), 'raw_text': text, 'postprocessed_text': text,
+                      'head_graph_score': acoustic, 'context_credit': context, 'total_score': acoustic + context,
+                      'within_word_head_switch_violations': violations,
+                      'head_counts': {lang: sum(language[t] == lang for t in prefix) for lang in LANGS}}
+        if prefix_scorer is not None:
+            hypothesis.update(prefix_scorer.receipt(prefix))
+            hypothesis['total_score'] += prefix_scorer.credit(prefix, final=True)
+        results.append(hypothesis)
     return {'hypotheses': sorted(results, key=lambda h: h['total_score'], reverse=True)[:5],
             'beam': 32, 'score': score, 'whole_word_context': whole_word_context,
             'context_paths': paths if score else [],

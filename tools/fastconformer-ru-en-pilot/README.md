@@ -340,6 +340,24 @@ Inference now disables SpecAugment and does not construct this absent parameter;
 all checkpoint parameters still load strictly and retain exact values. Failed
 receipts are kept separately; no random replacement weights were used.
 
+## LM inside the specialist pair graph
+
+`specialist_lm.py pilot MANIFEST` scores retained specialist token prefixes with
+the existing pinned ruGPT model. Its manifest follows `ctc_lm.py` but each
+receipt is a completed specialist-pair cell and context receipt is the matching
+whole-word replay. There is no acoustic model or waveform input. The optional
+scorer integration keeps head-specific blank/nonblank masses separate from LM
+and context credit. Beam32/prebeam64, LM alpha0.3, completed-word bonus1 and
+context0/2.5 are fixed, not a score sweep. Provisional full prefixes are scored
+before pruning; EOS settles the final sequence. The prebeam is approximate.
+
+For LM scoring only, English uppercase acoustic pieces are mapped to lowercase
+and delimiters to spaces. Raw output preserves the publisher's pieces and
+numerical origins. The actual LM-scored string and a direct teacher-forced
+probability consistency observation are recorded. Two-thread CPU guards and
+KV target are reused from the earlier CTC LM runner. This is a new combination
+of existing acoustic scores, not a claim that a text model fixes recognition.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
