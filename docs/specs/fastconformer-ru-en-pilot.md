@@ -19,5 +19,8 @@ Direct user on 2026-10-12: «Давай реализовываю потести�
 ## Material unknowns
 Exact checkpoint contents, archive export correspondence, installed runtime ABI, mask/context performance and Deck quality/resource cost. Language-branch exclusion cannot guarantee semantic language identity or accurate code-switching. No human gold transcript/WER exists. Licensing uses model card governing terms; do not relicense weights under repository code license.
 
+## Observed delivery
+Original checkpoint downloaded and tokenizers/config extracted without deserializing original weight state. Concrete int8 export matches original joint and all ten language vocabularies; EN512–767, RU1280–1535, blank2560 confirmed. Isolated Deck venv and committed Python decoder executed four fixed acoustic cells successfully. All output IDs allowed, but all were Russian-branch; score1.5 EN name paths changed neither transcript and did not recover target names. Production services remained active with unchanged PIDs. No replacement recommendation from this pilot. Model-free test invocation was blocked by platform ACTION_FILTER; do not retry or disguise it. Private transcripts/receipts stay outside Git.
+
 ## Search verdict
 Extend — pinned FastConformer ONNX reference inference plus task-local masked numerical decoder. Reference/source path and language partitions already researched; existing repository pilots provide hash/RSS conventions but no matching decoder. Python minimizes remote build/dependency surface versus rebuilding all sherpa for API bindings; preserve numerical IDs directly.

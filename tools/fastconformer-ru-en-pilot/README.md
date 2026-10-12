@@ -89,7 +89,14 @@ for the bounded two-recording pilot and retained no-repeat rules.
 
 Language-branch masking is not semantic language classification. Published
 monolingual/multilingual training does not prove continuous code-switch quality.
-CPU latency/RSS must be measured on Deck, and no human reference transcript/WER
-is available. Feature extraction follows the pinned exporter example rather
+The first fixed Deck pilot completed all four cells (two whole recordings,
+with and without score-1.5 hints) without protective stops. Allowed numerical
+IDs were respected, but every output used only Russian-branch IDs, the hints
+did not change either transcript, and the target names were not recovered.
+This version is not recommended for a production switch. Private result
+receipts retain the exact wall-time/RSS measurements and original audio; no
+human reference transcript/WER is available. Model-free checks were written,
+but their execution was rejected by the platform action filter, so they are
+not claimed as passed. Feature extraction follows the pinned exporter example rather
 than claiming bit-exact Python NeMo preprocessing. No speculative text repair,
 ITN or homophone substitution is applied.
