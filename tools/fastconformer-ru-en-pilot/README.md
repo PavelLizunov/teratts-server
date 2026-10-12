@@ -90,7 +90,10 @@ for the bounded two-recording pilot and retained no-repeat rules.
 `alternative.py pilot ROOT MANIFEST` runs new CTC cells with either the original
 KNF frontend or the source-aligned NumPy frontend. The manifest names a new
 results directory and cells (`id`, `wav`, `audio_sha256`, `frontend`). Model and
-token-map hashes are checked. Whole-utterance CTC probabilities are retained as
+token-map hashes are checked. Optional `precision` is `int8` (default) or `fp32`
+for the pinned official exports. The two full-precision cells also left target
+names and ordinary Russian text damaged; int8 alone does not explain the failure.
+Whole-utterance CTC probabilities are retained as
 NPZ alongside raw output. The alternate frontend implements NeMo 1.21 centered
 STFT, global preemphasis, Slaney mel, additive log guard and feature normalization;
 it is not claimed bit-exact with Torch. No silence is appended to the WAV.
