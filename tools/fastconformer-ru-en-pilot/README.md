@@ -358,6 +358,61 @@ probability consistency observation are recorded. Two-thread CPU guards and
 KV target are reused from the earlier CTC LM runner. This is a new combination
 of existing acoustic scores, not a claim that a text model fixes recognition.
 
+Observed specialist-LM result: short process242.343s/RSS1682.211MiB, but
+context repeats false names. Long no-context decode finished527.934s; the second
+variant hit the shared600s limit, with2532.941MiB peak RSS. Three completed best
+LM sums agree with direct teacher forcing within2.5e-5. The failed long cell and
+its completed first variant remain separate evidence; no rerun or timeout raise.
+
+## Model-derived language timing and native acoustic clocks
+
+`proposal_support.py --receipt PAIR_JSON --proposals WHISPER_JSON --output NEW_JSON`
+scores all retained N-best candidates against head-specific CTC paths and records
+Viterbi label frames. Normalization is only for scoring; unsupported words fail
+rather than disappear. This finite-candidate diagnostic is NOT an open-vocabulary
+recognizer or a hard RU/EN constraint on Whisper. Acoustic ranking rejected a
+repeated clause but still preferred a damaged short name.
+
+`guided_pair.py --receipt PAIR_JSON --support SUPPORT_JSON --output NEW_JSON`
+uses the fixed context-rank1 candidate only to derive head timing. Open beam32
+still chooses the actual token sequence, with whole-word context0/2.5. It is not
+trained frame-LID. Long-recording names improved without false extra names, but
+Russian remained poor. Short names still failed; no deployment recommendation.
+
+`giga_component.py pilot MANIFEST` observes the pinned Russian-only GigaAM-v3
+CTC export (`csukuangfj/sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16`,
+revision32a4c7cc81809bd132e2d935ab99e9e6ab47fbec). The manifest uses the existing
+MMS runner shape: model directory, new results directory, recordings with id/wav/
+sha256. Task-local torchaudio2.5.1+cpu implements the official320sample Hann/FFT,
+160sample hop,64HTKmel,power2,centerFalse/log-clamp frontend. No appended audio,
+VAD or resampling. Native34-class log probabilities are retained immediately.
+The published example's unspecified KNF window is not used. Russian improved;
+English did not. Whole processes3.505/4.006s, peak828.363/841.980MiB on the main
+host; these are not Deck measurements or full bilingual-pipeline times.
+
+`native_clock_pair.py --russian GIGA_JSON --english PAIR_JSON --guidance GUIDED_JSON
+--russian-model MODEL_DIRECTORY --output NEW_JSON` reuses these scores and the
+old English head. One beam traverses routed native events:40ms RU and20ms EN,
+without probability interpolation/repetition or independently decoded regions.
+It selects rows using the fixed earlier auxiliary schedule; original whole
+arrays stay intact. At each switch an actually scored delimiter must close the
+prior word before pruning. The first attempt lost all closed paths because the
+condition came after beam pruning; the repaired attempt preserves that acceptance
+condition before pruning, with no fabricated spaces or changed switch times.
+
+Native-clock output uses trained EN0–31/RU32–65 provenance (specials/blank cannot
+emit), open characters and context0/2.5. Repaired decoder-only times2.411/8.211s,
+RSS179.289/262.035MiB. Long names and ordinary Russian improved, but short names
+and words near switches still fail. Nominal convolution centers are not calibrated
+lexical emission times; the old Golos alignment may discard new-head speech.
+A direct observation of saved logits confirms that fixed old-head switches discard
+complete Russian emission runs at two long-recording boundaries and keep only
+part of a transliterated name in the short clip. No encoder or decoder was rerun
+for this observation. Returned N-best IDs, within-word head continuity and score
+sums satisfy implemented constraints, not recognition accuracy. A future joint
+alignment must use the current heads; hand-moving switches is not a quality fix.
+No new Deck run, full-pipeline latency claim, gold/WER claim or production switch.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
