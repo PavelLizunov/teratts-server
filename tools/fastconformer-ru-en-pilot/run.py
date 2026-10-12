@@ -197,8 +197,8 @@ def context_paths(root, artifacts, hints):
 
 def run(args):
     root, output = Path(args.artifacts), Path(args.output)
-    if output.exists():
-        raise FileExistsError('Refuse to repeat/overwrite a trial receipt')
+    if output.exists() or (args.retain_encoder and output.with_suffix('.npz').exists()):
+        raise FileExistsError('Refuse to repeat/overwrite a trial receipt or retained encoder')
     output.parent.mkdir(parents=True, exist_ok=True)
     guard = Guard(args.seconds, args.max_rss_mib)
     receipt = {'status': 'failed', 'audio_sha256': digest(args.wav),
@@ -224,12 +224,23 @@ def run(args):
         receipt['blank_id'] = artifacts['blank_id']
         model = OnnxModel(root, artifacts, args.threads)
         guard.check()
-        features, duration = features_from_wav(Path(args.wav), artifacts['preprocessor'])
+        if args.frontend == 'nemo':
+            from frontend import nemo_features
+            feature_fn = nemo_features
+        else:
+            feature_fn = features_from_wav
+        features, duration = feature_fn(Path(args.wav), artifacts['preprocessor'])
         receipt.update(audio_duration_s=duration, feature_frames=len(features),
                        model_metadata=model.meta, model_signature=model.signature)
         encoded, length = model.encode(features)
         guard.check()
         receipt['encoded_frames'] = length
+        if args.retain_encoder:
+            import numpy as np
+            retained_path = output.with_suffix('.npz')
+            with retained_path.open('xb') as retained:
+                np.savez_compressed(retained, encoded=encoded, length=np.array([length]))
+            receipt['retained_encoder_sha256'] = digest(retained_path)
         decoding_started = time.monotonic()
         result = decode(model, encoded, length, artifacts['allowed_token_ids'],
                         artifacts['blank_id'], ContextBias(paths, args.bias_score),
@@ -267,6 +278,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--hints')
     parser.add_argument('--no-bias', action='store_true')
+    parser.add_argument('--frontend', choices=('knf', 'nemo'), default='knf')
+    parser.add_argument('--retain-encoder', action='store_true')
     parser.add_argument('--bias-score', type=float, default=1.5)
     parser.add_argument('--beam', type=int, default=4)
     parser.add_argument('--max-symbols', type=int, default=10)

@@ -20,20 +20,23 @@ def rss_bytes(pid):
     return 0
 
 
-def main(root):
+def main(root, manifest_name='pilot-manifest.json'):
     root = Path(root)
-    manifest_path = root / 'pilot-manifest.json'
+    manifest_path = root / manifest_name
     manifest = json.loads(manifest_path.read_text())
-    results = root / 'results'
+    results = root / manifest.get('results_directory', 'results')
     results.mkdir(mode=0o700, exist_ok=True)
     if any(results.iterdir()):
         raise FileExistsError('Trial directory is not empty; no repeats or unknown duplicates')
     source = Path(__file__).parent
     initial_memory = memory_snapshot()
+    variants = manifest.get('variants', ['no-bias', 'bias'])
+    if not variants or len(set(variants)) != len(variants) or set(variants) - {'no-bias', 'bias'}:
+        raise ValueError('Unsupported or duplicate decoder variants')
     for recording in manifest['recordings']:
         if digest(root / recording['file']) != recording['sha256']:
             raise ValueError('Audio changed before pilot')
-        for variant in ('no-bias', 'bias'):
+        for variant in variants:
             name = recording['id'] + '-' + variant
             result_path = results / (name + '.json')
             command = [sys.executable, str(source / 'run.py'),
@@ -43,6 +46,9 @@ def main(root):
                        '--output', str(result_path), '--seconds', '180',
                        '--max-rss-mib', '1536', '--threads', '1', '--beam', '4']
             command += ['--no-bias'] if variant == 'no-bias' else ['--hints', str(root / 'hints.json')]
+            command += ['--frontend', manifest.get('frontend', 'knf')]
+            if manifest.get('retain_encoder', False):
+                command += ['--retain-encoder']
             started = time.monotonic()
             peak = 0
             reason = None
@@ -88,10 +94,12 @@ def main(root):
                 raise RuntimeError('Protective stop: ' + reason)
             if code != 0:
                 print('Trial failed and retained; proceed only with untouched cells', flush=True)
-    print('FOUR_FIXED_CELLS_FINISHED', flush=True)
+    print('MANIFEST_CELLS_FINISHED', flush=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('root')
-    main(parser.parse_args().root)
+    parser.add_argument('--manifest', default='pilot-manifest.json')
+    args = parser.parse_args()
+    main(args.root, args.manifest)
