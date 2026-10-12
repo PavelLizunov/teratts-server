@@ -141,7 +141,7 @@ def decode(events, rules, bonus, check):
             'hint_paths':rules.hint_receipts if bonus else []}
 
 
-def main(args):
+def main(args, alignment_fn=None):
     import numpy as np
     import sentencepiece as spm
     rp,ep,pp,output=map(Path,(args.russian,args.english,args.proposals,args.output))
@@ -174,8 +174,11 @@ def main(args):
         for lang,array,stride,origin in (('eng',elp,1280,0.),('rus',rlp,640,159.5)):
             for i,row in enumerate(array):events.append({'head':lang,'native_frame':i,'center_s':(stride*i+origin)/16000,'log_probs':row})
         events.sort(key=lambda e:e['center_s'])
-        selected,alignment=align(events,sequence,{'eng':1024,'rus':33},{'eng':processor.piece_to_id('▁'),'rus':0},guard.check,
-                                 stride_weights={'eng':2.,'rus':1.},switch_indices=switches)
+        if alignment_fn is None:
+            selected,alignment=align(events,sequence,{'eng':1024,'rus':33},{'eng':processor.piece_to_id('▁'),'rus':0},guard.check,
+                                     stride_weights={'eng':2.,'rus':1.},switch_indices=switches)
+        else:
+            selected,alignment=alignment_fn(events,sequence,guard.check)
         result.update(audio_sha256=ru['audio_sha256'],russian_receipt_sha256=digest(rp),english_receipt_sha256=digest(ep),
                       proposals_sha256=digest(pp),fixed_proposal_selection='name-context rank1',
                       trained_head_offsets={'eng':0,'rus':RU_OFFSET},native_rows={l:sum(e['head']==l for e in selected) for l in ('eng','rus')})
