@@ -271,14 +271,14 @@ def cell(args):
         print(json.dumps({k: v for k, v in result.items() if k != 'variants'}, ensure_ascii=False), flush=True)
 
 
-def pilot(args):
+def pilot(args, cell_script=None):
     manifest = json.loads(Path(args.manifest).read_text())
     results = Path(manifest['results_directory'])
     results.mkdir(mode=0o700, exist_ok=False)
     baseline = memory_snapshot()
     for clip in manifest['recordings']:
         output = results / (clip['id'] + '.json')
-        command = [sys.executable, str(Path(__file__).resolve()), 'cell', '--root', manifest['root'],
+        command = [sys.executable, str(Path(cell_script or __file__).resolve()), 'cell', '--root', manifest['root'],
                    '--model', manifest['model'], '--receipt', clip['receipt'], '--context-receipt', clip['context_receipt'],
                    '--output', str(output)]
         started, peak, reason, samples = time.monotonic(), 0, None, []

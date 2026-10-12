@@ -282,6 +282,18 @@ predictor/joint observations show2/62 and7/146changed token rankings on the same
 path; quantized tensor maps and gate order are verified. Full FP32 decoding is
 still unobserved; historical-path differences do not establish better accuracy.
 
+## Original FP32 RNNT decoder boundary
+
+`rnnt_fp32.py pilot MANIFEST` loads the verified original checkpoint's frozen
+embedding, one-layer640LSTM and three-affine/ReLU joint. It reuses retained
+whole-recording encoder arrays, not waveform input or a new encoder pass. The
+manifest has the same shape as the CTC-LM manifest but points `model` to the
+original archive and each receipt to its RNNT result. Strict11tensor shapes,
+hashes and original language-token map are recorded. Search remains beam4,
+max10symbols per frame, hints0/1.5, and original RU/EN numerical restriction.
+There is no LM scorer or new prior correction in this isolation experiment.
+Local protection is600s/RSS4096MiB; a successful run is not a quality claim.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
