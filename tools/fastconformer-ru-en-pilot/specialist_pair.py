@@ -34,6 +34,12 @@ def load_strict(root):
             or config.pad_token_id != 0 or config.num_hidden_layers != 24 or config.hidden_size != 1024):
         raise ValueError('Unexpected specialist architecture/time geometry')
     config._attn_implementation = 'sdpa'
+    # Old inference checkpoints may omit this training-only SpecAugment vector.
+    # Do not invent a random parameter: disable the unreachable training branch.
+    missing_training_mask = 'wav2vec2.masked_spec_embed' not in weights
+    if missing_training_mask:
+        config.mask_time_prob = config.mask_feature_prob = 0.0
+    config.apply_spec_augment = False
     with init_empty_weights():
         model = Wav2Vec2ForCTC(config)
     target = model.state_dict()
@@ -53,7 +59,9 @@ def load_strict(root):
         raise ValueError('Strict loader altered model tensors')
     del weights
     model.eval()
-    return model, {'mapping': used, 'all_tensor_values_equal': True, 'missing_keys': [], 'unexpected_keys': []}
+    return model, {'mapping': used, 'all_tensor_values_equal': True, 'missing_keys': [], 'unexpected_keys': [],
+                   'absent_training_only_mask_not_constructed': missing_training_mask,
+                   'spec_augment': False, 'model_training': model.training}
 
 
 def cell(args):
