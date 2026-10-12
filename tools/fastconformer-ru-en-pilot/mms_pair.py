@@ -153,8 +153,28 @@ def cell(args):
                                                        low_cpu_mem_usage=True, torch_dtype=torch.float32,
                                                        attn_implementation='sdpa', output_loading_info=True)
         result['loading_info'] = loading
-        if loading.get('missing_keys') or loading.get('mismatched_keys') or loading.get('error_msgs'):
-            raise ValueError('Model loader reports incomplete acoustic weights')
+        # Published MMS uses legacy weight_norm names. Torch's parametrization
+        # API gives the SAME g/v tensors different state-dict names; older
+        # Transformers low-memory loading does not migrate them automatically.
+        prefix = 'wav2vec2.encoder.pos_conv_embed.conv.'
+        migration = {prefix + 'weight_g': prefix + 'parametrizations.weight.original0',
+                     prefix + 'weight_v': prefix + 'parametrizations.weight.original1'}
+        if (set(loading.get('missing_keys', [])) == set(migration.values())
+                and set(loading.get('unexpected_keys', [])) == set(migration)
+                and not loading.get('mismatched_keys') and not loading.get('error_msgs')):
+            from safetensors import safe_open
+            with safe_open(model_root / 'model.safetensors', framework='pt', device='cpu') as file:
+                renamed = {new: file.get_tensor(old) for old, new in migration.items()}
+            model.load_state_dict(renamed, strict=False, assign=True)
+            actual = model.state_dict()
+            if any(not torch.equal(actual[key], tensor) for key, tensor in renamed.items()):
+                raise ValueError('Legacy weight-normalization migration changed tensor values')
+            result['weight_name_migration'] = {'mapping': migration, 'tensor_values_equal': True,
+                                               'training': False, 'remaining_missing_keys': []}
+            del actual, renamed
+        elif (loading.get('missing_keys') or loading.get('unexpected_keys')
+              or loading.get('mismatched_keys') or loading.get('error_msgs')):
+            raise ValueError('Model loader reports incomplete or unexpected acoustic weights')
         model.eval()
         result['runtime_model_source_sha256'] = digest(sys.modules[model.__class__.__module__].__file__)
         result['load_and_frontend_s'] = time.monotonic() - start
