@@ -14,7 +14,7 @@ from run import Guard
 from subword_pair import TokenRules, RU_OFFSET
 
 
-def cell(args, rules_type=TokenRules):
+def cell(args, rules_type=TokenRules, english_model='parakeet-english-ctc', english_results='results-parakeet-english-v1'):
     import numpy as np
     import sentencepiece as spm
     root,rm,rp,ap,output=map(Path,(args.root,args.model,args.receipt,args.context_receipt,args.output))
@@ -24,13 +24,18 @@ def cell(args, rules_type=TokenRules):
             'proposal_text_used_by_final_decoder':False,'source_commit':subprocess.check_output(['git','-C',str(Path(__file__).parent),'rev-parse','HEAD'],text=True).strip()}
     try:
         ru=json.loads(rp.read_text());alignment=json.loads(ap.read_text());clip=rp.stem
-        ep=root/'alternative-methods/results-parakeet-english-v1'/(clip+'.json');en=json.loads(ep.read_text())
+        ep=root/'alternative-methods'/english_results/(clip+'.json');en=json.loads(ep.read_text())
         parent=ap.with_name(ap.name.replace('-alignment.json','.json'));prior=json.loads(parent.read_text())
-        if digest(ap)!=prior['alignment_sha256'] or digest(ep)!=prior['english_receipt_sha256']:raise ValueError('Changed frozen English routing/score provenance')
+        fp=root/'alternative-methods/results-parakeet-english-v1'/(clip+'.json')
+        if digest(ap)!=prior['alignment_sha256'] or digest(fp)!=prior['english_receipt_sha256']:raise ValueError('Changed frozen English routing provenance')
+        if english_results!='results-parakeet-english-v1':
+            parent_en=json.loads(fp.read_text())
+            if en['audio_sha256']!=parent_en['audio_sha256'] or en['native_output_frames']!=parent_en['native_output_frames']:raise ValueError('Changed compact English clock/audio')
         if len({ru['audio_sha256'],en['audio_sha256'],alignment['audio_sha256']})!=1:raise ValueError('Different recordings')
         if digest(rp.with_suffix('.npz'))!=ru['retained_encoder_sha256'] or digest(ep.with_suffix('.npz'))!=en['retained_logits_sha256']:raise ValueError('Changed native arrays')
         if digest(rm/'prepared.json')!=ru['prepared_sha256']:raise ValueError('Changed Russian transducer provenance')
-        em=root/'alternative-methods/parakeet-english-ctc';prepared=json.loads((em/'prepared.json').read_text())
+        em=root/'alternative-methods'/english_model;prepared=json.loads((em/'prepared.json').read_text())
+        if english_results!='results-parakeet-english-v1' and prepared['fp32_parent_prepared_sha256']!=parent_en['prepared_sha256']:raise ValueError('Compact export belongs to a different verified parent')
         if digest(em/'prepared.json')!=en['prepared_sha256'] or digest(em/'tokenizer.model')!=prepared['tokenizer_sha256']:raise ValueError('Changed English trained vocabulary')
         with np.load(rp.with_suffix('.npz')) as file:encoded=file['encoded']
         with np.load(ep.with_suffix('.npz')) as file:elp=file['log_probs'].astype(np.float64)
