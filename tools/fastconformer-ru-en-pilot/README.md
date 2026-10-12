@@ -501,6 +501,18 @@ No guard stop or sampled swap growth occurred. These are consumed configurations
 not successful solutions. No new Deck run or production switch followed.
 Private raw transcripts remain outside Git; no human reference/WER is available.
 
+`mixed_path_support.py --root PRIVATE_ALTERNATIVES_DIR --clip short|long
+--output NEW_JSON` computes exact fixed-path mixed mass for the auxiliary and both
+already-emitted best paths, plus an approximate zero-encoder internal-language
+prior from the original RNNT predictor/joint. It is not a new recognizer. Exact
+mass is identical with and without the10-symbol cap on all six paths. Known
+incorrect paths remain ahead of the auxiliary by28.91–30.14 score units in the
+short clip and52.12–53.84 in the long clip under the same context. Beam loss exists,
+but expanding beam cannot overturn those known path scores. Removing one full
+unit of the approximate internal prior still leaves the long auxiliary behind;
+no tuned subtraction/bonus grid is justified. Next unresolved mechanism is
+CTC-derived routing versus native RNNT emission timing, not a proven cause.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
