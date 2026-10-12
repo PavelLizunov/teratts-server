@@ -323,6 +323,23 @@ probabilities. This is two monolingual models, not a jointly bilingual checkpoin
 Local600s/RSS8192MiB supervision comes from the existing MMS runner; no Deck
 readiness or quality claim follows from downloading the models.
 
+Observed specialist result: whole processes16.021/35.046s, peak RSS1950.020/
+2243.730MiB on the main host. Unbiased output replaces some Russian words with
+English nonsense. Context initially completed names inside longer words; a
+bounded repair now requires a right delimiter or virtual EOS before completion.
+`specialist_pair.py replay --receipt ORIGINAL_JSON --output NEW_JSON` uses only
+retained scores with this repair, not another acoustic pass. Score2.5/beam32 stay
+fixed, although the added delimiter is another credited token. The repaired
+outputs still insert incorrect complete names: rejected, not a Deck candidate.
+Replay took2.272/6.939s, RSS91.605/181.094MiB, no guard stops. Numeric head and
+word-boundary constraints hold; accuracy remains unresolved.
+
+The initial specialist loader failure occurred before any model forward because
+the old English checkpoint omitted the training-only `masked_spec_embed`.
+Inference now disables SpecAugment and does not construct this absent parameter;
+all checkpoint parameters still load strictly and retain exact values. Failed
+receipts are kept separately; no random replacement weights were used.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
