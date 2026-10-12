@@ -440,6 +440,67 @@ beats the auxiliary proposal, despite measurable beam pruning loss. Thus merely
 increasing beam cannot make the proposal optimal under the current objective;
 no beam/bonus grid or manual output substitution follows from this diagnostic.
 
+## English FastConformer and mixed transducer follow-up
+
+The separate English-only hybrid is
+[`nvidia/stt_en_fastconformer_hybrid_large_pc`](https://huggingface.co/nvidia/stt_en_fastconformer_hybrid_large_pc),
+revision `e60371c84e0d84d12d3ce5c94732022c8388b7ea`, CC-BY-4.0.
+This is **not** the multilingual checkpoint above. The FP32 CTC export is
+[`OpenVoiceOS/stt_en_fastconformer_hybrid_large_pc_onnx`](https://huggingface.co/OpenVoiceOS/stt_en_fastconformer_hybrid_large_pc_onnx),
+revision `af823bde696b1a505695b0b764e9f051acc4ce9e`.
+
+- `english_fc.py prepare --model MODEL_DIR` checks pinned archive/export digests,
+  all exported learned tensors (including 17 folded Conv/BN pairs), original
+  tokenizer IDs and the CTC head. It retains original Hann/mel buffers. This is
+  parameter correspondence, not a proof of full graph equivalence.
+- `english_fc.py pilot MANIFEST` runs one intact original recording through the
+  English CTC component and retains every native 80 ms score row. The manifest
+  uses `model`, `results_directory`, and `recordings[{id,wav,sha256}]`. No VAD,
+  appended waveform, resampling or English character-only vocabulary reduction.
+- `subword_pair.py --russian GIGA_JSON --english ENGLISH_JSON --proposals
+  WHISPER_JSON --russian-model GIGA_DIR --english-model ENGLISH_DIR --output
+  NEW_JSON` combines original English SentencePiece IDs with Russian character
+  IDs. English offset 0, unknown 0, blank 1024; Russian offset 1025, local space 0
+  and blank 33. Only trained non-special IDs emit. Word-start pieces and Russian
+  spaces supply actual language-switch boundaries. A context-only marker requires
+  whole-word hint completion; it never appears as an output token.
+- Auxiliary alignment uses the fixed retained Whisper context-rank1 proposal,
+  native EN80/RU40 ms events and duration weights EN2/RU1. These composite scores
+  are not calibrated language probabilities. Final beam32 receives only selected
+  head/frame events, not auxiliary words; every current-head ID is considered.
+  Context 0/2.5 is fixed. Boundary-credit and tokenization changes mean hint totals
+  are not numerically comparable with the earlier character-head bonus.
+- `english_rnnt.py pilot MANIFEST` uses the original trained English predictor and
+  joint network, without another acoustic pass. All 1025 saved CTC log probabilities
+  identify 512 encoder coordinates through the original centered projection.
+  Observed rank512, condition57.5720, maximum reprojection error below5.65e-6.
+  These recovered FP32 activations are numerically close, not bit-identical.
+  This diagnostic uses beam4, maximum10 symbols/frame, context0/1.5. Manifest
+  shape matches `rnnt_fp32.py`, with the English CTC receipt and model directory.
+- `mixed_transducer.py pilot MANIFEST` runs one open beam over Russian CTC and
+  English RNNT events. English predictor state persists across Russian events;
+  no per-region decoders or transcript splicing. Beam4/max10/context0/1.5. The
+  manifest's `receipt` is the recovered English encoder JSON and `context_receipt`
+  is the saved subword alignment. The fixed routing remains CTC-derived: it may
+  truncate RNNT emissions whose timing differs. Counts of paths reaching the
+  symbol cap are exploration counts, not evidence that the winning path hits it.
+
+Observed host results, short/long respectively:
+
+| Stage | Whole process, seconds | Peak RSS, MiB | Observed limit |
+| --- | ---: | ---: | --- |
+| New English acoustic component | 4.006 / 4.506 | 1170.605 / 1355.703 | English-only greedy output inadequate |
+| GigaAM + English subword CTC, alignment + both contexts | 13.817 / 16.200 | 280.551 / 297.602 | One short name recovered; main names fail |
+| English RNNT diagnostic, recovery + both contexts | 12.017 / 30.037 | 1127.770 / 1126.895 | Long acronym recovered; principal name fails |
+| GigaAM CTC + English RNNT, both contexts | 21.028 / 18.025 | 701.141 / 765.434 | Names and some boundary words still fail |
+
+English acoustic forward alone took0.150/0.550s. The decoder rows are **not**
+end-to-end pipeline latency or Deck measurements. Each stage is sequential and
+separate; peak RSS values must not be added into a claimed concurrent peak.
+No guard stop or sampled swap growth occurred. These are consumed configurations,
+not successful solutions. No new Deck run or production switch followed.
+Private raw transcripts remain outside Git; no human reference/WER is available.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
