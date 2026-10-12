@@ -413,6 +413,33 @@ sums satisfy implemented constraints, not recognition accuracy. A future joint
 alignment must use the current heads; hand-moving switches is not a quality fix.
 No new Deck run, full-pipeline latency claim, gold/WER claim or production switch.
 
+## Current-head alignment and fixed-path diagnosis
+
+`current_head_alignment.py --russian GIGA_JSON --english PAIR_JSON --proposals
+WHISPER_JSON --russian-model MODEL_DIRECTORY --output NEW_JSON` replaces the old
+Golos switch schedule with an asynchronous forced alignment on the current native
+heads. The fixed existing context-rank1 proposal only guides alignment; the final
+open decoder receives selected head/native-frame events, never proposal words.
+Inactive-head events carry state without emission cost, and head changes occur
+only at supplied word boundaries, including an optional new-head blank state.
+Duration weights RU2/EN1 come from native40/20ms strides, not fitted coefficients.
+This is a composite Viterbi objective, not calibrated language confidence.
+
+Actual processes2.500/8.560s, RSS177.141/247.125MiB, with alignment0.076/0.379s.
+Backtrace sums agree within2.85e-14; numeric and word-boundary constraints hold.
+Some lost Russian boundary words returned, but the long acronym was lost and the
+short name still failed. This is conflicting partial evidence, not a solution.
+
+`native_path_support.py --result RESULT_JSON --alignment ALIGNMENT_JSON --russian
+GIGA_JSON --english PAIR_JSON --output NEW_JSON` computes unpruned fixed-path CTC
+mass on those exact events. It does not rerun an open decoder or emit a new
+transcript. Proposal paths with/without explicit final delimiter are reported
+separately because displayed text strips that delimiter. Identical context credit
+is applied after exact path scoring. In both clips a known erroneous output still
+beats the auxiliary proposal, despite measurable beam pruning loss. Thus merely
+increasing beam cannot make the proposal optimal under the current objective;
+no beam/bonus grid or manual output substitution follows from this diagnostic.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
