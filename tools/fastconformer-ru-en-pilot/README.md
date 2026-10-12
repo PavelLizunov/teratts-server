@@ -119,7 +119,17 @@ Unknown IDs cannot create a boundary. The one observed combined repair removed
 the unwanted Pro and had no within-word branch violations, but ordinary words
 remained damaged and DSH was missed. It is still not a quality replacement.
 Scores retain their adjusted-acoustic/context split; the old failed outputs
-remain unchanged. The existing overlap-check expectation was updated to union
+remain unchanged.
+
+`run.py --frontend nemo --retain-encoder` also closes the previously unobserved
+RNNT frontend branch. `pilot.py ROOT --manifest MANIFEST` accepts optional
+`results_directory`, `frontend`, `retain_encoder`, and `variants` fields; the
+original manifest defaults remain unchanged. The two new RNNT/no-bias runs with
+the source-aligned frontend completed on Deck, but still emitted zero English
+IDs and damaged technical names. Whole-process wall was 3.41/5.00 seconds and
+high-water RSS 384.37/481.00 MiB. Retained encoder NPZ plus length/hash prevents
+unnecessary future native inference. These observations do not justify another
+blind coefficient sweep or a production replacement. The existing overlap-check expectation was updated to union
 coverage; checks were not executed after the earlier platform denial.
 
 `whisper_diagnostic.py pilot MANIFEST` is a **different, non-pair-constrained
