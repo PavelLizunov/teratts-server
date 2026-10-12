@@ -27,7 +27,8 @@ def cell(args, rules_type=TokenRules, english_model='parakeet-english-ctc', engl
         ep=root/'alternative-methods'/english_results/(clip+'.json');en=json.loads(ep.read_text())
         parent=ap.with_name(ap.name.replace('-alignment.json','.json'));prior=json.loads(parent.read_text())
         fp=root/'alternative-methods/results-parakeet-english-v1'/(clip+'.json')
-        if digest(ap)!=prior['alignment_sha256'] or digest(fp)!=prior['english_receipt_sha256']:raise ValueError('Changed frozen English routing provenance')
+        route_english=ep if prior.get('routing_english_receipt_sha256')==digest(ep) else fp
+        if digest(ap)!=prior['alignment_sha256'] or digest(route_english)!=prior['english_receipt_sha256']:raise ValueError('Changed frozen English routing provenance')
         if english_results!='results-parakeet-english-v1':
             parent_en=json.loads(fp.read_text())
             if en['audio_sha256']!=parent_en['audio_sha256'] or en['native_output_frames']!=parent_en['native_output_frames']:raise ValueError('Changed compact English clock/audio')
