@@ -1,8 +1,9 @@
-"""Open mixed token passing: Viterbi recombination, not transcript logsum.
+"""Open mixed token passing with sufficient-state recombination.
 
-Keep all English CTC/context sufficient states for four native RU histories.
-Different English texts are NEVER probability-summed. The representative keeps
-its literal emitted token trace and separate acoustic/context scores.
+Keep all English CTC/context states for four native RU histories. Viterbi is the
+default; optional forward accumulation sums only identical emitted token tuples.
+Different texts are NEVER probability-summed. Discarded text representatives
+mean forward mode is approximate, not an exact transcript posterior.
 Reference principle: flashlight/text LexiconFreeDecoder.cpp (MIT).
 """
 from dataclasses import dataclass

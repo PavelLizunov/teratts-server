@@ -639,6 +639,125 @@ variants, was6.008/28.542s, RSS178.309/386.285MiB; the context search alone took
 3.702/15.072s. These timings exclude encoders and auxiliary Whisper inference.
 No whole-pipeline or Deck measurement is claimed. No production switch followed.
 
+## Compact English export and sequential pipeline
+
+`parakeet_int8.py prepare --model INT8_DIR --parent VERIFIED_FP32_DIR`
+checks the published compact export from the same pinned repository revision.
+All854 parent initializers were accounted:295 quantized tensors differ by at
+most0.500004 scale units; remaining tensors match exactly. It reuses original
+frontend/tokenizer bytes, rather than inventing a compact vocabulary. The one
+whole-audio int8 component pass used1883.539/1914.273MiB RSS on the host.
+
+Initial mixed beam4 pruning lost the main name in both clips. Recomputing
+auxiliary timing from int8 scores did not fix it. Exact complete English-path
+scores showed the known better contextual path was being pruned early. The
+repair retains the existing native CTC beam32 during English events while
+keeping Russian RNNT beam4/max10. No bonus increase or width sweep was used.
+`compact_mixed.py` selects this repaired configuration; `compact_guidance.py`
+can derive native timing from the retained int8 scores. All four names and the
+same Russian text as the prior FP32 candidate returned with context2.5.
+Context-only search took6.851/11.869s on the host, excluding acoustic models.
+
+`paired_pipeline.py pilot MANIFEST` runs separate sequential child processes:
+whole-audio auxiliary Whisper, whole-audio English CTC, whole-audio Russian RNNT,
+then current-score phrase timing and one shared constrained search. It never
+splices completed model transcripts. The auxiliary proposal only determines
+English phrase timing. Each model process exits before the next loads; prior
+stage receipts and arrays remain on disk. NumPy frontends load the original
+stored buffers. Their maximum differences from the Torch formulas on the two
+whole recordings were below0.000060 for English and0.000299 for Russian, not
+bit identity.
+
+The manifest contains `source_commit`, `source_files` (filename to SHA256),
+`whisper_python`, `acoustic_python`, `whisper_model`, `english_model`,
+`russian_model`, `results_directory`, `rss_mib`, and
+`recordings[{id,wav,sha256}]`. The English runtime expects `runtime.onnx` plus
+external `runtime.weights`, with hashes in `prepared.json.runtime_external_files`.
+Storage conversion preserved all1522 compact initializer arrays byte-for-byte;
+no arithmetic or quantization change is involved. Host load-only peak was
+630.859MiB without Torch, not a full-inference or Deck memory claim.
+
+Pipeline guards cover each native child process: requested RSS cap, available
+memory floor2048MiB, swap growth256MiB,85°C and600s per recording. These are
+agent-selected method limits, not a user deadline. Every stage saves its own
+status, provenance, peak RSS and supervisor samples; a failed/unknown stage
+must not be repeated automatically. Only one context variant is used in the
+full pipeline. Its total time includes auxiliary inference and cold model
+loads, unlike the preceding decoder-only timings.
+
+The isolated Deck pipeline completed both recordings in22.938/41.335s with
+peak stage RSS962.027/1044.621MiB. Minimum available memory was2273.082/2173.242MiB,
+above the2048MiB reserve; maximum observed temperature67/70°C. Sampled swap growth
+was0.109375MiB for the short recording and0 for the long one. Sequential stage
+peaks are not summed. Production services remained active with their original
+PIDs. The stricter1280MiB process cap was selected before execution after a1400MiB
+preflight did not fit the current available-memory budget; no acoustic pass
+occurred under the rejected preflight.
+
+The short result retained both names and the Russian continuation. The long
+result failed the principal English name and omitted an intervening Russian
+phrase, despite host success. The Deck uses ONNX Runtime1.31 rather than the
+host's1.20.1; retained logits and derived timing differ. The cause of numerical
+differences is not established. Do not describe host and Deck output as parity.
+
+Exact scoring of two actually observed paths on the Deck's own arrays showed
+the prior good host path beats the erroneous Deck path by10.183945 score units
+with the existing hints. Max10 RNNT emissions changed these exact masses by
+less than3.4e-9 relative to uncapped paths. Search loss is therefore established,
+not a claim that the target path is acoustically impossible. A passive trace
+located loss of the compatible English prefix at rank38 versus CTC beam32.
+Neither applying native word-switch acceptance before pruning nor reserving
+representatives of distinct context states within the same32-path budget fixed
+the long output. Their negative receipts remain separate. Context banking is
+optional (`context_banks` in the pipeline manifest), not a recommended fix.
+
+For causal decoder-only observations, `retained_inputs_directory` in the manifest
+reuses saved auxiliary/English/Russian receipts and arrays and runs only `final`.
+Such results are not full-pipeline latency measurements. `deck_path_mass.py` and
+`trace_deck_pruning.py` inspect observed paths without fabricating target words;
+the latter verifies that its callback leaves the winner unchanged.
+
+### State-recombined search: latest partial result
+
+`state_transducer.py` replaces competition between entire English prefixes with
+sufficient-state recombination: native Russian predictor history, last emitted
+trained token, CTC blank status, and context-automaton state. All reachable
+English states remain eligible for four retained native Russian histories. This
+is a different search budget, not the old32-path beam made implicitly wider.
+It reached8364 simultaneous states on each recording without changing context2.5,
+model scores, routing or the open vocabulary. The design follows the token-passing
+principle of [Flashlight's lexicon-free decoder](https://github.com/flashlight/text/blob/main/flashlight/lib/text/decoder/LexiconFreeDecoder.cpp),
+with the separate native Russian predictor retained by our mixed decoder.
+
+Set `search_method` in the pipeline manifest:
+
+- `sufficient-state-viterbi`: maximum single acoustic path; never sum different
+  emitted texts. This recovered all four names on Deck but omitted a Russian
+  phrase. Exact saved-path scoring showed that omission marginally wins under
+  Viterbi, while the complete phrase wins under transcript-forward logsum.
+- `sufficient-state-forward`: log-add alignment paths only when their complete
+  emitted token tuples are identical. Different texts sharing the same sufficient
+  state compete by score; their probability masses are never summed. This is
+  approximate retained forward mass, not an exact transcript posterior.
+- Omitted: original prefix-beam implementation, for preserved compatibility.
+
+The forward-state method recovered all four names and the missing Russian phrase
+on the Deck's retained arrays. The best displayed token strings match the prior
+successful host int8 result. Residual Russian error remains. Search took5.314/13.112s;
+supervised final-only stage time was5.909/13.741s, child-reported peak RSS123.703/132.387MiB.
+All guards passed. These are decoder-only measurements, not the full chain.
+The prior full-pipeline22.938/41.335s must not be reassigned to this later method.
+
+`deck_path_mass.py --viterbi` selects exact max-path diagnostics; without the flag
+it uses exact fixed-transcript logsum. These diagnostics never supply target
+words to final recognition. Source and all failed variants remain pinned in the
+private receipts. No acoustic pass, auxiliary-model repeat, stronger hint or
+production switch was used for the state-method repairs.
+
+This is a promising isolated prototype, not a production recommendation. Latest
+end-to-end latency, residual Russian accuracy and generalization beyond the two
+retained recordings remain unverified. Production services are unchanged.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
