@@ -75,6 +75,11 @@ def run(args):
     records=cfg['recordings'];statuses=[];start=time.monotonic()
     for clip in records:
         available=memory_snapshot()['MemAvailable']/1048576
+        waiting=[];deadline=time.monotonic()+cfg.get('capacity_wait_seconds',0)
+        while available<2048+cfg['rss_mib'] and time.monotonic()<deadline:
+            waiting.append({'time_unix':time.time(),'available_mib':available})
+            time.sleep(2);available=memory_snapshot()['MemAvailable']/1048576
+        if waiting:save(output/(clip['id']+'-capacity-wait.json'),waiting)
         if available<2048+cfg['rss_mib']:
             save(output/(clip['id']+'-not-started.json'),{'reason':'insufficient_preflight_budget','available_mib':available,'required_mib':2048+cfg['rss_mib']})
             print('budget pause before',clip['id'],available,flush=True);break
