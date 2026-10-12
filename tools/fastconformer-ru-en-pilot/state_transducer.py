@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 import math
 
+from ctc_context import logadd
 from decoder import ContextBias
 from subword_pair import BOUNDARY
 
@@ -31,7 +32,7 @@ class PathState:
         return self.russian,self.ids[-1] if self.ids else None,self.blank,self.context
 
 
-def search(events,encoded,ctc_logp,model,rules,bonus,check,**unused):
+def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=False,**unused):
     import numpy as np
     graph=ContextBias(rules.paths if bonus else (),bonus)
     stats={'max_states':1,'max_english_states':0,'max_native_histories':1,
@@ -55,6 +56,9 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,**unused):
     def keep(dst,node):
         if not math.isfinite(node.score):return
         old=dst.get(node.key)
+        if same_text_logsum and old is not None and old.ids==node.ids:
+            dst[node.key]=PathState(old.ids,old.russian,old.context,old.blank,logadd(old.acoustic,node.acoustic),old.credit)
+            return
         if old is None or node.score>old.score:
             if old is not None:stats['equivalent_state_replacements']+=1
             dst[node.key]=node
@@ -70,7 +74,15 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,**unused):
 
     def groups(states,ctc):
         result={}
-        for node in states.values():
+        nodes=states.values()
+        if same_text_logsum:
+            by_text={}
+            for node in nodes:
+                old=by_text.get(node.ids)
+                if old is None:by_text[node.ids]=node
+                else:by_text[node.ids]=PathState(node.ids,node.russian,node.context,True,logadd(old.acoustic,node.acoustic),node.credit)
+            nodes=by_text.values()
+        for node in nodes:
             last=node.ids[-1] if node.ids else None
             head=rules.language[last] if last is not None else None
             if ctc and head=='rus' and last not in rules.closes:continue
@@ -97,13 +109,21 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,**unused):
                 for token,local in english:
                     if head is None and token not in rules.starts:continue
                     before=best[0]
-                    if not before.blank and before.ids and before.ids[-1]==token:
+                    if same_text_logsum:
+                        if before.ids and before.ids[-1]==token:
+                            choices=[]
+                            blank_node=current.get((rids,token,True,q))
+                            if blank_node is not None:choices.append(blank_node)
+                            if len(best)>1 and (not best[1].ids or best[1].ids[-1]!=token):choices.append(best[1])
+                            if not choices:continue
+                            before=max(choices,key=lambda n:n.score)
+                    elif not before.blank and before.ids and before.ids[-1]==token:
                         if len(best)<2:continue
                         before=best[1]
                     delta,state=transition(q,head,token)
                     a=before.acoustic+float(row[local]);c=before.credit+delta
                     key=rids,token,False,state;old=following.get(key)
-                    if old is None or a+c>old.score:
+                    if old is None or a+c>old.score or (same_text_logsum and old.ids==(*before.ids,token)):
                         keep(following,PathState((*before.ids,token),rids,state,False,a,c))
             stats['max_english_states']=max(stats['max_english_states'],len(following))
         else:
@@ -132,17 +152,22 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,**unused):
         if not following:raise ValueError('Empty sufficient-state search')
         stats['max_states']=max(stats['max_states'],len(following));current=following
     result={}
+    final_nodes={}
     for node in current.values():
+        old=final_nodes.get(node.ids)
+        if old is None or (not same_text_logsum and node.score>old.score):final_nodes[node.ids]=node
+        elif same_text_logsum:final_nodes[node.ids]=PathState(node.ids,node.russian,node.context,True,logadd(old.acoustic,node.acoustic),node.credit)
+    for node in final_nodes.values():
         delta,state=graph.step(node.context,BOUNDARY);credit=node.credit+delta+graph.finalize(state)
         score=node.acoustic+credit
         if node.ids in result and result[node.ids]['total_score']>=score:continue
         if any(not rules.allows(node.ids[:i],t) for i,t in enumerate(node.ids)):raise ValueError('Invalid native output path')
         raw=rules.text(node.ids)
         result[node.ids]={'token_ids':list(node.ids),'raw_pieces':[rules.tokens[t] for t in node.ids],'raw_text':raw,
-                          'viterbi_acoustic_logp':node.acoustic,'context_credit':credit,'total_score':score,
+                          ('retained_same_text_logsum' if same_text_logsum else 'viterbi_acoustic_logp'):node.acoustic,'context_credit':credit,'total_score':score,
                           **rules.formatting_receipt(node.ids)}
     return {'hypotheses':sorted(result.values(),key=lambda h:h['total_score'],reverse=True)[:4],
-            'objective':'maximum single acoustic path plus unchanged context; NOT transcript posterior logsum',
+            'objective':('same-token-text retained logsum, max representative across different texts; approximate forward search' if same_text_logsum else 'maximum single acoustic path plus unchanged context; NOT transcript posterior logsum'),
             'recombination':'native RU history, last emitted trained token, CTC blank state, context automaton state',
             'english_global_prefix_limit':None,'native_russian_history_beam':4,'rnnt_max_symbols':10,
             'all_trained_non_special_tokens_considered':True,'hint_paths':rules.hint_receipts if bonus else [],
