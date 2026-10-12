@@ -293,6 +293,16 @@ hashes and original language-token map are recorded. Search remains beam4,
 max10symbols per frame, hints0/1.5, and original RU/EN numerical restriction.
 There is no LM scorer or new prior correction in this isolation experiment.
 Local protection is600s/RSS4096MiB; a successful run is not a quality claim.
+The first run on retained int8encoder finished in7.511/14.520s with671MiB RSS,
+but both hint modes emitted zero English tokens; the quality requirement failed.
+
+`recover_encoder.py --root PRIVATE_ROOT --output NEW_DIRECTORY` recovers hidden
+activations from existing full-class FP32 CTC log probabilities. Centering across
+classes removes the logsoftmax scalar; the known centered2561x512projection is
+full rank (condition80.56). Double least-squares must reproduce log probabilities
+within0.001 before saving a FP32 encoder array compatible with `rnnt_fp32.py`.
+This is a numerical reconstruction, not a new encoder pass or bit-identical
+claim. All2561classes participate in inversion, not the later RU/EN mask.
 
 ## Limits
 

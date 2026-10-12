@@ -106,6 +106,7 @@ def cell(args):
         model = OriginalDecoder(Path(args.model))
         guard.check()
         result.update(audio_sha256=receipt['audio_sha256'], original_checkpoint_sha256=ORIGINAL_SHA,
+                      encoder_precision=receipt.get('encoder_precision', 'retained published int8'),
                       parent_receipt_sha256=digest(args.receipt), context_receipt_sha256=digest(args.context_receipt),
                       retained_encoder_sha256=digest(saved), tensor_hashes=model.tensor_hashes,
                       load_s=time.monotonic() - started, allowed_token_ids=artifacts['allowed_token_ids'], blank_id=2560)
