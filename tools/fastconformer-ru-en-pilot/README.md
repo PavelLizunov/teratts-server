@@ -85,6 +85,49 @@ context prefix refunds/optout and alignment-score merging. They do not measure
 acoustic accuracy. See the [task contract](../../docs/specs/fastconformer-ru-en-pilot.md)
 for the bounded two-recording pilot and retained no-repeat rules.
 
+## Alternative methods
+
+`alternative.py pilot ROOT MANIFEST` runs new CTC cells with either the original
+KNF frontend or the source-aligned NumPy frontend. The manifest names a new
+results directory and cells (`id`, `wav`, `audio_sha256`, `frontend`). Model and
+token-map hashes are checked. Whole-utterance CTC probabilities are retained as
+NPZ alongside raw output. The alternate frontend implements NeMo 1.21 centered
+STFT, global preemphasis, Slaney mel, additive log guard and feature normalization;
+it is not claimed bit-exact with Torch. No silence is appended to the WAV.
+
+`ctc_context.py --root ROOT --receipt CTC_JSON --output NEW_JSON` searches those
+retained probabilities without rerunning the encoder. It preserves numerical
+language IDs, CTC blank/nonblank mass and open vocabulary. Beam32 with no hints
+and score2.5 hints did not recover the target names in the retained recordings.
+
+`whisper_diagnostic.py pilot MANIFEST` is a **different, non-pair-constrained
+quality diagnostic**, not an activated backend. It loads the pinned code-switch
+fine-tune `coriollon/whisper-large-v3-turbo-russian-codeswitch` at revision
+`bf64d2a976a268e35041f74233f889f951f0f676`, published CT2 assets only. It encodes each
+whole WAV once without padding, then runs beam5 without hints and with the same
+name context. It does not use VAD, crop audio, segment audio, rewrite transcripts
+or infer a language restriction from script. Each branch keeps its raw IDs/text
+and score. The JSON manifest specifies `model`, `results_directory` and
+`recordings` with `id`, `wav`, `sha256`. Existing result directories are refused.
+
+Use a separate venv with `faster-whisper==1.2.1`, `ctranslate2==4.8.2` and
+`tokenizers==0.23.3`. Runtime versions and model-download hashes are recorded.
+Method guards are 240s per whole recording including both decoder variants,
+4096MiB process RSS, 2048MiB available RAM, 256MiB swap growth and 85C. These are
+agent-selected ceilings, not capacity reservations. Exact Deck feasibility is
+recorded in private result receipts, separately from local-host quality runs.
+
+The fine-tune plus name context recovered the known technical names on both
+retained clips locally and on Deck, while one ordinary Russian word remained
+malformed and a small omission remained in the longer Deck output. The Deck
+portability observation used about 954–1046MiB RSS, reached 66C and showed no
+sampled swap growth. Complete processes including model load and both decoder
+variants took 7.64s/15.65s for 5.80s/18.09s recordings; this is not persistent
+endpoint latency. The local and Deck texts were not byte-identical. No human
+gold/WER exists. Its shared multilingual vocabulary does **not** meet
+the original hard RU/EN restriction, despite mixed-language fine-tuning. Thus it
+is a promising quality result, not an unqualified replacement recommendation.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
