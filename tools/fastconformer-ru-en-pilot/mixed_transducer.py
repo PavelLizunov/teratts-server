@@ -100,7 +100,7 @@ def search(events, encoded, ru_logp, model, rules, bonus, check):
             'english_predictor_persistent':True,'prediction_cache':prediction.cache_info()._asdict()}
 
 
-def cell(args):
+def cell(args, alignment_fn=None):
     import numpy as np
     import sentencepiece as spm
     root,em,parent,alignment_path,output=Path(args.root),Path(args.model),Path(args.receipt),Path(args.context_receipt),Path(args.output)
@@ -126,6 +126,13 @@ def cell(args):
         result.update(audio_sha256=en['audio_sha256'],encoder_receipt_sha256=digest(parent),alignment_sha256=digest(alignment_path),
                       russian_receipt_sha256=digest(rp),tensor_hashes=model.tensor_hashes,
                       head_offsets={'eng':0,'rus':RU_OFFSET},load_s=time.monotonic()-start)
+        if alignment_fn is not None:
+            before=time.monotonic()
+            updated=alignment_fn(alignment,encoded,rlp,model,guard.check)
+            updated.update(audio_sha256=en['audio_sha256'],parent_alignment_sha256=digest(alignment_path),
+                           encoder_receipt_sha256=digest(parent),russian_receipt_sha256=digest(rp))
+            new_path=output.with_name(output.stem+'-alignment.json');save(new_path,updated)
+            alignment=updated;result.update(alignment_sha256=digest(new_path),alignment_s=time.monotonic()-before)
         for name,bonus in (('no-context',0.),('context',1.5)):
             before=time.monotonic();value=search(alignment['selected_events'],encoded,rlp,model,rules,bonus,guard.check)
             value['decode_s']=time.monotonic()-before
