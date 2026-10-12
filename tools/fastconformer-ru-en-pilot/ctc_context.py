@@ -75,6 +75,41 @@ def search(log_probs, allowed, blank, context, beam, check):
     return sorted(results, key=lambda h: h['total_score'], reverse=True)[:5]
 
 
+def equalize_branch_priors(log_probs, artifacts):
+    """Remove measured utterance-level language prior, not token acoustics.
+
+    Preserve each frame's RU+EN total mass and blank exactly. This deliberately
+    assumes equal prior exposure to the two languages; not estimated truth or a
+    semantic-language guarantee. No desired transcript enters the calculation.
+    """
+    import numpy as np
+    lp = np.array(log_probs, dtype=np.float64, copy=True)
+    branches = []
+    for lang in ('en', 'ru'):
+        config = artifacts['languages'][lang]
+        branches.append(np.arange(config['offset'], config['offset'] + config['size']))
+    if lp.ndim != 2 or lp.shape[1] != artifacts['blank_id'] + 1 or not np.isfinite(lp).all():
+        raise ValueError('Invalid retained acoustic logits')
+    masses = np.stack([np.exp(lp[:, ids]).sum(axis=1) for ids in branches], axis=1)
+    total = masses.sum(axis=1)
+    priors = masses.sum(axis=0) / masses.sum()
+    if not np.isfinite(priors).all() or np.any(priors <= 0) or np.any(total <= 0):
+        raise ValueError('Unmeasurable language prior')
+    # Normalize the prior-divided masses back to their original pair mass.
+    normalizer = np.log((masses / priors).sum(axis=1)) - np.log(total)
+    for k, ids in enumerate(branches):
+        lp[:, ids] -= np.log(priors[k]) + normalizer[:, None]
+    after = sum(np.exp(lp[:, ids]).sum(axis=1) for ids in branches)
+    error = float(np.max(np.abs(after - total)))
+    if error > 1e-10 or not np.array_equal(lp[:, artifacts['blank_id']], log_probs[:, artifacts['blank_id']]):
+        raise ValueError('Prior correction changed pair mass or blank')
+    return lp, {'method': 'utterance-language-prior-division',
+                'target_prior': {'en': .5, 'ru': .5},
+                'observed_priors': dict(zip(('en', 'ru'), map(float, priors))),
+                'maximum_pair_mass_conservation_error': error,
+                'blank_unchanged': True, 'within_language_relative_logits_unchanged': True}
+
+
 def main(args):
     import numpy as np
     output, parent = Path(args.output), Path(args.receipt)
@@ -103,11 +138,18 @@ def main(args):
     try:
         with np.load(logits_path) as file:
             lp = file['log_probs']
+        result['language_prior_correction'] = None
+        if args.equalize_language_priors:
+            lp, result['language_prior_correction'] = equalize_branch_priors(lp, artifacts)
         variants = {}
         for name, score in (('no-bias', 0.0), ('context', 2.5)):
             graph = ContextBias(paths if score else (), score)
             hypotheses = search(lp, artifacts['allowed_token_ids'], artifacts['blank_id'], graph, 32, guard.check)
             for h in hypotheses:
+                if args.equalize_language_priors:
+                    h['prior_adjusted_log_prob'] = h.pop('acoustic_log_prob')
+                if any(t not in artifacts['allowed_token_ids'] for t in h['token_ids']):
+                    raise ValueError('Forbidden language token emitted')
                 h['raw_text'] = ''.join(tokens[t] for t in h['token_ids']).replace('▁', ' ').strip()
                 h['postprocessed_text'] = h['raw_text']
                 h['en_ids'] = sum(512 <= t < 768 for t in h['token_ids'])
@@ -131,4 +173,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     for name in ('root', 'receipt', 'output'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--equalize-language-priors', action='store_true')
     main(parser.parse_args())
