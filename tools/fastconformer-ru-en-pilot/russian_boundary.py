@@ -17,6 +17,11 @@ class NativeWordRules(TokenRules):
         previous=next((t for t in reversed(prefix) if self.language[t]=='rus'),None)
         return previous is None or previous in self.closes
 
+    def can_leave_head(self,prefix,head,next_head):
+        if head!='rus' or next_head!='eng':return True
+        previous=next((t for t in reversed(prefix) if self.language[t]=='rus'),None)
+        return previous is None or previous in self.closes
+
     def path_symbols(self,prefix):
         symbols=self.symbols(prefix[-1])
         if len(prefix)>1 and self.language[prefix[-1]]!=self.language[prefix[-2]] and (not symbols or symbols[0]!=BOUNDARY):symbols=[BOUNDARY,*symbols]

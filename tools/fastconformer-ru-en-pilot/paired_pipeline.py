@@ -101,7 +101,7 @@ def final_decode(cfg,clip,out,guard):
     from russian_boundary import NativeWordRules
     from phrase_guidance import align_phrases
     from mixed_transducer import search
-    folder=out.parent;stem=clip['id'];results={k:json.loads((folder/(stem+'-'+k+'.json')).read_text()) for k in ('aux','eng','rus')}
+    folder=Path(cfg.get('retained_inputs_directory',out.parent));stem=clip['id'];results={k:json.loads((folder/(stem+'-'+k+'.json')).read_text()) for k in ('aux','eng','rus')}
     for h in ('eng','rus'):
         if digest(folder/(stem+'-'+h+'.npz'))!=results[h]['retained_array_sha256']:raise ValueError('Changed retained pipeline scores')
     with np.load(folder/(stem+'-eng.npz')) as f:lp=f['values'].astype(np.float64)
@@ -143,7 +143,7 @@ def pilot(args):
         if digest(source/name)!=sha:raise ValueError('Changed pinned runtime code')
     for clip in cfg['recordings']:
         begin=time.monotonic();baseline=memory_snapshot();stages=[]
-        for name in ('aux','eng','rus','final'):
+        for name in (('final',) if cfg.get('retained_inputs_directory') else ('aux','eng','rus','final')):
             interpreter=cfg['whisper_python'] if name=='aux' else cfg['acoustic_python'];out=folder/(clip['id']+'-'+name+'.json')
             cmd=[interpreter,str(Path(__file__).resolve()),'stage',args.manifest,'--clip',clip['id'],'--stage',name]
             samples=[];reason=None;started=time.monotonic();peak=0

@@ -48,7 +48,7 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
     def add(target,prefix,pb=NEG,pnb=NEG):
         a,b=target.get(prefix,(NEG,NEG));target[prefix]=logadd(a,pb),logadd(b,pnb)
     current={(): (0.,NEG)};cap_paths=0
-    for event in events:
+    for event_index,event in enumerate(events):
         check();following={}
         if event['head']==ctc_head:
             row=ctc_logp[event['native_frame']]
@@ -86,7 +86,8 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
                 if not active:break
                 # Use the fixed symbol cap rather than unsafe score stopping:
                 # unfinished context may still borrow additional credit.
-            following=prune(following)
+        if event_index+1<len(events) and events[event_index+1]['head']!=event['head'] and hasattr(rules,'can_leave_head'):
+            following={p:v for p,v in following.items() if rules.can_leave_head(p,event['head'],events[event_index+1]['head'])}
         current=prune(following,ctc_beam if event['head']==ctc_head else 4)
         if not current:raise ValueError('Empty mixed acoustic beam')
     result=[]
