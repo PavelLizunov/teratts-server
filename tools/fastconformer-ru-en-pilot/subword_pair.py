@@ -92,7 +92,7 @@ class TokenRules:
         return ''.join(self.tokens[t] for t in prefix).replace('▁',' ').strip()
 
 
-def decode(events, rules, bonus, check):
+def decode(events, rules, bonus, check, prefix_scorer=None):
     graph = ContextBias(rules.paths if bonus else (),bonus)
     @lru_cache(maxsize=100000)
     def bias(prefix):
@@ -120,7 +120,12 @@ def decode(events, rules, bonus, check):
                     add(prefix,pnb=pnb+lp)
                     if rules.allows(prefix,token):add((*prefix,token),pnb=pb+lp)
                 elif rules.allows(prefix,token):add((*prefix,token),pnb=total+lp)
-        current={p:following[p] for p in sorted(following,key=lambda p:logadd(*following[p])+bias(p)[0],reverse=True)[:32]}
+        candidates=list(following)
+        if prefix_scorer is not None:
+            candidates=sorted(candidates,key=lambda p:logadd(*following[p])+bias(p)[0]+prefix_scorer.estimate(p),reverse=True)[:prefix_scorer.prebeam]
+            prefix_scorer.prepare(candidates)
+        current={p:following[p] for p in sorted(candidates,key=lambda p:logadd(*following[p])+bias(p)[0]+(prefix_scorer.credit(p) if prefix_scorer is not None else 0.),reverse=True)[:32]}
+    if prefix_scorer is not None:prefix_scorer.prepare(list(current),final=True)
     result=[]
     for prefix,masses in current.items():
         acoustic=logadd(*masses)
@@ -131,10 +136,11 @@ def decode(events, rules, bonus, check):
         raw=rules.text(prefix)
         violations=[i for i,t in enumerate(prefix) if not rules.allows(prefix[:i],t)]
         if violations:raise ValueError('Invalid trained-head word path')
+        lm=prefix_scorer.receipt(prefix) if prefix_scorer is not None else {}
         result.append({'token_ids':list(prefix),'raw_pieces':[rules.tokens[t] for t in prefix],
                        'raw_text':raw,'postprocessed_text':raw,'native_ctc_logsum':acoustic,
-                       'context_credit':credit,'total_score':acoustic+credit,'within_word_violations':violations,
-                       'head_counts':{lang:sum(rules.language[t]==lang for t in prefix) for lang in rules.heads}})
+                       'context_credit':credit,'total_score':acoustic+credit+lm.get('lm_credit',0.),'within_word_violations':violations,
+                       'head_counts':{lang:sum(rules.language[t]==lang for t in prefix) for lang in rules.heads},**lm})
     return {'hypotheses':sorted(result,key=lambda r:r['total_score'],reverse=True)[:5],
             'beam':32,'acoustic_candidates':'all trained non-special IDs of current head',
             'hint_bonus':bonus,'context_boundary_marker_is_not_output':True,
