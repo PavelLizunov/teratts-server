@@ -543,7 +543,49 @@ and hint tokenization follow that convention, explicitly recorded in the prepare
 receipt; final recognized text is not case-rewritten or replaced. The existing
 `subword_pair.py` consumes the new receipt plus retained GigaAM scores; its
 beam32/context0,2.5, native event clocks and trained-head offsets are unchanged.
-Preparation/inference results must be read before calling this candidate useful.
+All854 exported initializers were accounted against the original checkpoint,
+including24 folded Conv/BN pairs. Original Hann/mel buffers matched the prior
+English component exactly. Full graph equivalence is still not claimed.
+
+One new English acoustic pass per clip completed in8.513/10.013s, with forward
+itself0.784/2.577s, RSS2633.414/2676.320MiB. These are host observations, not Deck
+measurements. Joint auxiliary alignment plus open beam took12.160/14.653s,
+RSS314.328/279.398MiB. Both short names and the first long name were recovered with
+context; the long acronym and some Russian words remained missing.
+
+A retained-score observation found a concrete hard-routing conflict: an available
+English acronym-prefix emission at5.12s was excluded because the forced Russian
+auxiliary words occupied that interval. `phrase_guidance.py` accepts the same
+arguments as `subword_pair.py`, but aligns only ordered contiguous English runs
+from the same fixed auxiliary proposal. Its CTC trellis allows wildcard gaps,
+scored by the per-frame maximum over the complete trained English distribution.
+It does not force Russian auxiliary text. Native80ms frame cells determine the
+routing intervals; no manual time shifts or waveform cuts. The final unchanged
+open beam sees only head/frame events, not phrase words.
+
+Phrase guidance completed in10.359/13.453s, RSS284.320/302.301MiB. All four target
+names across the two recordings were recovered with context, but duplicate
+Russian fragments and the original Russian omission remained. This is a partial
+improvement, not a full ASR solution or ground-truth language detector.
+
+`subword_lm.py pilot MANIFEST` reuses those frozen events and native scores with
+the previously pinned probability-only ruGPT scorer: beam32/prebeam64, alpha0.3,
+completed-word bonus1, context2.5, one variant per recording,600s/4096MiB guard.
+The manifest uses `root`, the LM `model` directory, `results_directory`, and
+`recordings[{id,receipt,context_receipt}]` pointing to the phrase-guided result
+and its alignment. LM scores full provisional prefixes before beam pruning and
+EOS once at completion; it has no generate call or transcript rewrite. Actual
+best-path cached scores are checked against teacher forcing. No old acoustic
+baseline, language-routing or encoder pass is repeated.
+
+That fixed LM variant completed in83.613/357.471s whole-process time,
+RSS1544.063/2335.984MiB; cached/direct best-path log probabilities agreed within
+2.50e-5. It removed the short duplicate fragment while preserving names, but
+worsened Russian words in the long recording. Names alone are not the acceptance
+criterion. The long latency is unsuitable for dictation, so no Deck deployment,
+LM weight grid or production switch followed. The256MiB KV setting is a retention
+target; transient cache peaks were258.35/260.01MiB before eviction. No guard stop
+or sampled swap growth occurred.
 
 ## Limits
 
