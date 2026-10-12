@@ -23,6 +23,11 @@ A separate [bounded Qwen3-ASR comparison](<tools/qwen-stt-pilot/README.md>) and
 retained private recordings without switching production. These are diagnostic
 tools, not an activated replacement backend.
 
+The [isolated FastConformer RU/EN prototype](<tools/fastconformer-ru-en-pilot/README.md>)
+adds numerical language-token restriction and technical-name context bias to a
+CPU ONNX decoder. It is a separate recording-matched pilot, not a production
+switch or a guarantee of code-switch accuracy.
+
 ## Optional private voice telemetry
 
 Telemetry is off by default. Set `VOICE_TELEMETRY_INGEST` to a private HTTP
