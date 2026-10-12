@@ -9,10 +9,11 @@ import math
 
 
 class ContextBias:
-    """Potential-based phrase bias; unfinished prefix credit is refunded.
+    """Credit each covered token once, including nested/overlapping phrases.
 
-    IDs are language-aware inputs, never reverse-looked-up token strings.
-    Overlapping completed names earn only the longest completion at a step.
+    State holds (numerical ID, already-covered) pairs for bounded lookback.
+    Uncovered unfinished prefixes borrow credit which is refunded on mismatch
+    or finalization. IDs retain their original tokenizer language offsets.
     """
     def __init__(self, paths=(), score=0.0):
         self.paths = tuple(sorted(set(tuple(p) for p in paths)))
@@ -22,19 +23,32 @@ class ContextBias:
         self.prefixes = {p[:i] for p in self.paths for i in range(1, len(p))}
         self.max_length = max(map(len, self.paths), default=0)
 
+    def pending_units(self, state):
+        ids = tuple(token for token, covered in state)
+        length = max((len(p) for p in self.prefixes
+                      if len(p) <= len(ids) and ids[-len(p):] == p), default=0)
+        return sum(not covered for token, covered in state[-length:]) if length else 0
+
     def step(self, state, token):
         if not self.paths or self.score == 0:
             return 0.0, ()
-        sequence = (*state, int(token))
+        old_pending = self.pending_units(state)
+        sequence = (*state, (int(token), False))
+        ids = tuple(t for t, covered in sequence)
         completed = max((len(p) for p in self.paths
-                         if len(p) <= len(sequence) and sequence[-len(p):] == p), default=0)
-        pending = max((p for p in self.prefixes
-                       if len(p) <= len(sequence) and sequence[-len(p):] == p),
-                      key=len, default=())
-        return self.score * (completed + len(pending) - len(state)), pending
+                         if len(p) <= len(ids) and ids[-len(p):] == p), default=0)
+        newly_covered = 0
+        if completed:
+            newly_covered = sum(not covered for t, covered in sequence[-completed:])
+            sequence = (*sequence[:-completed], *((t, True) for t, covered in sequence[-completed:]))
+        new_pending = self.pending_units(sequence)
+        retained_length = max((len(p) for p in self.prefixes
+                               if len(p) <= len(ids) and ids[-len(p):] == p), default=0)
+        retained = sequence[-retained_length:] if retained_length else ()
+        return self.score * (newly_covered + new_pending - old_pending), retained
 
     def finalize(self, state):
-        return -self.score * len(state)
+        return -self.score * self.pending_units(state)
 
 
 def finite_topk(scores, allowed, count):

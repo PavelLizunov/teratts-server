@@ -25,7 +25,53 @@ def logadd(a, b):
     return high + math.log1p(math.exp(-abs(a - b)))
 
 
-def search(log_probs, allowed, blank, context, beam, check):
+class WordLanguageConstraint:
+    """One original tokenizer branch per word, not script-based language ID."""
+    def __init__(self, artifacts, tokens):
+        import unicodedata
+        self.languages, self.starts, self.closes, self.neutral, self.unknown = {}, set(), set(), set(), set()
+        for lang in ('en', 'ru'):
+            info = artifacts['languages'][lang]
+            self.unknown.add(info['offset'] + info['unk_id'])
+            for token in range(info['offset'], info['offset'] + info['size']):
+                piece = tokens[token]
+                self.languages[token] = lang
+                if piece.startswith('▁'):
+                    self.starts.add(token)
+                visible = piece.replace('▁', '')
+                if not visible or all(unicodedata.category(c)[0] in 'PZS' for c in visible):
+                    self.neutral.add(token)
+                if not visible or unicodedata.category(visible[-1])[0] in 'PZS':
+                    self.closes.add(token)
+
+    def state(self, prefix):
+        if not prefix:
+            return None
+        last = prefix[-1]
+        return None if last in self.closes else self.languages[last]
+
+    def allows(self, prefix, token):
+        if token in self.unknown or token not in self.languages:
+            return False
+        previous = self.state(prefix)
+        return (previous is None or token in self.starts or token in self.neutral
+                or self.languages[token] == previous)
+
+    def receipt(self, ids):
+        violations, switches = [], 0
+        prefix = ()
+        for position, token in enumerate(ids):
+            if not self.allows(prefix, token):
+                violations.append(position)
+            if prefix and self.languages[prefix[-1]] != self.languages[token]:
+                switches += 1
+            prefix = (*prefix, token)
+        return {'branch_switches': switches, 'within_word_violations': violations,
+                'boundary_source': 'original SentencePiece boundary or punctuation',
+                'language_source': 'original aggregate-tokenizer numerical offsets'}
+
+
+def search(log_probs, allowed, blank, context, beam, check, word_rule=None):
     import numpy as np
     allowed = set(allowed) - {blank}
     context_tokens = set(t for p in context.paths for t in p)
@@ -57,10 +103,12 @@ def search(log_probs, allowed, blank, context, beam, check):
             # when it drops out of this frame's acoustic top-k candidates.
             for token in eligible | ({last} if last is not None else set()):
                 lp = float(row[token])
+                can_extend = word_rule is None or word_rule.allows(prefix, token)
                 if token == last:
                     add(prefix, pnb=pnb + lp)
-                    add((*prefix, token), pnb=pb + lp)
-                else:
+                    if can_extend:
+                        add((*prefix, token), pnb=pb + lp)
+                elif can_extend:
                     add((*prefix, token), pnb=total + lp)
         rank = lambda p: logadd(*following[p]) + bias(p)[0]
         current = {p: following[p] for p in sorted(following, key=rank, reverse=True)[:beam]}
@@ -141,10 +189,11 @@ def main(args):
         result['language_prior_correction'] = None
         if args.equalize_language_priors:
             lp, result['language_prior_correction'] = equalize_branch_priors(lp, artifacts)
+        word_rule = WordLanguageConstraint(artifacts, tokens) if args.word_language_continuity else None
         variants = {}
         for name, score in (('no-bias', 0.0), ('context', 2.5)):
             graph = ContextBias(paths if score else (), score)
-            hypotheses = search(lp, artifacts['allowed_token_ids'], artifacts['blank_id'], graph, 32, guard.check)
+            hypotheses = search(lp, artifacts['allowed_token_ids'], artifacts['blank_id'], graph, 32, guard.check, word_rule)
             for h in hypotheses:
                 if args.equalize_language_priors:
                     h['prior_adjusted_log_prob'] = h.pop('acoustic_log_prob')
@@ -153,6 +202,12 @@ def main(args):
                 h['raw_text'] = ''.join(tokens[t] for t in h['token_ids']).replace('▁', ' ').strip()
                 h['postprocessed_text'] = h['raw_text']
                 h['en_ids'] = sum(512 <= t < 768 for t in h['token_ids'])
+                if h['context_credit'] > score * len(h['token_ids']) + 1e-8:
+                    raise ValueError('Context credit exceeds unique output-token budget')
+                if word_rule:
+                    h['word_language_rule'] = word_rule.receipt(h['token_ids'])
+                    if h['word_language_rule']['within_word_violations']:
+                        raise ValueError('Cross-branch token inside a word')
             variants[name] = {'beam': 32, 'score': score, 'context_paths': path_receipts if score else [], 'hypotheses': hypotheses}
         result.update(status='success', variants=variants)
     except Exception as error:
@@ -174,4 +229,5 @@ if __name__ == '__main__':
     for name in ('root', 'receipt', 'output'):
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--equalize-language-priors', action='store_true')
+    parser.add_argument('--word-language-continuity', action='store_true')
     main(parser.parse_args())

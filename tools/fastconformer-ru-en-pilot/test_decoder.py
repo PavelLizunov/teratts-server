@@ -39,7 +39,8 @@ class DecoderChecks(unittest.TestCase):
         for token in [1, 2, 3]:
             delta, state = graph.step(state, token)
             total += delta
-        self.assertEqual(total + graph.finalize(state), 4)
+        # Shared token 2 is covered once, not once per overlapping phrase.
+        self.assertEqual(total + graph.finalize(state), 3)
 
     def test_duplicate_acoustic_alignments_logadd(self):
         h = Hypothesis((513,), (2,), (-1,), -2, 3, 0, (), None)
