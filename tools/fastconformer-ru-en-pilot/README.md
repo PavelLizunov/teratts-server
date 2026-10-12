@@ -185,6 +185,23 @@ Agent-selected protections: 600s/recording, RSS8192MiB, available-floor2048MiB,
 swap-growth256MiB, 85C. This is not a Deck memory or latency claim, and does not
 activate a production backend. Model license is CC-BY-NC4.0.
 
+The first launch stopped before inference on a legacy `weight_g/weight_v` versus
+Torch parametrization-name mismatch. The loader now migrates only this exact
+two-key mapping and verifies unchanged tensor values. Other missing/unexpected
+weights are errors; failed receipts remain intact.
+
+Both acoustic runs then completed, but equal mixture blank probability erased
+many Russian emissions. `mms_word_graph.py --model MODEL --receipt MMS_JSON
+--output NEW_JSON` repairs that mechanism using retained logits: the active
+head, including its own blank, persists within each word. Heads may switch at
+word boundaries; ordinary open vocabulary remains available. The decoder has
+180s/1536MiB guards and performs no acoustic pass. Its output no longer loses
+letters en masse, but context still inserts wrong names and corrupts speech.
+Neither MMS configuration is recommended as a replacement. The local full
+process including both head passes and original mixture search took 31.04/48.06s
+with high-water RSS4160.09/4466.41MiB. Subsequent word-state decoding took
+4.04/15.47s separately; these are not Deck or persistent-endpoint timings.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
