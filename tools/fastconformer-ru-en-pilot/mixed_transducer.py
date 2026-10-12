@@ -22,8 +22,12 @@ from run import Guard
 from subword_pair import BOUNDARY, RU_OFFSET, TokenRules
 
 
-def search(events, encoded, ru_logp, model, rules, bonus, check):
+def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng'):
     import numpy as np
+    if rnnt_head not in ('eng','rus'):raise ValueError('Unknown trained RNNT head')
+    ctc_head='rus' if rnnt_head=='eng' else 'eng'
+    rnnt_blank=1024 if rnnt_head=='eng' else 33
+    ctc_blank=33 if ctc_head=='rus' else 1024
     graph=ContextBias(rules.paths if bonus else (),bonus)
     @lru_cache(maxsize=100000)
     def context(prefix):
@@ -33,11 +37,11 @@ def search(events, encoded, ru_logp, model, rules, bonus, check):
             delta,state=graph.step(state,symbol);score+=delta
         return score,state
     @lru_cache(maxsize=4096)
-    def prediction(english):
-        if not english:return model.predict(1024,model.initial_states())
-        _,state=prediction(english[:-1])
-        return model.predict(english[-1],state)
-    def english_prefix(prefix):return tuple(t for t in prefix if t<RU_OFFSET)
+    def prediction(local_ids):
+        if not local_ids:return model.predict(rnnt_blank,model.initial_states())
+        _,state=prediction(local_ids[:-1])
+        return model.predict(local_ids[-1],state)
+    def rnnt_prefix(prefix):return tuple(rules.heads[rnnt_head][t] for t in prefix if t in rules.heads[rnnt_head])
     def prune(masses):
         return {p:masses[p] for p in sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)[:4]}
     def add(target,prefix,pb=NEG,pnb=NEG):
@@ -45,12 +49,12 @@ def search(events, encoded, ru_logp, model, rules, bonus, check):
     current={(): (0.,NEG)};cap_paths=0
     for event in events:
         check();following={}
-        if event['head']=='rus':
-            row=ru_logp[event['native_frame']]
+        if event['head']==ctc_head:
+            row=ctc_logp[event['native_frame']]
             for prefix,(pb,pnb) in current.items():
-                total=logadd(pb,pnb);add(following,prefix,pb=total+float(row[33]))
+                total=logadd(pb,pnb);add(following,prefix,pb=total+float(row[ctc_blank]))
                 last=prefix[-1] if prefix else None
-                for token,local in rules.heads['rus'].items():
+                for token,local in rules.heads[ctc_head].items():
                     lp=float(row[local])
                     if last==token:
                         add(following,prefix,pnb=pnb+lp)
@@ -61,21 +65,22 @@ def search(events, encoded, ru_logp, model, rules, bonus, check):
             for symbols in range(11):
                 next_active={}
                 for prefix,(pb,pnb) in active.items():
-                    pred,_=prediction(english_prefix(prefix))
+                    pred,_=prediction(rnnt_prefix(prefix))
                     logits=model.join(encoded[:,:,event['native_frame']:event['native_frame']+1],pred).astype(np.float64)
-                    logits[0]=-np.inf;lp=logits-np.logaddexp.reduce(logits)
-                    add(following,prefix,pb=pb+float(lp[1024]),pnb=pnb+float(lp[1024]))
+                    if rnnt_head=='eng':logits[0]=-np.inf
+                    lp=logits-np.logaddexp.reduce(logits)
+                    add(following,prefix,pb=pb+float(lp[rnnt_blank]),pnb=pnb+float(lp[rnnt_blank]))
                     if symbols==10:
                         cap_paths+=1;continue
                     base_credit,_=context(prefix)
                     candidates=[]
-                    for token in rules.heads['eng']:
+                    for token,local in rules.heads[rnnt_head].items():
                         if rules.allows(prefix,token):
                             credit,_=context((*prefix,token))
-                            candidates.append((float(lp[token])+credit-base_credit,token))
+                            candidates.append((float(lp[local])+credit-base_credit,token,local))
                     # All output IDs are considered before bounded local top4.
-                    for _,token in sorted(candidates,reverse=True)[:4]:
-                        add(next_active,(*prefix,token),pnb=logadd(pb,pnb)+float(lp[token]))
+                    for _,token,local in sorted(candidates,reverse=True)[:4]:
+                        add(next_active,(*prefix,token),pnb=logadd(pb,pnb)+float(lp[local]))
                 active=prune(next_active)
                 if not active:break
                 # Use the fixed symbol cap rather than unsafe score stopping:
@@ -97,7 +102,7 @@ def search(events, encoded, ru_logp, model, rules, bonus, check):
     return {'hypotheses':sorted(result,key=lambda h:h['total_score'],reverse=True)[:4],
             'beam':4,'rnnt_max_symbols':10,'paths_reaching_symbol_cap':cap_paths,
             'context_score':bonus,'hint_paths':rules.hint_receipts if bonus else [],
-            'english_predictor_persistent':True,'prediction_cache':prediction.cache_info()._asdict()}
+            'rnnt_head':rnnt_head,'ctc_head':ctc_head,('english' if rnnt_head=='eng' else 'russian')+'_predictor_persistent':True,'prediction_cache':prediction.cache_info()._asdict()}
 
 
 def cell(args, alignment_fn=None):
