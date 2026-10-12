@@ -12,7 +12,10 @@ from run import Guard, digest, features_from_wav, memory_snapshot, sensors
 from pilot import rss_bytes
 from frontend import nemo_features
 
-CTC_SHA = 'e3ea888bcc90cafdeeedeea26f6e8ca2186d8af7939236e0eb246206f5098c00'
+CTC_EXPORTS = {
+    'int8': ('model.int8.onnx', 'e3ea888bcc90cafdeeedeea26f6e8ca2186d8af7939236e0eb246206f5098c00'),
+    'fp32': ('model.onnx', 'b0e77792202b0113e8439b5cff88e24119016f861425940a45f57568137dec4b'),
+}
 
 
 def cell(args):
@@ -35,8 +38,10 @@ def cell(args):
                 raise ValueError('Prepared artifact changed: ' + name)
         if digest(root / args.wav) != args.audio_sha256:
             raise ValueError('Original audio changed')
-        model_path = root / 'ctc-int8/model.int8.onnx'
-        if digest(model_path) != CTC_SHA or digest(root / 'ctc-int8/tokens.txt') != digest(root / 'prepared/tokens.txt'):
+        filename, model_sha = CTC_EXPORTS[args.precision]
+        model_root = root / ('ctc-' + args.precision)
+        model_path = model_root / filename
+        if digest(model_path) != model_sha or digest(model_root / 'tokens.txt') != digest(root / 'prepared/tokens.txt'):
             raise ValueError('CTC export/token map mismatch')
         feature_fn = nemo_features if args.frontend == 'nemo' else features_from_wav
         feats, duration = feature_fn(root / args.wav, artifacts['preprocessor'])
@@ -72,7 +77,7 @@ def cell(args):
             pieces[int(i)] = text
         text = ''.join(pieces[i] for i in ids).replace('▁', ' ').strip()
         receipt.update(status='success', token_ids=ids, frame_indices=frames, raw_text=text,
-                       postprocessed_text=text, audio_sha256=args.audio_sha256, model_sha256=CTC_SHA,
+                       postprocessed_text=text, audio_sha256=args.audio_sha256, model_sha256=model_sha,
                        feature_frames=len(feats), encoded_frames=len(logits), audio_duration_s=duration,
                        allowed_token_ids=allowed.tolist(), blank_id=blank,
                        ctc_path_log_prob=float(logits[np.arange(len(logits)), path].sum()),
@@ -103,7 +108,8 @@ def supervise(root, manifest_name):
             raise ValueError('Invalid cell ID')
         command = [sys.executable, str(Path(__file__).resolve()), 'cell', '--root', str(root),
                    '--output', str(results / (name + '.json')), '--wav', item['wav'],
-                   '--audio-sha256', item['audio_sha256'], '--frontend', item['frontend']]
+                   '--audio-sha256', item['audio_sha256'], '--frontend', item['frontend'],
+                   '--precision', item.get('precision', 'int8')]
         started, peak, reason, samples = time.monotonic(), 0, None, []
         with (results / (name + '.stdout')).open('xb') as out, (results / (name + '.stderr')).open('xb') as err:
             proc = subprocess.Popen(['nice', '-n', '19', *command], stdout=out, stderr=err,
@@ -147,6 +153,7 @@ if __name__ == '__main__':
     for name in ('root', 'output', 'wav', 'audio-sha256'):
         c.add_argument('--' + name, required=True)
     c.add_argument('--frontend', required=True, choices=('knf', 'nemo'))
+    c.add_argument('--precision', choices=('int8', 'fp32'), default='int8')
     p = sub.add_parser('pilot')
     p.add_argument('root')
     p.add_argument('manifest')
