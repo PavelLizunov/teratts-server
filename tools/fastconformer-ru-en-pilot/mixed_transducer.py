@@ -22,7 +22,7 @@ from run import Guard
 from subword_pair import BOUNDARY, RU_OFFSET, TokenRules
 
 
-def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng', ctc_beam=4):
+def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng', ctc_beam=4, observe_pruning=None):
     import numpy as np
     if rnnt_head not in ('eng','rus'):raise ValueError('Unknown trained RNNT head')
     ctc_head='rus' if rnnt_head=='eng' else 'eng'
@@ -44,7 +44,9 @@ def search(events, encoded, ctc_logp, model, rules, bonus, check, rnnt_head='eng
         return model.predict(local_ids[-1],state)
     def rnnt_prefix(prefix):return tuple(rules.heads[rnnt_head][t] for t in prefix if t in rules.heads[rnnt_head])
     def prune(masses,width=4):
-        return {p:masses[p] for p in sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)[:width]}
+        ranked=sorted(masses,key=lambda p:logadd(*masses[p])+context(p)[0],reverse=True)
+        if observe_pruning is not None:observe_pruning(event_index,event,ranked,masses,context,width)
+        return {p:masses[p] for p in ranked[:width]}
     def add(target,prefix,pb=NEG,pnb=NEG):
         a,b=target.get(prefix,(NEG,NEG));target[prefix]=logadd(a,pb),logadd(b,pnb)
     current={(): (0.,NEG)};cap_paths=0
