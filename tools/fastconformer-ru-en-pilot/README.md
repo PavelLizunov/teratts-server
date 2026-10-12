@@ -236,6 +236,31 @@ The remaining34depthwise-convolution tensors correspond to analytic BatchNorm
 folding (separate retained diagnostic, maximum difference3.815e-6). This excludes
 large observed feature/weight mismatches, not every possible graph/operator bug.
 
+## Probability-only LM fusion on retained CTC scores
+
+`ctc_lm.py pilot MANIFEST` runs a new isolated decoder using retained FP32 CTC
+scores. The manifest supplies private artifact root, pinned ruGPT3-small model,
+new result directory and two original acoustic/context receipts. The scorer
+never calls `generate`: only allowed numerical RU/EN acoustic paths can appear.
+
+Fixed diagnostic parameters are beam32, prebeam64, LM weight0.3, completed-word
+bonus1.0 and context0/2.5. The existing prior equalization and word-language
+continuity remain. The prebeam is an explicit bounded approximation; not all
+possible paths receive LM scoring. Completed whitespace-delimited prefixes are
+scored during search, with full text+EOS at finish. Full-prefix byte-BPE
+retokenization and cached common ancestors handle token merges. LM scores and
+CTC masses remain separate. A direct teacher-forced score of each best output
+checks the actual cached-score calculation without rerunning audio or ASR.
+
+The pinned checkpoint is loaded with `weights_only=True` and strict parameter
+matching. Legacy causal-mask buffers are checked before removal; learned
+weights are not ignored or trained. Local-only guards are600s per recording,
+RSS4096MiB, available-memory floor2048MiB, two CPU threads and a256MiB KV cache.
+Completed variants and failed attempts are retained. Language-model training
+on RU/EN text is not acoustic bilingual training and is not a replacement for
+the original numerical token constraint. No quality result is implied by this
+implementation or by successfully loading its weights.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

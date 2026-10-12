@@ -71,7 +71,7 @@ class WordLanguageConstraint:
                 'language_source': 'original aggregate-tokenizer numerical offsets'}
 
 
-def search(log_probs, allowed, blank, context, beam, check, word_rule=None):
+def search(log_probs, allowed, blank, context, beam, check, word_rule=None, prefix_scorer=None):
     import numpy as np
     allowed = set(allowed) - {blank}
     context_tokens = set(t for p in context.paths for t in p)
@@ -110,16 +110,30 @@ def search(log_probs, allowed, blank, context, beam, check, word_rule=None):
                         add((*prefix, token), pnb=pb + lp)
                 elif can_extend:
                     add((*prefix, token), pnb=total + lp)
-        rank = lambda p: logadd(*following[p]) + bias(p)[0]
-        current = {p: following[p] for p in sorted(following, key=rank, reverse=True)[:beam]}
+        base_rank = lambda p: logadd(*following[p]) + bias(p)[0]
+        candidates = list(following)
+        if prefix_scorer is not None:
+            # Bounded acoustic/context prebeam including already-known LM credit.
+            # This is an explicit approximation, not exhaustive shallow fusion.
+            candidates = sorted(candidates, key=lambda p: base_rank(p) + prefix_scorer.estimate(p),
+                                reverse=True)[:prefix_scorer.prebeam]
+            prefix_scorer.prepare(candidates, final=False)
+        rank = lambda p: base_rank(p) + (prefix_scorer.credit(p) if prefix_scorer else 0.0)
+        current = {p: following[p] for p in sorted(candidates, key=rank, reverse=True)[:beam]}
     results = []
+    if prefix_scorer is not None:
+        prefix_scorer.prepare(list(current), final=True)
     for prefix, masses in current.items():
         score, state = bias(prefix)
         credit = score + context.finalize(state)
         acoustic = logadd(*masses)
         if not math.isfinite(acoustic): continue
-        results.append({'token_ids': list(prefix), 'acoustic_log_prob': acoustic,
-                        'context_credit': credit, 'total_score': acoustic + credit})
+        hypothesis = {'token_ids': list(prefix), 'acoustic_log_prob': acoustic,
+                      'context_credit': credit, 'total_score': acoustic + credit}
+        if prefix_scorer is not None:
+            hypothesis.update(prefix_scorer.receipt(prefix))
+            hypothesis['total_score'] += prefix_scorer.credit(prefix, final=True)
+        results.append(hypothesis)
     return sorted(results, key=lambda h: h['total_score'], reverse=True)[:5]
 
 
