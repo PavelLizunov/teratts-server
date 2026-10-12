@@ -60,8 +60,13 @@ class LanguageScorer:
             raise ValueError('Expected tied embeddings in checkpoint')
         del weights
         self.tokenizer = GPT2TokenizerFast.from_pretrained(root, local_files_only=True)
-        if (self.tokenizer.bos_token_id, self.tokenizer.eos_token_id, len(self.tokenizer)) != (1, 2, 50264):
-            raise ValueError('Unexpected trained tokenizer IDs')
+        vocabulary = json.loads((root / 'vocab.json').read_text())
+        if ((self.tokenizer.bos_token_id, self.tokenizer.eos_token_id, len(self.tokenizer)) != (1, 2, 50257)
+                or self.tokenizer.get_vocab() != vocabulary or config.vocab_size != 50264
+                or set(vocabulary.values()) != set(range(50257))):
+            raise ValueError('Unexpected published tokenizer map or model projection')
+        # Seven output slots are absent from publisher vocabulary. Keep the
+        # original 50264-way softmax; never resize weights or invent token IDs.
         self.load_receipt = {'strict_parameters': True, 'removed_verified_nonlearned_buffers': removed,
                              'asset_receipt_sha256': digest(root / 'download-receipt.json'),
                              'runtime_model_source_sha256': digest(sys.modules[self.model.__class__.__module__].__file__)}
