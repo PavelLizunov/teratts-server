@@ -59,6 +59,11 @@ def decode(events, tokens, head, delimiters, blank, paths, score, check):
                     continue
                 else:
                     add((*prefix, token), pnb=total+lp)
+        next_index = event['index'] + 1
+        if next_index < len(events) and events[next_index]['head'] != lang:
+            # A known next-frame acceptance condition must apply BEFORE beam
+            # pruning, or all acoustically scored delimiter paths can be lost.
+            following = {p: masses for p, masses in following.items() if p and p[-1] in delimiters}
         current = {p: following[p] for p in sorted(following,
                    key=lambda p:logadd(*following[p])+bias(p)[0], reverse=True)[:32]}
     results = []
