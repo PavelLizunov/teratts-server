@@ -160,6 +160,31 @@ gold/WER exists. Its shared multilingual vocabulary does **not** meet
 the original hard RU/EN restriction, despite mixed-language fine-tuning. Thus it
 is a promising quality result, not an unqualified replacement recommendation.
 
+## MMS trained RU/EN adapters
+
+`mms_pair.py pilot MANIFEST` is an isolated local-host diagnostic using publisher
+`facebook/mms-1b-all` revision `3d33597edbdaaba14a8e858e2c8caa76e3cec0cd`.
+The JSON manifest contains `model`, `results_directory`, and `recordings` with
+`id`, `wav`, `sha256`. Verified safetensors and a `download-receipt.json` are
+required; runtime network access is disabled. Use a task-only environment with
+CPU Torch 2.5.1, Transformers 4.44.2, Accelerate 0.34.2, NumPy 1.26.4.
+
+Each intact WAV gets two full encoder passes with the official eng/rus adapters.
+Per-language adapters affect all transformer layers; one shared final encoding
+would be incorrect. Separate head logits/IDs are retained before numerical
+fusion. The decoder mixes both heads equally, combines their blanks, suppresses
+reserved symbols, and permits only original eng/rus head-token IDs. English
+154 classes and Russian 95 classes are publisher vocabularies, not invented
+alphabet masks. Some head tokens use other scripts; this is not a semantic
+language guarantee. Character vocabulary remains open; name context is applied
+numerically before beam pruning, with no transcript replacement.
+
+Equal head weighting is a fixed diagnostic assumption, not proven acoustic
+language detection. No-context/context beam32 variants share retained logits.
+Agent-selected protections: 600s/recording, RSS8192MiB, available-floor2048MiB,
+swap-growth256MiB, 85C. This is not a Deck memory or latency claim, and does not
+activate a production backend. Model license is CC-BY-NC4.0.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
