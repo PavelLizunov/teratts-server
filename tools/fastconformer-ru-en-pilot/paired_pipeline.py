@@ -100,7 +100,10 @@ def final_decode(cfg,clip,out,guard):
     from subword_pair import auxiliary_labels
     from russian_boundary import NativeWordRules
     from phrase_guidance import align_phrases
-    from mixed_transducer import search
+    if cfg.get('search_method')=='sufficient-state-viterbi':
+        from state_transducer import search
+    else:
+        from mixed_transducer import search
     folder=Path(cfg.get('retained_inputs_directory',out.parent));stem=clip['id'];results={k:json.loads((folder/(stem+'-'+k+'.json')).read_text()) for k in ('aux','eng','rus')}
     for h in ('eng','rus'):
         if digest(folder/(stem+'-'+h+'.npz'))!=results[h]['retained_array_sha256']:raise ValueError('Changed retained pipeline scores')
