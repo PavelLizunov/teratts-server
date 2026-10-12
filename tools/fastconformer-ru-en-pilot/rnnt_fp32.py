@@ -21,26 +21,26 @@ ORIGINAL_SHA = '8f1ec32033bd905c1666a26f8315ab9d830bd7baefa2b3c5b20db99ed1c77581
 
 
 class OriginalDecoder:
-    def __init__(self, archive):
+    def __init__(self, archive, expected_sha=ORIGINAL_SHA, classes=2561):
         import torch
         self.torch = torch
         torch.set_num_threads(2)
         torch.set_num_interop_threads(1)
-        if digest(archive) != ORIGINAL_SHA:
+        if digest(archive) != expected_sha:
             raise ValueError('Original checkpoint changed')
         with tarfile.open(archive) as container:
             with container.extractfile('./model_weights.ckpt') as file:
                 all_weights = torch.load(file, map_location='cpu', weights_only=True)
         self.weights = {k: v for k, v in all_weights.items() if k.startswith(('decoder.', 'joint.'))}
         del all_weights
-        expected = {'decoder.prediction.embed.weight': (2561, 640),
+        expected = {'decoder.prediction.embed.weight': (classes, 640),
                     'decoder.prediction.dec_rnn.lstm.weight_ih_l0': (2560, 640),
                     'decoder.prediction.dec_rnn.lstm.weight_hh_l0': (2560, 640),
                     'decoder.prediction.dec_rnn.lstm.bias_ih_l0': (2560,),
                     'decoder.prediction.dec_rnn.lstm.bias_hh_l0': (2560,),
                     'joint.enc.weight': (640, 512), 'joint.enc.bias': (640,),
                     'joint.pred.weight': (640, 640), 'joint.pred.bias': (640,),
-                    'joint.joint_net.2.weight': (2561, 640), 'joint.joint_net.2.bias': (2561,)}
+                    'joint.joint_net.2.weight': (classes, 640), 'joint.joint_net.2.bias': (classes,)}
         if set(expected) != set(self.weights) or any(tuple(self.weights[k].shape) != shape or self.weights[k].dtype != torch.float32 for k, shape in expected.items()):
             raise ValueError('Unexpected original predictor/joint architecture')
         self.lstm = torch.nn.LSTM(640, 640, 1).eval()
