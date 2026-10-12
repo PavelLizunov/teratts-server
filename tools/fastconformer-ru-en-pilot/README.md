@@ -102,6 +102,13 @@ it is not claimed bit-exact with Torch. No silence is appended to the WAV.
 retained probabilities without rerunning the encoder. It preserves numerical
 language IDs, CTC blank/nonblank mass and open vocabulary. Beam32 with no hints
 and score2.5 hints did not recover the target names in the retained recordings.
+Optional `--equalize-language-priors` divides each branch by its observed whole-
+utterance prior, then preserves original per-frame pair mass and blank. This
+removes a measured EN prior of only 0.005–0.010%, not a desired-text-derived score.
+Adjusted sequence probabilities are labeled separately from raw acoustics.
+The bounded FP32 observation recovered names only in the short clip but mixed
+Latin pieces into Russian words and inserted an unwanted longer name in the
+long clip. The method is retained for diagnosis, **not recommended for use**.
 
 `whisper_diagnostic.py pilot MANIFEST` is a **different, non-pair-constrained
 quality diagnostic**, not an activated backend. It loads the pinned code-switch
