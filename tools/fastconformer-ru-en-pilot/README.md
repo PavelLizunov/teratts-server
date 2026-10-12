@@ -510,8 +510,18 @@ incorrect paths remain ahead of the auxiliary by28.91–30.14 score units in the
 short clip and52.12–53.84 in the long clip under the same context. Beam loss exists,
 but expanding beam cannot overturn those known path scores. Removing one full
 unit of the approximate internal prior still leaves the long auxiliary behind;
-no tuned subtraction/bonus grid is justified. Next unresolved mechanism is
-CTC-derived routing versus native RNNT emission timing, not a proven cause.
+no tuned subtraction/bonus grid is justified.
+
+`transducer_alignment.py pilot MANIFEST` then replaced CTC-derived routing with
+native English RNNT/Russian CTC Viterbi on all retained native frames. Same
+manifest as the mixed decoder, but a fresh result directory is mandatory. Fixed
+proposal labels determine only auxiliary alignment; the final open search sees
+only head/frame events and keeps beam4/max10/context0,1.5. Complete label coverage
+and backtrace sums agree below2.85e-14. The short route gained two English frames,
+the long route one. Whole processes22.530/21.528s, RSS701.316/781.375MiB;
+alignment0.282/1.895s. Names and omissions remained: changing this routing alone
+was not sufficient. This is another consumed negative method, not an unfinished
+alignment implementation or permission to rerun the same encoder.
 
 ## Limits
 
