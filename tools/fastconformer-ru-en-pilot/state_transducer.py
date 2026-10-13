@@ -33,9 +33,10 @@ class PathState:
         return self.russian,self.ids[-1] if self.ids else None,self.blank,self.context
 
 
-def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=False,**unused):
+def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=False,retain_context_graph=False,**unused):
     import numpy as np
-    graph=ContextBias(rules.paths if bonus else (),bonus)
+    # Diagnostic structural control: preserve context partitions but pay no credit.
+    graph=ContextBias(rules.paths if bonus or retain_context_graph else (),bonus or (1. if retain_context_graph else 0.))
     stats={'max_states':1,'max_english_states':0,'max_native_histories':1,
            'equivalent_state_replacements':0,'native_history_pruning_events':0}
 
@@ -47,7 +48,7 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=Fals
         delta=0.
         for symbol in symbols:
             value,context=graph.step(context,symbol);delta+=value
-        return delta,context
+        return delta if bonus else 0.,context
 
     @lru_cache(maxsize=4096)
     def prediction(russian):
@@ -159,7 +160,7 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=Fals
         if old is None or (not same_text_logsum and node.score>old.score):final_nodes[node.ids]=node
         elif same_text_logsum:final_nodes[node.ids]=PathState(node.ids,node.russian,node.context,True,logadd(old.acoustic,node.acoustic),node.credit)
     for node in final_nodes.values():
-        delta,state=graph.step(node.context,BOUNDARY);credit=node.credit+delta+graph.finalize(state)
+        delta,state=graph.step(node.context,BOUNDARY);credit=node.credit+(delta+graph.finalize(state) if bonus else 0.)
         score=node.acoustic+credit
         if node.ids in result and result[node.ids]['total_score']>=score:continue
         if any(not rules.allows(node.ids[:i],t) for i,t in enumerate(node.ids)):raise ValueError('Invalid native output path')
@@ -171,5 +172,6 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=Fals
             'objective':('same-token-text retained logsum, max representative across different texts; approximate forward search' if same_text_logsum else 'maximum single acoustic path plus unchanged context; NOT transcript posterior logsum'),
             'recombination':'native RU history, last emitted trained token, CTC blank state, context automaton state',
             'english_global_prefix_limit':None,'native_russian_history_beam':4,'rnnt_max_symbols':10,
-            'all_trained_non_special_tokens_considered':True,'hint_paths':rules.hint_receipts if bonus else [],
+            'all_trained_non_special_tokens_considered':True,'hint_paths':rules.hint_receipts if bonus or retain_context_graph else [],
+            'retain_context_graph':bool(retain_context_graph),'context_graph_active':bool(bonus or retain_context_graph),
             'context_score':bonus,'state_stats':stats,'prediction_cache':prediction.cache_info()._asdict()}

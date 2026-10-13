@@ -25,10 +25,11 @@ def cell(manifest_path,clip):
     if output.exists():raise FileExistsError('Consumed/unknown routing cell')
     method=cfg.get('timing_method','english-only')
     if method not in ('english-only','ctc-corroborated-words-v1'):raise ValueError('Unknown timing method')
+    retain_graph=bool(cfg.get('retain_context_graph',False))
     bonus=float(cfg.get('context_score',2.5))
     if not math.isfinite(bonus) or bonus<0:raise ValueError('Invalid context score')
     start=time.monotonic();guard=Guard(600,1536)
-    result={'id':clip,'status':'failed','timing_method':method,'encoder_rerun':False,'audio_modified':False,'new_decoder_run':False,'source_commit':cfg['source_commit'],'context_score':bonus}
+    result={'id':clip,'status':'failed','timing_method':method,'encoder_rerun':False,'audio_modified':False,'new_decoder_run':False,'source_commit':cfg['source_commit'],'context_score':bonus,'retain_context_graph':retain_graph}
     try:
         receipts={k:json.loads(Path(row[k]).read_text()) for k in ('aux','eng','rus')}
         for key in receipts:
@@ -79,7 +80,7 @@ def cell(manifest_path,clip):
             if cfg.get('require_prior_route',False) and not same:raise ValueError('Changed route in fixed-route comparison')
             if method=='english-only' and not same and not cfg.get('auxiliary_replaced',False):raise ValueError('Unexpected route regression')
             result['prior_context_score']=prior.get('search',{}).get('context_score')
-            if same and prior.get('search',{}).get('context_score')==bonus:
+            if same and prior.get('search',{}).get('context_score')==bonus and prior['search'].get('retain_context_graph',False)==retain_graph:
                 if not prior.get('search',{}).get('hypotheses'):raise ValueError('No previous complete output to reuse')
                 result.update(status='reused_unchanged',reused_final_sha256=digest(prior_path),search=prior['search'],runtime_origin='saved earlier result, no rerun');return
         for candidate in row.get('reuse_results',[]):
@@ -87,11 +88,11 @@ def cell(manifest_path,clip):
             retained=json.loads(Path(candidate['path']).read_text())
             if retained['audio_sha256']!=result['audio_sha256']:raise ValueError('Route cache belongs to different audio')
             same=alignment['selected_events']==retained.get('alignment',{}).get('selected_events')
-            if same and retained.get('search',{}).get('hypotheses') and retained['search'].get('context_score')==bonus:
+            if same and retained.get('search',{}).get('hypotheses') and retained['search'].get('context_score')==bonus and retained['search'].get('retain_context_graph',False)==retain_graph:
                 result.update(status='reused_prior_route',reused_final_sha256=candidate['sha256'],reused_result=candidate['path'],search=retained['search'],runtime_origin='another previously consumed identical route, no rerun');return
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
-        result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True)
+        result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True,retain_context_graph=retain_graph)
         if not result['search']['hypotheses']:raise ValueError('No complete constrained output')
         result.update(decode_s=time.monotonic()-before,status='new_constrained_output',runtime_origin='local host joiner/predictor with retained Deck encoder output',formatting=rules.formatting)
         import onnxruntime as ort

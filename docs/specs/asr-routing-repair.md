@@ -340,3 +340,26 @@ human references exist; successful output is not a quality pass. Preserve raw
 and formatting-only output separately in the existing private cumulative report.
 Verdict: Extend the existing dependency-free runner; state_transducer already
 supports zero bonus and is unchanged. No new dependency or model download.
+
+### Round15a observation and bounded mechanism follow-up
+First control completed10/10, exact routes10/10; eight texts changed. Both
+previous ChatGPT spellings and all five DSH spellings disappeared, but the
+previous GitHub error did not become GitHub. Russian token histories changed
+in two records, including a record without a completed fixed hint. This does
+not justify switching context off. Runtime52.491205s decode/60.669856s supervised,
+RSS highwater131.296875MiB/sample128.917969MiB; no model/encoder reruns.
+
+The predeclared caveat is now directly relevant: zero bonus removed context
+state partitions. Run one bounded follow-up on the SAME ten records, keeping the
+same fixed hint automaton transitions/state keys as baseline but setting every
+credit contribution to zero. This is a structural control, not another bonus
+coefficient. ContextBias instantiated with unit score supplies state transitions;
+all step/finalization deltas are multiplied by zero. No graph/token inventory,
+beam, interval or text change. Nonzero-bonus/default behavior must remain exact.
+Compare baseline2.5, zero-without-graph and zero-with-graph. No earlier variant is
+rerun. Record both bonus and graph-retention mode and disallow cross-mode reuse.
+Keep all results; the mechanism follow-up is registered after the first outcome,
+not a preregistered blinded test. Same host bounds and previous safety invariants.
+The count is20 genuinely distinct final decodes if both ten-record controls finish,
+not20 recordings or acoustic encoder calls. Numerical state/credit identities can
+be checked with the configured hint symbols before consuming this control.
