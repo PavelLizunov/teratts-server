@@ -812,6 +812,44 @@ this candidate based on that result. Auxiliary repetition/unsupported-word
 handling and hard routing remain concrete weaknesses; this evaluation did not
 retune them to improve the held-out score.
 
+## Standalone GigaAM context experiment
+
+`giga_context_eval.py run MANIFEST` evaluates the pinned original GigaAM
+Multilingual Large CTC checkpoint on whole PCM16 mono16k recordings. It verifies
+source/config/weight hashes, loads all original tensors strictly, and retains
+native71-way log probabilities after one acoustic pass per recording. The model
+remains loaded between recordings. Three outputs share those probabilities:
+native greedy, open CTC beam32 without context, and beam32 with the four existing
+name hints at2.5 per character. No Whisper routing, alphabet masking, lexical
+replacement, waveform segmentation/padding or weight training is used.
+
+The full shared multilingual vocabulary remains open. Context paths are
+character substrings, not enforced word boundaries; incomplete credit is
+refunded and overlapping phrases cannot double-credit output positions. The
+beam/top32 acoustic pruning remains approximate. This does not satisfy the
+original requirement for separately trained RU/EN-only heads.
+
+`giga_context_report.py ROOT --results results-v3` combines private results with
+the preceding corpus references into private JSON/HTML. Never embed literal
+private transcript examples in this generator or commit generated corpus files.
+The repeated29-record sample is exploratory, not a new blind holdout.
+
+Observed frozen comparison:29/29 completed, but all greedy/beam/context outputs
+contained no Latin characters. Context changed0/29 best beam outputs. The
+median utterance Latin-symbol share of nonblank probability mass was0.0014%,
+maximum0.0157%; this is a symbol-mass diagnostic, not calibrated language ID.
+The run took146.642s including loading and both beam variants on harness-test,
+CPU FP32/Torch2.5.1/two threads, **not Deck**. Median acoustic time1.471s,
+median context decode1.075s; sampled process peak3691.234MiB. Original FP32
+weights alone exceed the observed Deck budget after its2048MiB reserve.
+
+Actual fine-tuning is separate from context decoding. The
+[official training tools](https://github.com/salute-developers/GigaAM/tree/main/train_utils)
+support CTC/RNNT fine-tuning and new vocabulary/heads on SSL backbones. Improving
+mixed-language behavior requires appropriately labeled RU/EN examples and a
+separate evaluation split. No training was launched and the collected corpus
+still has no human-verified transcript references.
+
 ## Experimental <=1B editors and EmbeddingGemma 2
 
 The separate [mini-editor contract](../../docs/specs/asr-mini-editor.md) covers
