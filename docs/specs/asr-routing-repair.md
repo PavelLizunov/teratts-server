@@ -301,3 +301,42 @@ interval. IsolatecontextcausallyonallnewQwenENroutesusingretainedarrays and
 pre-registeredfixedcontext-offvariant (notgrid),orinspectexistingcandidate
 pathscorebreakdownbeforeclaimingcause. DoNOThandpickc022fix/newGitHubhintonly,
 notlanguagefilter/rewrite,donotclaimcontextisthecausewithoutcomparison.
+
+## Round15 — fixed context-off control on every Qwen English route
+
+Question: how much of the changed name selection comes from the fixed context
+component, rather than the auxiliary proposal alone? Run exactly one new control:
+`context_score: 0.0`, against retained round14 `2.5`. Select all ten round14
+records with any English frames by route metadata, irrespective of output text.
+The other18 all-Russian routes are outside this contrast and are not new trials.
+Keep Qwen proposals, ordered phrase alignment, original acoustic arrays, full
+trained token inventories, Russian history beam4/native word closure and
+same-token-text approximate forward search unchanged. No Qwen/encoder reruns,
+new hints, coefficient grid, custom spelling variants or manual text merging.
+
+Extend the existing runner with explicit context_score (default2.5) and forbid
+reuse across different search context scores. Every control must reproduce the
+entire prior selected_events sequence; otherwise stop rather than attribute a
+changed route to context. Pin manifests/source/receipts before execution; previous
+results remain immutable. Reject consumed output directories. Existing guard:
+600s/record,900s/batch,RSS1536MiB,available floor2048MiB,swap growth256MiB; these
+are method limits, not a user deadline. Host final-only inference, no Deck run.
+
+The existing decoder removes the context graph when score is zero, so this
+intervention includes context-guided retention/recombination, not just final
+score subtraction on a fixed hypothesis set. State this confound explicitly.
+Do not call retained_same_text_logsum an exact posterior or compare its changes
+as an exact acoustic likelihood ratio across different pruned searches. Inspect
+all ten top outputs and stored alternatives; report context credit, retained
+acoustic score, total, state counts, language-preserving vs lost names, and whole
+string changes. Agreement with Qwen/archive is descriptive, not accuracy.
+
+Before-run source observation: one anomalous final name has12.5 context credit
+at2.5 per context symbol. Context symbols include boundary markers; this is not
+word confidence. All four retained hypotheses in that record share the name,
+so subtracting credit from that saved top4 cannot discover a missing alternative.
+Fresh zero-context search is genuinely distinct, necessary decoder work. No
+human references exist; successful output is not a quality pass. Preserve raw
+and formatting-only output separately in the existing private cumulative report.
+Verdict: Extend the existing dependency-free runner; state_transducer already
+supports zero bonus and is unchanged. No new dependency or model download.
