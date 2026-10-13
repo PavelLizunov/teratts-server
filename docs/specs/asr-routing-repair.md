@@ -404,3 +404,47 @@ provenance. Must not become a closed phrase decoder, replace text, hardcode the
 observed missing name or assign model agreement the status of acoustic truth.
 Alternatively examine stronger English specialist support for Russian-accented
 names; known consumed model matrix must be checked first. No coefficient sweep.
+
+## Round16 — auxiliary phrase context scoped to its fixed English interval
+
+One new decoder mode, `context_mode: auxiliary-interval-v1`, uses each unchanged
+Qwen English phrase as the ONLY soft contextual path in its own saved interval.
+No old global hints in this mode, no added spelling/alias/name. Use the same
+canonical trained token IDs already used by the aligner; append context-only
+right boundary. Keep score2.5, the full open trained EN/RU vocabulary, native
+word closure, RU-history beam4 and fixed round14 events. All ten EN routes are
+included independent of text;18allRU routes not rerun. No new audio/Qwen pass.
+This is a new coupled method: the auxiliary model now influences both timing
+and context ranking, not just timing. Agreement with it is NOT independent
+confirmation, and a wrong proposal can be reinforced. Never label this correction
+as acoustic truth. Raw pieces, context paths and auxiliary provenance retained.
+
+Each English interval has a separate ContextBias graph. Outside it the graph is
+empty. On leaving/changing interval, add a virtual context-only right boundary,
+settle completed matches/refund unfinished prefixes, then clear graph state.
+Do not reset RU predictor, output prefix or CTC blank state; do not emit delimiter
+IDs or alter the route. The next graph sees only tokens emitted in its interval.
+EOS uses the same settlement once. This is not independent region decoding or
+waveform segmentation. Boundaries are the existing inferred intervals, not gold.
+
+Unlike global text-only credit, scoped credit can differ for identical output
+IDs emitted at different times. Therefore accumulated credit must partition
+state keys, same-text grouping and final retained alternatives in this mode.
+Sum acoustic paths ONLY when both emitted IDs and credit agree; max-compete
+other texts. Keep separate text+credit alternatives rather than falsely calling
+a mixed-credit score an acoustic logsum. Record this approximation/possible
+duplicate strings. No change to default global context behavior.
+
+Freeze manifests/source before execution. Require exact prior selected_events,
+and prevent cache reuse across context modes as well as scores/graph options.
+Numerical controls: full phrase reward at interval exit; incomplete prefix refund;
+no match/reward leakage across intervals; outside-interval tokens unrewarded;
+identical-output paths with different credit remain separate. Tiny synthetic
+open search must be able to reject a weak proposal in favor of another trained
+word. Those are algorithm controls, not gold speech or repetitions of old tests.
+Same host limits600s/cell,900s/batch,RSS1536MiB,availablefloor2048MiB,swap256MiB.
+One changed run per ten records; consumed/unknown cells never replayed. Include
+all10 outcomes, new names vs lost names, RU changes and resources in privateHTML.
+No production promotion, fullchain/Deck or accuracy claim from successful scripts.
+Verdict: Extend existing ContextBias and state_transducer; new small scheduling
+module, no dependency/model download. No coefficient grid or hard phrase filter.
