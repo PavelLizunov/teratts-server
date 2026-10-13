@@ -52,16 +52,16 @@ def request(url,payload=None,timeout=90):
     with urllib.request.urlopen(req,timeout=timeout) as r:return json.load(r)
 
 
-def run(root,model):
-    directory=root/('results-'+model);directory.mkdir(exist_ok=False)
+def run(root,model,suite_name='suite.json',result_name=None,modes=('edit','rank')):
+    directory=root/(result_name or ('results-'+model));directory.mkdir(exist_ok=False)
     models={'qwen25':('qwen25-q8.gguf','ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e'),
             'qwen3':('qwen3-q8.gguf','9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031')}
     name,expected=models[model]
     if digest(root/name)!=expected:raise ValueError('Changed model')
-    suite=json.loads((root/'suite.json').read_text());server=root/'runtime/llama-b11429/llama-server'
+    suite=json.loads((root/suite_name).read_text());server=root/'runtime/llama-b11429/llama-server'
     with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
     cmd=[str(server),'--model',str(root/name),'--alias',model,'--host','127.0.0.1','--port',str(port),'-t','2','-tb','2','-c','4096','-np','1','-ngl','0','--fit','off','--jinja','--no-context-shift','--cache-ram','0','--no-warmup','--chat-template-kwargs','{"enable_thinking":false}']
-    result={'model':model,'model_sha256':expected,'runtime_sha256':digest(server),'suite_sha256':digest(root/'suite.json'),'command':cmd,'rows':[],'status':'failed','samples':[]}
+    result={'model':model,'model_sha256':expected,'runtime_sha256':digest(server),'suite_sha256':digest(root/suite_name),'command':cmd,'rows':[],'status':'failed','samples':[]}
     start=time.monotonic();initial=memory_snapshot();process=None
     def check():
         if time.monotonic()-start>900:raise TimeoutError('Model iteration limit')
@@ -86,7 +86,7 @@ def run(root,model):
             result['props_sha256']=digest(directory/'server-props.json')
             screen=time.monotonic()
             with ThreadPoolExecutor(max_workers=1) as executor:
-                for mode in ('edit','rank'):
+                for mode in modes:
                     for row in suite['rows']:
                         if time.monotonic()-screen>600:raise TimeoutError('Paired screen budget exhausted')
                         if mode=='edit':content='<transcript>\n'+row['input']+'\n</transcript>'
@@ -123,6 +123,6 @@ def run(root,model):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=('prepare','qwen25','qwen3'));p.add_argument('--root',required=True);p.add_argument('--base');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=('prepare','qwen25','qwen3'));p.add_argument('--root',required=True);p.add_argument('--base');p.add_argument('--suite',default='suite.json');p.add_argument('--result-name');p.add_argument('--modes',nargs='+',choices=('edit','rank'),default=['edit','rank']);a=p.parse_args()
     if a.mode=='prepare':prepare(Path(a.root),Path(a.base))
-    else:run(Path(a.root),a.mode)
+    else:run(Path(a.root),a.mode,a.suite,a.result_name,tuple(a.modes))

@@ -30,6 +30,7 @@ def run(root,base):
         unexpected=loading.get('unexpected_keys',[])
         if any(not k.startswith(('vision_tower.','embed_vision.')) for k in unexpected):raise ValueError('Unexpected nonvision checkpoint tensors')
         model.eval();processor=AutoProcessor.from_pretrained(modelroot,local_files_only=True)
+        loading=json.loads(json.dumps(loading,default=lambda value:sorted(value) if isinstance(value,set) else str(value)))
         result.update(loading=loading,loaded_parameters=sum(p.numel() for p in model.parameters()),load_s=time.monotonic()-start,
                       asset_receipt_sha256=digest(modelroot/'download-receipt.json'),runtime={k:importlib.metadata.version(k) for k in ('torch','transformers','numpy','tokenizers','librosa')})
         guard.check()
