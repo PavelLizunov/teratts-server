@@ -531,3 +531,39 @@ implementation parity or human gold claim. Agentlimits600s/RSS1536MiB/floor2048M
 swap256MiB with supervision. Existing private cumulative HTML includes all11rows.
 Verdict: Extend the existing NumPy diagnostic style and reuse supervisor; no new
 model or dependency. Do not recompute consumed round13 occurrence experiments.
+
+### Round17 observed result
+Runtime108e963,manifest-round17.json,job2255exit0collected. All10records/11phrases
+complete. Viterbi traces10/10exact,scoreerror0;maximum forward/backward partition
+error1.4210854715202004e-14. Three complete-state-path enumeration cases(21/6/7paths)
+and five raw-CTC cases(81paths each) pass,maxerror2.220446049250313e-16. The shared
+supervisor gained only optionalworker_script; originaldefault preserved.
+
+Selected-span mass min0.0763121563/median0.1465657147/max0.4049344540. All11have
+trailingblank-topframes. Equal-cost trailingblank ownership between phrase and
+gap makes boundary mass diffuse even without missed speech; do not treat lowspan
+mass as proof of wrong timing or use quantile bounds as a new route. c009GitHub
+native42–44 length3=min3,conditionalstartmode42mass0.4331,previous41mass0.4080;
+endmode47mass0.3197. SameintervalcanonicalCTClogmass−17.967507 vs greedy−2.883917;
+netdifference−15.083589+12.5=−2.583589. Genuine local acoustic deficit despitebias,
+not proof of fullmixedsearchcause/righttiming. c022start59mass0.97318, enddiffuse
+throughblankplateau; no independent RU emission localization or duplicatecause.
+
+Nineof11canonicaltargetmassesbelowgreedy;onlyc009stillbelowafterexistingcredit.
+Newmechanicalfinding c005GPT: canonicalIDs[41,287] vs greedy[41,1015,998] render
+identically, but credits10vs0. CurrentcontextmatchesoneSPEsequence,notspelling.
+Keep this distinct from pronunciation/spelling errors and language selection;
+no character matcher or new decoder run claimed this round.
+
+Hostworker0.274404s/supervised0.602350s,highwater42.734375MiB,
+sampled42.882813MiB,minavailable8930.734375MiB,swap0. NumPyretaineddata-only;
+newmodelcalls0,newtranscripts0,gold0. boundary_report.py records all11rows and
+all originalframes privately; production/routesunchanged. Goal remainsunmet.
+
+Nextnotfrozen: segmentation-invariant spelling context on unchangedintervals,
+rewarding equal spelling equally regardless of trained subword segmentation.
+Must keep total completion credit fixed per original phrase (avoid accidental
+per-character bonus increase), no newnames/aliases/Qwenchanges; openalltrainedIDs,
+actualacousticpiecesandcreditpartitions retained. Empty/partial/wrong/outside
+spelling must refund; punctuation/boundaries explicit. Compare all10routes rather
+than justc005. This addresses representation bias, not QwenGSH/Latinization truth.

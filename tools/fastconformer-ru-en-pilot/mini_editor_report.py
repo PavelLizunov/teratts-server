@@ -70,6 +70,10 @@ def report(root,filename='mini-editor-results.html'):
         from interval_context_report import section as interval_context_section
         sections.insert(1,interval_context_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 16</p><h1>Локальная подсказка помогает имени — и может закрепить ошибку.</h1><p class="lead">Все десять английских маршрутов проверены с фразой Qwen только в её интервале. GitHub и GPT появились, ChatGPT сохранился, но GSH и ошибочная латинизация тоже усилились. Общая задача пока не решена.</p></header>'''
+    if (root.parent/'routing-repair/round17-observation.json').exists():
+        from boundary_report import section as boundary_section
+        sections.insert(1,boundary_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 17</p><h1>Сначала причина ошибки, затем новая граница.</h1><p class="lead">Разобраны все одиннадцать английских интервалов. GitHub местами проигрывает акустически; blank размывает оценку конца, а одинаковое GPT получает разную премию из-за токенизации. Новые границы и тексты не выдавались за исправление.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target

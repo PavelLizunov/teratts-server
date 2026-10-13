@@ -1120,6 +1120,40 @@ or full-chain timings; cost growth is not profiler-attributed.
 private cumulative HTML. The [repair contract](../../docs/specs/asr-routing-repair.md)
 contains frozen scope, invariants and observed limitations.
 
+### Conditional boundary diagnosis without changing the route
+
+`boundary_diagnostic.py pilot MANIFEST` examines all previously selected English
+phrases using their saved CTC arrays. `boundary_mass.py` reconstructs the original
+ordered phrase/wildcard graph and computes exact forward/backward boundary mass
+conditional on those requested canonical phrases. This is not calibrated timing,
+word or language confidence: wildcard-max gaps and path multiplicity affect mass.
+It does not read/crop/pad waveforms, rerun a model, change intervals or emit a new
+transcript. The existing guarded supervisor accepts an optional worker script;
+its original default worker remains unchanged.
+
+All11phrases on10records completed. Saved Viterbi scores/traces matched exactly;
+maximum forward/backward partition error1.42e-14. Three exhaustive tiny graph
+controls and five raw-path CTC controls passed, maximum absolute error2.22e-16.
+No human references/external parity. Original selected-span conditional mass
+ranges7.63–40.49% (median14.66%), but every interval has a trailing blank-top run:
+an ambiguous assignment of blank to phrase or gap can leave the best score
+unchanged. These masses do not justify blindly expanding intervals. Two intervals
+use the minimum CTC frame count; one still loses its proposed name even after the
+existing context credit. Russian token emissions were not localized by this
+English-only diagnosis, so a duplicated RU fragment's cause remains unproven.
+
+Exact fixed-token CTC mass on each unchanged interval is reported separately from
+the conditional boundary graph. Canonical target mass is below the interval's
+greedy token sequence in9/11; this excludes alternative spellings/segmentations
+and is not a mixed-RNNT search counterfactual. One identical spelling uses different
+IDs and receives different context credit: the current token-based context is not
+segmentation-invariant. A character-based matching experiment is not yet executed.
+
+Host worker0.274s/supervised0.602s,highwater42.734MiB/sample42.883MiB,
+minavailable8930.734MiB,swap0. This is NumPy diagnosis, not ASR speed or Deck timing.
+`boundary_report.py ROOT` adds all eleven rows and full per-frame evidence to the
+private cumulative report. Baseline, production and prior results are preserved.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
