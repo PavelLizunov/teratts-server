@@ -121,6 +121,43 @@ Do not combine them into a misleading independent-test or audio-accuracy count.
 Private self-contained HTML is rendered by mini_editor_report.py. Private
 transcripts, manifests, vectors and weights remain outside Git.
 
+## Round 10: conditional numerical candidate likelihood (new method)
+Hypothesis: teacher-forced likelihood of each candidate independently avoids the
+observed index-generation presentation bias. Keep pinned Qwen3 Q8_0, native
+llama.cpp b11429, CPU2, FP16 KV and4096 context. Score candidate text as the
+assistant continuation of the original conservative-edit prompt, conditioned on
+raw ASR. No candidate list in model input and no generation. Use actual stored
+Jinja template with enable_thinking=false exactly once. Force complete candidate
+and end-of-turn token; compute log-softmax over full151936 vocabulary for every
+candidate token. Primary score is mean log probability including end-of-turn;
+retain sum and token counts, but no normalization/coefficient sweep. This score
+is text likelihood, not acoustic evidence or probability of correctness.
+
+The native server only documents probabilities of generated tokens; built-in
+multiple-choice scorer drops a shared prefix, normalizes only divergent suffix
+and does not export per-candidate scores. Rather than approximate via top-k,
+implement a small standalone driver linked to downloaded matching libllama,
+using publisher C API for teacher forcing and full-vocabulary log-softmax.
+No library fork, training, dependency replacement, or production server.
+Decode prefix once per candidate; clear KV between candidates. Chunk at64 tokens
+only inside text inference (no audio segmentation), bounded logits buffers.
+Candidate processing order canonical lexical; identical prompt/token paths reuse
+exact stored score. Ties must remain explicit; never choose by displayed index.
+
+Freeze original10 synthetic controls,3 previous holdout controls,2 saved
+ASR development Nbest and20 collected Nbest before inference (35 cases).
+Reusing input texts with a genuinely new scoring method is not repeating the
+consumed index-generation configuration. Keep per-case sources/hashes and exact
+rendered prefix, token IDs and per-token log probabilities. One diagnostic
+numerical check compares batched versus one-token processing on a synthetic
+short string before corpus scoring; tolerance1e-3 for CPU batch roundoff,
+not transcript-quality admission. A mismatch stops dependent scoring.
+Same agent resource floor2048MiB, swapgrowth256MiB, RSS3072MiB, CPU2;
+method time600s batch/900s overall. No explicit candidate repair/probe tuning
+based on audio results. Check protected negatives/names/numbers and incomplete
+thoughts; compare selected real text but do not claim WER without human gold.
+Other session owns the newer GigaAM29-record experiment; do not duplicate it.
+
 ## Decision and continuation
 No automatic promotion: free editing, index-only selection and embedding-only
 ranking are not supported as a usable transcription repair by this evidence.
