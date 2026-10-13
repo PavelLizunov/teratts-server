@@ -269,3 +269,35 @@ originalrawmodelagreementNOTaccuracy,auxvsfinaldisagreements,exactreuse/novel
 finaldecodes,hoststagewall/RSS. Human gold remains0; noWERorpassedqualityclaim.
 Verdict: Extend — alreadyinspected/pinnednativeQwenCLI plus existingretained-head
 runner; no new dependency, modeldownload, enginefeature or externalprivatecall.
+
+### Round14 observed result
+Pinnedsource67f8857,job1939auxiliary28/28success,job1956final28/28outputs,both
+collectedexit0. Parametersreadfromsafetensors938008576(totalencoder+decoder),
+under1Bbutnotliteral600M. Verifiedall8assets+binary/taskBLAS/sourcehashes;
+knownpriorQwenmatrix/developmentaudioSHAoverlap0,28genuinefreshauxiliarycalls.
+Originalcorpus28audio167.705125s;noEN/RUencoderrepeats. Final13round11routeexact
+reuses+9round12identicalroutereuses+6newdecodes. All6oldround11failuresnowoutputs;
+no previoussuccesslost. NewEnglishroutes10vs14previoussuccessful;18allRU(noEN
+auxwords),7/22pairedrecordslosesomeoldENwords,2addENwords;9/22textschanged.
+TheseincludesreplacementofnonsenseforcedENwithRU,notallwordlossesbad;nogold.
+
+Concretecausalobservations/privateexamplesallinHTML: c027Englishframes47→11,
+repeatedauxnamegoneandRUcontinuation+technicalnamepresent; c00944→3recoveringRU
+butnamegarbled. c018GSHauxsameintervalandretainedDSHfinaldemonstratesnospelling
+copy. c022newGitHubintervalfinalDSHunderunchangedhintgraph;timingrepairnotname
+selectionrepair. c002QwenLatinizesRU(allENroute)showingunconstrainedauxLIDrisk.
+KeepQwenbranchforfurtherinvestigation,notqualitypromoted/mainpipelineadopted.
+Full28outputsNOT28correcttranscripts. Oldcorpus21/29+round11remainimmutable.
+
+Auxbatch132.352457s,medianperclipcold4.070699s,sampledRSS2706.917969MiB.
+Final-onlybatch29.116681s,6decode sum16.685243s/median2.091990s,
+sampledRSS113.527344MiB;sequentialpeaksnotadded;minavailable7697.628906MiB,
+swap0. NoDeckmeasurement/fullcoldchainclaim. Archivedrawagreementpaired22:
+old2same/11small/9substantial,new3same/12small/7substantial,NOTaccuracy.
+AuxQwenvsfinal16substantial/9small/3same;Qwennotgold. No humanreferences.
+
+Nextqualitymechanism: fixedglobalcontext namesmaycrowdoutnewnameevenwithbetter
+interval. IsolatecontextcausallyonallnewQwenENroutesusingretainedarrays and
+pre-registeredfixedcontext-offvariant (notgrid),orinspectexistingcandidate
+pathscorebreakdownbeforeclaimingcause. DoNOThandpickc022fix/newGitHubhintonly,
+notlanguagefilter/rewrite,donotclaimcontextisthecausewithoutcomparison.

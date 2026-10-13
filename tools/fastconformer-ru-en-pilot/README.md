@@ -1010,6 +1010,43 @@ not Deck or full-ASR latency. No new model call, encoder pass or transcript.
 report. Source/algorithm scope remains in the
 [repair contract](../../docs/specs/asr-routing-repair.md).
 
+### Qwen auxiliary-generator replacement
+
+`qwen_auxiliary.py AUX_MANIFEST` runs the pinned native Qwen3-ASR-0.6B only to
+propose English phrase order. The model has938008576 actual tensor parameters,
+original BF16; autolanguage, no hints, no past-text, `-S 0`, CPU2/nice19. It is
+multilingual and does not independently satisfy the hard trained RU/EN-head
+constraint. Only its English phrase timing enters the unchanged final open
+Parakeet CTC/GigaAM RNNT search; its text is never copied into final output.
+Original WAVs, model/binary/library hashes, raw stdout/stderr and resource samples
+are retained. Native centered-STFT reflection is retained; no appended silence,
+waveform segmentation or skip-silence. Existing assets require the task-local
+BLAS directory in `LD_LIBRARY_PATH`, not a system dependency installation.
+
+The final-only `routing_repair.py` manifest uses `auxiliary_replaced: true` and
+`timing_method: english-only`. Exact matches to prior round11/12 routes reuse
+saved outputs; provenance hashes are recorded. On28original corpus recordings,
+Qwen completed28/28 and final paths produced28/28 outputs (versus22 round11).
+13samebaseline routes and9other previous routes were reused;6new final decodes.
+English frames occurred in10 records;18 had no auxiliary English words and
+therefore all-Russian routes. Nine of22 paired texts changed. This removes all6
+prior auxiliary failures but does not establish correct transcription.
+
+Some repetition-induced overlong English intervals shrink and Russian
+continuation returns. Other failures remain: multilingual auxiliary Latinization
+can misroute Russian, and the unchanged context-biased final search may choose
+a different technical name than the proposal. That is not automatic correction
+or evidence of accuracy. Keep this experimental branch; no production promotion,
+new name-specific hint or hand-selected fragment combination.
+
+Host auxiliarybatch132.352s, mediancoldclip4.071s, sampledRSS2706.918MiB;
+final-onlybatch29.117s, sixnewdecode sum16.685s, sampledRSS113.527MiB. Sequential
+peaks are not additive; minavailable7697.629MiB, swap0. No trained EN/RU encoder
+reruns or new Deck/fullcoldchain measurements. `qwen_auxiliary_report.py` adds
+all28 raw/proposal/final comparisons to the private cumulative HTML. Human gold0;
+archived model agreement is not WER. Method and pins are in the
+[repair contract](../../docs/specs/asr-routing-repair.md).
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

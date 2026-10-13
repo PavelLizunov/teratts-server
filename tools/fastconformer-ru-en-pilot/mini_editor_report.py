@@ -55,6 +55,10 @@ def report(root,filename='mini-editor-results.html'):
         from occurrence_report import section as occurrence_section
         sections.insert(1,occurrence_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 13</p><h1>Акустические альтернативы теперь измеряются без top1-фильтра.</h1><p class="lead">Рассчитана масса 133 словесных событий на 28 сохранённых записях. Это новый диагностический инструмент, но ещё не надёжный критерий коррекции: прежние технические названия могут иметь очень малую массу.</p></header>'''
+    if (root.parent/'routing-repair/round14-observation.json').exists():
+        from qwen_auxiliary_report import section as qwen_auxiliary_section
+        sections.insert(1,qwen_auxiliary_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 14</p><h1>Другой источник подсказки; те же обученные RU/EN-головы.</h1><p class="lead">Qwen3-ASR заменяет только вспомогательный Whisper. Сравнены все28 оригиналов, новые языковые маршруты и финальные результаты — без копирования Qwen-текста и без объявления его эталоном.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
