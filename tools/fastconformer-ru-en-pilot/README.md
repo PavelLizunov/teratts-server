@@ -758,6 +758,60 @@ This is a promising isolated prototype, not a production recommendation. Latest
 end-to-end latency, residual Russian accuracy and generalization beyond the two
 retained recordings remain unverified. Production services are unchanged.
 
+## Collected-speech evaluation
+
+`corpus_inventory.py CORPUS OUTPUT` reads only TAR metadata from the rolling
+speech store. It distinguishes STT from TTS/journal records and retains reference
+and request-policy provenance privately. `corpus_eval.py select INVENTORY OUTPUT`
+freezes a small chronology-spread sample: ten saved-text Latin examples, ten
+technical-name proxies, and ten other Russian examples. These are metadata
+strata, not verified language labels. It excludes development-audio hashes,
+duplicates, dictionary opt-outs and unsupported input lengths/formats.
+
+`corpus_eval.py prepare SELECTION CORPUS ROOT` copies exact selected WAV bytes and
+metadata into an isolated root, verifies SHA256 and records missing/invalid
+sources without replacement. `corpus_eval.py run MANIFEST` invokes one full
+`paired_pipeline.py` process per recording. Ordinary per-record failure remains
+in the results while untouched records continue. A resource guard or unknown
+outcome stops the remaining work; consumed records must not be resubmitted.
+Optional `capacity_wait_seconds` waits before dispatch only, without lowering
+the memory reserve. Resume by creating a new manifest containing only the
+explicitly untouched IDs and a new results directory.
+
+The full pipeline now handles an auxiliary proposal with no English phrase by
+retaining all Russian native frames. It does not force the auxiliary Russian
+words. Impossible English alignments and unrepresentable auxiliary words remain
+explicit failures, not opportunities to tune hints against the sample.
+
+`corpus_report.py ROOT` joins the frozen selection, preparation receipts and
+`results-v*` directories into a private comparison JSON and self-contained HTML.
+It reports every selected item, full-chain timings, measured resources and
+normalized-text disagreement. Saved production and auxiliary outputs are not
+human gold; no WER or accuracy claim is made. Do not commit any private corpus
+manifest, WAV, transcript or generated report to this repository.
+
+Observed first frozen sample:30 selected, one source expired before copying,
+29 attempted once,21 completed transcripts and8 failures. Four failures were
+impossible auxiliary phrase alignment, three unrepresentable auxiliary words,
+one a Whisper RSS guard. The last untouched record completed separately under
+the same limits; no consumed failure was retried. Orchestration-only recovery
+added up to120s capacity waiting before untouched records. Model/search/hints
+remained fixed throughout.
+
+Among21 completed outputs, normalized agreement with archived production raw
+text was2 equal,11 small differences and8 substantial differences. These are
+not correctness counts. Several completed outputs also show severe language
+routing distortion. Median successful cold full-chain time was19.648s, range
+12.017–37.173s; aggregate409.203s processing /135.848s audio =3.012x real time.
+Minimum available memory remained2194.684MiB, above the2048MiB reserve; maximum
+sampled temperature76C, no sampled swap growth. The failed guard reached
+1160.789MiB sampled RSS against the1100MiB cap and was terminated.
+
+The two-development-clip success did not generalize sufficiently. Do not deploy
+this candidate based on that result. Auxiliary repetition/unsupported-word
+handling and hard routing remain concrete weaknesses; this evaluation did not
+retune them to improve the held-out score.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
