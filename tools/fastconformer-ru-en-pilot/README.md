@@ -1232,6 +1232,43 @@ These are fresh-process English-only host timings, not Deck/fullchain or a clean
 speedup comparison against the older int8 model. Maximum raw log-normalization
 error9.06e-7. Every full raw output and interval comparison is in the privateHTML.
 
+### Compact CTC head in the trained mixed search
+
+Round20 combines the retained110M English scores with unchanged GigaAMv3RNNT and
+round14 Qwen proposals, recomputing phrase timing on every record with the new
+original-case tokenizer. It uses round14's global-fixed context/score2.5, not the
+later interval/spelling contexts. Four fixed hint texts stay unchanged, but their
+canonical completion budgets differ: ChatGPT15→17.5, ChatGPT Pro20→25,
+DSH12.5→12.5, Oracle15→15. Acoustic checkpoint, quantization, case/tokenization,
+hint budget and resulting timing are not an isolated architecture comparison.
+
+`acoustic_cache.py` separates retained array schemas (`values` vs `log_probs`) and
+requires both head receipts to match before any English-route reuse. Same route
+alone is insufficient: two actual records kept their route but required a new
+search with the changed head. All-RU reuse requires identical RU data/events,
+global context parameters, RU-only hypotheses, zero final credit and EN-only
+hint paths. Historical reused search metadata stays historical. Nine synthetic
+cache controls and two schema controls passed; missing provenance rejects reuse.
+All28auxiliary texts were representable by the new tokenizer, without text repair.
+
+All28outputs completed:10new searches,18proved all-RU reuses;20exact prior routes,
+8changed routes. Nine strings changed/eight after comparison-onlycasefold;
+three RU token paths changed. Auxiliary exact casefold agreement5/11→3/11 is not
+accuracy. One technical name retains its correct case, while two prior spellings
+are lost; missing names and wrong Latinization persist. A new language-boundary
+artifact duplicates a spoken letter after a Latin name. A previously missed
+single-frame interval expands automatically to three frames, restoring support
+for that English word but not removing its old trailing Russian fragment.
+No recommendation to promote this pair; all originals, baseline and production
+remain unchanged. `compact_mixed_report.py ROOT` records all28rows/top4/timings.
+
+Hostfinal-stagewall49.187s; tennewdecodes39.473s/median3.592s/max7.956s,
+highwater141.660MiB,sampled139.418MiB,minavailable8682.223MiB,swap0,
+maxnewstates8388. This excludes encoder/Qwen passes and is not a measured
+fullchain/Deck result. Final constrained IDs verified; no human gold/WER.
+Remaining work includes reliable language/timing evidence and RU emission
+localization; context credits and compact model size do not demonstrate quality.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

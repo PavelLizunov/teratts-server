@@ -103,7 +103,7 @@ def cell(manifest_path,clip):
         before=time.monotonic();result['new_decoder_run']=True
         result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True,retain_context_graph=retain_graph,interval_alignment=alignment if context_mode!='global-fixed' else None,spelling_context=context_mode=='auxiliary-spelling-interval-v1')
         if not result['search']['hypotheses']:raise ValueError('No complete constrained output')
-        result.update(decode_s=time.monotonic()-before,status='new_constrained_output',runtime_origin='local host joiner/predictor with retained Deck encoder output',formatting=rules.formatting)
+        result.update(decode_s=time.monotonic()-before,status='new_constrained_output',runtime_origin='local host joiner/predictor with retained native acoustic arrays',formatting=rules.formatting)
         import onnxruntime as ort
         result['onnxruntime']=ort.__version__
     except Exception as error:result.update(error=type(error).__name__+': '+str(error));raise

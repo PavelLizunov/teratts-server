@@ -748,3 +748,36 @@ Agent limits unchanged600s/cell,900s/batch,1536MiB/floor2048MiB/swap256MiB. Free
 source/manifest beforelaunch; allraw/alternatives/routechanges/reusecontrols in
 privateHTML. Encoder/Qwen calls0; distinguishmechanicalcoverage/newdecodes/reuses
 from bilingualaccuracy. No production switch or unapproved audio changes.
+
+### Round20 observed result
+Runtime2e2f7df, manifest-round20.json, job2363exit0collected. Ninecachecontrols +
+2schemas passed; all28newtokenizerproposals representable. All28complete:10new
+mixeddecodes,18provedall-RUreuses. ENroutes10/RU-only18; routesexact20,
+changed8(c003,c005,c009,c015,c018,c020,c027,c028). UnchangedENroutesc002/c022
+stillNEWdecodedbecauseheadidentitychanged. Noencoder/Qwen/audiooperations.
+Finalconstrainttop1IDsandtop4scoredecompositionscheckedbyreport.
+
+Changedstrings9/casefold8(c027caseonly); changedRUtokenpaths3(c009,c015,c018).
+Qwenagreement5/11→3/11,notaccuracy. ChatGPT Proretained; ChatGPTc028lost,
+Gemini→Germini; all3GitHubmissing. c003DSH→GBTnotcorrection,c002Latinization
+persists,c018newDSH+spokenletterRUfragment. c020clearoldframe58range4.6–4.68
+→newframes57..59range4.52–4.76,wholefinalunchangedincludingtrailingRUfragment.
+Timingfixaloneinsufficient. No recommendation; preserveexistingbaseline.
+CanonicalglobalcreditChatGPT15→17.5,ChatGPT Pro20→25,DSH12.5unchanged,
+Oracle15unchanged;combinedacoustic/timing/contexttokenizationvariantnotcausal
+architectureorquantexperiment. Originalcasekept,casefoldonlycomparison.
+
+Hostbatch49.186841s,decode39.472852s/median3.592151/max7.955806s;
+highwater141.660156MiB,sampled139.417969MiB,minavailable8682.222656MiB,swap0,
+maxnewstates8388. NotDeck/fullchain; noaddnestedtimings. compact_mixed_report.py
+retainsall28previous/newrawcomparisons,proposals,actualroutes,hints/top4/provenance.
+Production/gateway/dictionary/WAVunchanged;qualityobjectiveUNMET.
+
+Nextunimplemented: RUtoken emissiontrace/nativepredictorhistory at actual EN/RU
+transitions to distinguish duplicatedletter/localization from semantic selection.
+Existing outputs store finalRUtokenpath but not emissiontiming; causal tracing
+requires explicitlynewinstrumentedsearch and cannotbeclaimedfromstrings alone.
+Do not run bonusgrids or manuallycrop/extendWAV; preserve negative compacthead
+result and investigate boundary mechanism on frozenstates/routes. Independently,
+a truly bilingual pretrainedhead or independent language evidence remains needed;
+text editing had measured semantic drift and cannot substitute acousticconstraint.

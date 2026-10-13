@@ -82,6 +82,10 @@ def report(root,filename='mini-editor-results.html'):
         from compact_english_report import section as compact_english_section
         sections.insert(1,compact_english_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 19</p><h1>Другая английская акустика — пока без нужного улучшения.</h1><p class="lead">CTC-ветвь Parakeet110M проверена на всех28целых записях. Нужные GitHub и ChatGPT без подсказок не восстановились; перенос старых интервалов тоже оказался ненадёжным. Полные вероятности сохранены, двуязычная замена ещё не проверена.</p></header>'''
+    if (root.parent/'routing-repair/round20-observation.json').exists():
+        from compact_mixed_report import section as compact_mixed_section
+        sections.insert(1,compact_mixed_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 20</p><h1>Меньшая модель пока не стала лучшим распознавателем.</h1><p class="lead">Проверена новая пара обученных RU/EN-голов со своими границами: десять новых смешанных поисков и восемнадцать доказанно неизменных русских результатов. ChatGPT Pro сохранился, но другие имена потерялись; повтор русских звуков не устранён. Рабочую систему не переключаем.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
