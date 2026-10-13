@@ -7,6 +7,7 @@ import resource
 import subprocess
 import time
 
+from acoustic_cache import array_identity, reuse_identity
 from english_timing import english_timing_labels
 from mms_pair import digest, save
 from phrase_guidance import align_phrases
@@ -38,8 +39,11 @@ def cell(manifest_path,clip):
             if digest(row[key])!=row['hashes'][key]:raise ValueError('Changed retained receipt')
         if len({r['audio_sha256'] for r in receipts.values()})!=1:raise ValueError('Different original audio sources')
         result['audio_sha256']=receipts['eng']['audio_sha256']
+        identities={h:array_identity(receipts[h]) for h in ('eng','rus')}
         for h in ('eng','rus'):
-            if digest(Path(row[h]).with_suffix('.npz'))!=receipts[h]['retained_array_sha256']:raise ValueError('Changed retained acoustic data')
+            if digest(Path(row[h]).with_suffix('.npz'))!=identities[h][1]:raise ValueError('Changed retained acoustic data')
+        result['acoustic_identity']={h:{'receipt_sha256':row['hashes'][h],'prepared_sha256':receipts[h]['prepared_sha256'],
+                                      'array_sha256':identities[h][1],'array_key':identities[h][0]} for h in ('eng','rus')}
         em=Path(cfg['english_model']);rm=Path(cfg['russian_model']);ep=json.loads((em/'prepared.json').read_text());rp=json.loads((rm/'prepared.json').read_text())
         if digest(em/'prepared.json')!=receipts['eng']['prepared_sha256'] or digest(rm/'prepared.json')!=receipts['rus']['prepared_sha256']:raise ValueError('Different trained model mapping')
         if digest(em/'tokenizer.model')!=ep['tokenizer_sha256']:raise ValueError('Changed English tokenizer')
@@ -49,8 +53,8 @@ def cell(manifest_path,clip):
         except ValueError as error:
             result.update(status='unsupported_auxiliary',error=str(error));return
         result.update(auxiliary_sequence=sequence,auxiliary_words=words)
-        with np.load(Path(row['eng']).with_suffix('.npz')) as f:lp=f['values'].astype(np.float64)
-        with np.load(Path(row['rus']).with_suffix('.npz')) as f:encoded=f['values']
+        with np.load(Path(row['eng']).with_suffix('.npz')) as f:lp=f[identities['eng'][0]].astype(np.float64)
+        with np.load(Path(row['rus']).with_suffix('.npz')) as f:encoded=f[identities['rus'][0]]
         lp[:,0]=-np.inf;lp-=np.logaddexp.reduce(lp,axis=1,keepdims=True)
         if method=='ctc-corroborated-words-v1':
             from corroborated_timing import corroborated_sequence
@@ -80,9 +84,11 @@ def cell(manifest_path,clip):
         if old is not None:
             same=alignment['selected_events']==old['selected_events'];result['selected_events_identical']=same
             if cfg.get('require_prior_route',False) and not same:raise ValueError('Changed route in fixed-route comparison')
-            if method=='english-only' and not same and not cfg.get('auxiliary_replaced',False):raise ValueError('Unexpected route regression')
+            if method=='english-only' and not same and not (cfg.get('auxiliary_replaced',False) or cfg.get('acoustic_replaced',False)):raise ValueError('Unexpected route regression')
             result['prior_context_score']=prior.get('search',{}).get('context_score')
-            if same and prior.get('search',{}).get('context_score')==bonus and prior['search'].get('retain_context_graph',False)==retain_graph and prior['search'].get('context_mode','global-fixed')==context_mode and (context_mode=='global-fixed' or old['english_phrases']==alignment['english_phrases']):
+            reuse_reason=reuse_identity(prior,row['hashes'],alignment['selected_events'],context_mode)
+            result['prior_acoustic_reuse_reason']=reuse_reason
+            if same and reuse_reason and prior.get('search',{}).get('context_score')==bonus and prior['search'].get('retain_context_graph',False)==retain_graph and prior['search'].get('context_mode','global-fixed')==context_mode and (context_mode=='global-fixed' or old['english_phrases']==alignment['english_phrases']):
                 if not prior.get('search',{}).get('hypotheses'):raise ValueError('No previous complete output to reuse')
                 result.update(status='reused_unchanged',reused_final_sha256=digest(prior_path),search=prior['search'],runtime_origin='saved earlier result, no rerun');return
         for candidate in row.get('reuse_results',[]):
@@ -90,8 +96,9 @@ def cell(manifest_path,clip):
             retained=json.loads(Path(candidate['path']).read_text())
             if retained['audio_sha256']!=result['audio_sha256']:raise ValueError('Route cache belongs to different audio')
             same=alignment['selected_events']==retained.get('alignment',{}).get('selected_events')
-            if same and retained.get('search',{}).get('hypotheses') and retained['search'].get('context_score')==bonus and retained['search'].get('retain_context_graph',False)==retain_graph and retained['search'].get('context_mode','global-fixed')==context_mode and (context_mode=='global-fixed' or retained['alignment']['english_phrases']==alignment['english_phrases']):
-                result.update(status='reused_prior_route',reused_final_sha256=candidate['sha256'],reused_result=candidate['path'],search=retained['search'],runtime_origin='another previously consumed identical route, no rerun');return
+            reuse_reason=reuse_identity(retained,row['hashes'],alignment['selected_events'],context_mode)
+            if same and reuse_reason and retained.get('search',{}).get('hypotheses') and retained['search'].get('context_score')==bonus and retained['search'].get('retain_context_graph',False)==retain_graph and retained['search'].get('context_mode','global-fixed')==context_mode and (context_mode=='global-fixed' or retained['alignment']['english_phrases']==alignment['english_phrases']):
+                result.update(status='reused_prior_route',reused_final_sha256=candidate['sha256'],reused_result=candidate['path'],acoustic_reuse_reason=reuse_reason,search=retained['search'],runtime_origin='another previously consumed identical route, no rerun');return
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
         result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True,retain_context_graph=retain_graph,interval_alignment=alignment if context_mode!='global-fixed' else None,spelling_context=context_mode=='auxiliary-spelling-interval-v1')

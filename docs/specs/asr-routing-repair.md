@@ -709,3 +709,42 @@ silentlymapBPEIDsorcasefoldoutput. Retainednewarraykeylog_probs vsoldvalues and
 receiptretained_logits_sha256 vsretained_array_sha256 needlosslessadapter/noencoder
 repeat. No downstreammethodselected/launchedthisround. Boundaryrecalculationnot
 promisedtofixnames;all28newcomparisonmustretainknownLatinization/auxerrors.
+
+## Round20 — compact-head mixed search with fresh native phrase timing
+
+New retained-data combination: Parakeet110M CTC F32 + unchanged GigaAMv3RNNT,
+unchanged round14 Qwen text; all28records in original order, not only successful
+Englishnames. Compare with round14 global-fixed mode, score2.5, fixed hints
+ChatGPT/ChatGPT Pro/DSH/Oracle. Recompute ordered phrase timing with the NEW
+original-case tokenizer and NEW nativeCTC scores for every record. Do not borrow
+round18spellingcontext, hand-move boundaries or addGitHub. Case/tokenization,
+acoustics and resulting route all change; global hint completion budgets change
+with the new trained tokenization. Record both, not a pure architecture causality
+claim. Final output preserves actual trained pieces and formatting-only separators.
+
+Extend receipt loader to accept original retained `values` / arraySHA and new
+`log_probs` / logitsSHA formats explicitly; no copied/transformed NPZ or acoustic
+rerun. Unknown0 masked,1024blank, EN1..1023/RUoffset1025 unchanged numerical range,
+but no semantic mapping of different ENIDs. Validate preparedSHA/tokenizerSHA/
+arraySHA and matching originalaudio. Named acoustic_replaced flag allows newly
+inferred routes, not arbitrary reuse. Old raw results remain untouched.
+
+Cache identity must prove identical selected head inputs, not route equality.
+Store current per-head receiptSHA/preparedSHA/arraySHA; accept legacy evidence
+only through equal source_hashes for relevant heads. For routes with ANY ENevent,
+require BOTH eng/rus receipts identical as well as prior score/mode/schedule/phrase
+conditions. Otherwise newdecode even if selectedevents coincidentallymatch.
+All-RU routes may reuse a prior all-RU path ONLY with sameRUreceipt/events,
+global-fixed mode/score/graphretention and verifiedRU-onlyhypotheses/zerocredit.
+Proof: both fixed graphs consist of ENtokens+boundary, so RUstream can only
+borrow/refund shared initialboundary; fullhint cannotcomplete and finalcredit0.
+The head's ENtokenizer cannot influence nativeRUscore/history in this restricted
+path. No generic cross-head reuse for scoped contexts. Record reason and provenance.
+Synthetic cache controls reject differentENacoustics/same-route, differentRU,
+missingidentity or suspiciousENoutput; accept identicalheads or provedallRU.
+Do not rerun consumed identical all-RU outputs just to inflate newdecodecount.
+
+Agent limits unchanged600s/cell,900s/batch,1536MiB/floor2048MiB/swap256MiB. Freeze
+source/manifest beforelaunch; allraw/alternatives/routechanges/reusecontrols in
+privateHTML. Encoder/Qwen calls0; distinguishmechanicalcoverage/newdecodes/reuses
+from bilingualaccuracy. No production switch or unapproved audio changes.
