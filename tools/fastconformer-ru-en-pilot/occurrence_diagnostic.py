@@ -68,14 +68,14 @@ def worker(manifest_path):
                             'new_model_calls':0,'human_gold_records':0})
 
 
-def pilot(manifest_path):
+def pilot(manifest_path, worker_script=None):
     cfg=json.loads(Path(manifest_path).read_text());out=Path(cfg['output']);out.mkdir(mode=0o700,exist_ok=False)
     for name,sha in cfg['source_files'].items():
         if digest(Path(__file__).parent/name)!=sha:raise ValueError('Changed frozen source')
     start=time.monotonic();base=memory_snapshot();samples=[];reason=None
     if base['MemAvailable']<(1536+2048)*1048576:raise RuntimeError('Insufficient budget before start')
     with (out/'worker.log').open('x') as log:
-        p=subprocess.Popen([cfg['python'],str(Path(__file__).resolve()),'worker',str(manifest_path)],stdout=log,stderr=subprocess.STDOUT)
+        p=subprocess.Popen([cfg['python'],str(Path(worker_script or __file__).resolve()),'worker',str(manifest_path)],stdout=log,stderr=subprocess.STDOUT)
         try:
             while p.poll() is None:
                 m=memory_snapshot();rss=rss_bytes(p.pid);elapsed=time.monotonic()-start

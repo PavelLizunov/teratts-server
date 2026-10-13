@@ -487,3 +487,47 @@ RU/EN acoustic evidence and search alternatives before adjusting boundaries.
 Do not pad waveform/hand-move intervals to desired output or raisecontextscore.
 Also auxiliary Latinization/GSH failure needs independent evidence; simply trust
 Qwenmore is contradicted. Preserve all methods and raw provenance.
+
+## Round17 — inspect boundary uncertainty before changing any route
+
+One numerical diagnosis over all11original English phrases on the same10records.
+No new transcript/route, waveform reads, encoder/Qwen/decoder reruns or manually
+expanded intervals. Use original saved EN log probabilities and round16 alignment
+receipts, model mapping and hashes. English-only diagnosis does not independently
+locate Russian token emissions; it cannot prove the source of a duplicated RU
+fragment. Context and acoustic failures must remain distinguished.
+
+Reconstruct the existing ordered phrase graph (self-looping label/blank states,
+zero-cost wildcard gaps, label emission logp minus per-frame maximum). Verify its
+Viterbi score and traceback against the saved aligner. Then compute exact forward
+and backward sums over complete paths in THIS graph, normalize by its partition,
+and derive first/last phrase-frame distributions and occupancy. These are
+conditional weighted alignment distributions given the requested canonical
+phrases and wildcard construction; NOT calibrated timing/word/language confidence
+or CTC transcript probability. Wildcard max-path gaps and path multiplicity affect
+the measure. All phrase labels remain forced for diagnosis even if auxiliary wrong.
+
+For each phrase report original interval, minimum CTC frames (tokens + adjacent
+repeats), length slack, mode/mean/entropy and fixed5–95percentile frame ranges for
+first/last boundaries, mass of the exact selected span (separate constrained-DP
+sum, not product of marginals), conditional occupancy outside it, and frames of
+highest boundary mass. No percentile is used as a new decode route or threshold.
+Use all frames with original80ms centres; no resampling/interpolation/padding.
+
+Additionally sum standard CTC alignments for the canonical target IDs and the
+interval's independent greedy-collapsed IDs within the SAME unchanged frame range.
+These are exact probabilities of fixed token sequences on that frame set, not
+all alternative subword spellings or full mixed RNNT text. Report their log-mass
+difference, the existing one-completion context credit and isolated sum, labelled
+as a local score diagnostic rather than actual final search counterfactual. Do
+not increase credit to turn a failure into a pass. Retain per-frame top1/blank/
+target-label scores and occupancy for all original frames, not handpicked crops.
+
+New algorithm controls: small-graph exhaustive state-path enumeration must match
+partition, start/end marginals and selected-span mass; fixed-token CTC must match
+independent raw-path enumeration including repeated labels. Match saved Viterbi
+scores/trace and forward/backward partitions on all10real records. No external
+implementation parity or human gold claim. Agentlimits600s/RSS1536MiB/floor2048MiB/
+swap256MiB with supervision. Existing private cumulative HTML includes all11rows.
+Verdict: Extend the existing NumPy diagnostic style and reuse supervisor; no new
+model or dependency. Do not recompute consumed round13 occurrence experiments.
