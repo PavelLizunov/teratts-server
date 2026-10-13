@@ -151,3 +151,48 @@ NextmechanismmustretainacousticallyplausiblenonargmaxEnglishlabelsandalsoallow
 Whispertimingtobeuncertain; exacttop1agreementcannotachieveboth. Candidate
 RNNT/CTCword-boundaryjointsearchortrainedlocalframeLIDneedsfixedwell-defined
 objectivebeforeexecution; no newvariantselectedorlaunchpendingthisround.
+
+## Round13 — exact CTC whole-word occurrence evidence, not a new gate
+Round12 top1 conflated absence in a greedy path with absence of acoustic support.
+Compute P(collapsed CTC piece stream contains whole target word/phrase) by a
+weighted deterministic character automaton times the previous raw CTC label.
+Use all1023 trained EN pieces and blank1024, unknown0 excluded and renormalized
+exactly as existingdecoder. Every distinct raw alignment has one deterministic
+path; repeats collapse BEFORE blank removal. Feed newly emitted pieces through
+the word/phrase automaton after published ▁→space and SAME separator/punctuation
+policy as auxiliary_words. Start/EOF boundaries count, wholewordend required;
+all valid piece segmentations of the same spelling are included, not just the
+publisher canonicalencode path. Case follows original uncased tokenizer, no
+phonetic/fuzzy normalization. Targets are all unique representable English
+auxiliary words PLUS the fixed four existing hints on each of28headsets. Keep
+unsupportedauxwordfailures as metadata;fixedhintsstillcanbediagnosed. No targets
+from production/comparator text or human guesses. Duplicatewordoccurrences do
+not cause repeatedcomputation. Hints are diagnosticqueries here, NOT outputvocab.
+
+Log-space sum-product DP state(partialcharacterprefix,last_raw_token);absorbing
+found mass records each raw path at first complete match only. Other-word dead
+state resets on boundary. Stable prefix/suffix logadds exclude repeated raw
+label without near1 subtraction. Newly repeated label remains at same DFAstate;
+blank resets last rawlabel but emits nothing. Save perframefirst-completionmass,
+EOFcompletionmass and exactprobability; model distribution only, NOT calibrated
+word correctness or RU/EN frameLID. Conserve found+unfound probability perframe.
+For multiwordphrase collapse consecutiveboundarysymbols; require initial/trailing
+wordboundaries, allow re-start at internalwordboundary on mismatch using a
+prefix automaton rather than dropping possible suffix matches.
+
+Before realdata, new small-vocabulary enumeration checks SAME algorithm against
+all3^5 raw paths (blank,a,b) for repeatedlabels/wordboundary/EOF; controlscontain
+no privateaudio and are not ASRaccuracy. These are distinct newalgorithmcontrols,
+not retriesofdeniedround11unittests. Checkstepmassandboundsinactual28recordrun.
+No transcriptdecode, modelweights/joiner/encoder/audio load, no thresholdselection,
+noautomaticall-RUfallback, no arbitrarycoefficients. Evidence determineswhether
+softpathsupportmeritsfutureopenjointsearch; negativeoutcome staysnegative.
+HostNumPyCPU,agent600sbatch/RSS1536MiB/floor2048/swap256;samehashes,immutable
+round13directory/manifest. Do notclaimwordconfidence/qualityfrommathcorrectness.
+
+Verdict: Extend — existing numerical CTC/retained-input conventions; repo has
+fixedpathforcealign and maxphrasealignment but not all-segmentations occurrence
+probability. No additional runtime/dependency. Background reference:
+https://github.com/huggingface/audio-transformers-course/blob/main/chapters/en/chapter3/ctc.mdx
+explains CTC collapse and multiple paths; custom finitewordevent algorithm is
+ours, not a claimed official implementation or published benchmark.
