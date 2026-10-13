@@ -14,17 +14,17 @@ from pilot import rss_bytes
 from run import memory_snapshot
 
 
-def prepare(root):
+def prepare(root,result_name='likelihood-sequential'):
     from jinja2.sandbox import ImmutableSandboxedEnvironment
-    directory=root/'likelihood-results';directory.mkdir(exist_ok=False)
+    directory=root/result_name;directory.mkdir(exist_ok=False)
     suite=json.loads((root/'suite.json').read_text());corpus=json.loads((root/'corpus-order-suite.json').read_text());extra=json.loads((root/'corpus-suite.json').read_text())
     rows=suite['rows']+corpus['rows']+[r for r in extra['rows'] if r['kind']=='synthetic_text_control']
     props=json.loads((root/'results-qwen3/server-props.json').read_text());template=ImmutableSandboxedEnvironment(trim_blocks=True,lstrip_blocks=True).from_string(props['chat_template'])
     def prefix(text):
         return template.render(messages=[{'role':'system','content':EDIT_SYSTEM},{'role':'user','content':'<transcript>\n'+text+'\n</transcript>'}],tools=None,add_generation_prompt=True,enable_thinking=False)
     # Preserve exact template, rendered prompt and candidate text independently.
-    requests=[{'purpose':'batch64_numerical_smoke','prefix':prefix('Не включай режим B.'),'answer':'Не включай режим B.','chunk':64},
-              {'purpose':'batch1_numerical_smoke','prefix':prefix('Не включай режим B.'),'answer':'Не включай режим B.','chunk':1}]
+    requests=[{'purpose':'causal_prefix','prefix':prefix('Не включай режим B.'),'answer':'Не включай режим B.','chunk':1},
+              {'purpose':'causal_prefix_with_suffix','prefix':prefix('Не включай режим B.'),'answer':'Не включай режим B. Используй режим C.','chunk':1}]
     cache={}
     for row in rows:
         if row.get('source') and digest(row['source'])!=row['source_sha256']:raise ValueError('Changed saved ASR receipt')
@@ -32,7 +32,7 @@ def prepare(root):
         for candidate in sorted(set(row['candidates'])):
             key=(row['prefix'],candidate)
             if key not in cache:
-                cache[key]=len(requests);requests.append({'purpose':'candidate','prefix':row['prefix'],'answer':candidate,'chunk':64})
+                cache[key]=len(requests);requests.append({'purpose':'candidate','prefix':row['prefix'],'answer':candidate,'chunk':1})
             row['score_request_indices'][candidate]=cache[key]
     manifest={'model_sha256':'9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031','rows':rows,'requests':requests,
               'primary_score':'mean target log probability including im_end','sum_is_diagnostic_only':True,'template':props['chat_template'],
@@ -46,8 +46,8 @@ def prepare(root):
     print('Frozen cases',len(rows),'unique candidate scores',len(requests)-2,'numerical smoke passes',2)
 
 
-def run(root):
-    directory=root/'likelihood-results';manifest=json.loads((directory/'manifest.json').read_text());binary=root/'likelihood-native/candidate-likelihood';model=root/'qwen3-q8.gguf'
+def run(root,result_name='likelihood-sequential'):
+    directory=root/result_name;manifest=json.loads((directory/'manifest.json').read_text());binary=root/'likelihood-native/candidate-likelihood-sequential';model=root/'qwen3-q8.gguf'
     if digest(model)!=manifest['model_sha256']:raise ValueError('Model changed')
     output=directory/'scores.jsonl'
     if output.exists():raise FileExistsError('Refusing repeated or unknown scoring cells')
@@ -83,7 +83,10 @@ def run(root):
                     'negative_tokens_before_after':None if chosen is None else [sum(t in ('не','нет','без','not','no') for t in normalized(x)) for x in (row['input'],chosen)],
                     'evaluation_s':sum(scored[i]['elapsed_s'] for i in set(row['score_request_indices'].values()))}
             save(directory/(row['id']+'.json'),record);rows.append(record)
-        result['rows']=rows;result['numerical_smoke_max_difference']=max(abs(a-b) for a,b in zip(scored[0]['target_logprobs'],scored[1]['target_logprobs']));result['status']='success'
+        result['rows']=rows
+        shared=next((i for i,(a,b) in enumerate(zip(scored[0]['token_ids'],scored[1]['token_ids'])) if a!=b),min(len(scored[0]['token_ids']),len(scored[1]['token_ids'])))
+        targets=shared-scored[0]['prefix_tokens'];result['causal_smoke_shared_targets']=targets
+        result['causal_smoke_max_difference']=max(abs(a-b) for a,b in zip(scored[0]['target_logprobs'][:targets],scored[1]['target_logprobs'][:targets]));result['status']='success'
         print('Completed',len(rows),'cases; controls',sum(r['normalized_equal_reference'] is True for r in rows),'/',sum(r['reference'] is not None for r in rows))
     except Exception as error:result['error']=type(error).__name__+': '+str(error);raise
     finally:
@@ -95,4 +98,6 @@ def run(root):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=('prepare','run'));p.add_argument('root',type=Path);a=p.parse_args();(prepare if a.mode=='prepare' else run)(a.root)
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=('prepare','run'));p.add_argument('root',type=Path);p.add_argument('--result-name',default='likelihood-sequential');a=p.parse_args()
+    if a.mode=='prepare':prepare(a.root,a.result_name)
+    else:run(a.root,a.result_name)

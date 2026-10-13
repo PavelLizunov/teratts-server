@@ -96,9 +96,9 @@ int main(int argc, char **argv) {
         std::ifstream in(argv[2], std::ios::binary); std::ofstream out(argv[3]);
         if (!in || !out) throw std::runtime_error("Cannot open input/output");
         ggml_backend_load_all_from_path(argv[4]); llama_backend_init();
-        auto mp=llama_model_default_params(); mp.n_gpu_layers=0;
+        auto mp=llama_model_default_params(); mp.n_gpu_layers=0; mp.use_extra_bufts=false;
         model=llama_model_load_from_file(argv[1],mp); if(!model) throw std::runtime_error("Model load failed");
-        auto cp=llama_context_default_params();cp.n_ctx=4096;cp.n_batch=64;cp.n_ubatch=64;
+        auto cp=llama_context_default_params();cp.n_ctx=4096;cp.n_batch=1;cp.n_ubatch=1;
         cp.n_seq_max=1;cp.n_threads=2;cp.n_threads_batch=2;cp.type_k=GGML_TYPE_F16;cp.type_v=GGML_TYPE_F16;
         cp.offload_kqv=false;cp.op_offload=false;
         ctx=llama_init_from_model(model,cp);if(!ctx) throw std::runtime_error("Context creation failed");
@@ -109,15 +109,17 @@ int main(int argc, char **argv) {
         for(unsigned i=0; i<n; ++i) {
             if(std::chrono::duration<double>(Clock::now()-start).count()>600) throw std::runtime_error("Scoring time limit");
             auto prefix=read_string(in);auto answer=read_string(in);auto chunk=read_u32(in);
-            if(chunk!=1 && chunk!=64) throw std::runtime_error("Unsupported batch size");
+            if(chunk!=1) throw std::runtime_error("Sequential-only method requires chunk1");
             auto s=score(ctx,v,prefix,answer,chunk);output(out,i,s);
             if(i==0) reference=s;
             if(i==1) {
-                if(s.tokens!=reference.tokens || s.logprobs.size()!=reference.logprobs.size()) throw std::runtime_error("Numerical smoke token mismatch");
+                size_t shared=0;
+                while(shared<std::min(s.tokens.size(),reference.tokens.size()) && s.tokens[shared]==reference.tokens[shared]) ++shared;
+                if(s.prefix!=reference.prefix || shared<=s.prefix+2) throw std::runtime_error("Insufficient shared causal tokens");
                 double error=0;
-                for(size_t j=0;j<s.logprobs.size();++j) error=std::max(error,std::abs(s.logprobs[j]-reference.logprobs[j]));
-                std::cerr<<"SMOKE_MAX_ABS_LOGPROB_DIFF="<<error<<std::endl;
-                if(error>1e-3) throw std::runtime_error("Batch versus token-at-a-time discrepancy");
+                for(size_t j=0;j<shared-s.prefix;++j) error=std::max(error,std::abs(s.logprobs[j]-reference.logprobs[j]));
+                std::cerr<<"CAUSAL_SHARED_TOKENS="<<shared-s.prefix<<" MAX_ABS_LOGPROB_DIFF="<<error<<std::endl;
+                if(error>1e-6) throw std::runtime_error("Future suffix changed causal log probabilities");
             }
         }
         if(in.peek()!=std::char_traits<char>::eof()) throw std::runtime_error("Trailing input data");

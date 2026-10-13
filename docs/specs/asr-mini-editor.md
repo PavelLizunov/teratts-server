@@ -158,6 +158,34 @@ based on audio results. Check protected negatives/names/numbers and incomplete
 thoughts; compare selected real text but do not claim WER without human gold.
 Other session owns the newer GigaAM29-record experiment; do not duplicate it.
 
+### Numerical preflight recovery
+Initial native launch stopped after exactly2 synthetic smoke passes, before any
+of110 frozen candidate paths. Identical target token IDs but max per-token
+logprob difference0.0320915 between chunk64 and chunk1 exceeds fixed1e-3 gate.
+The gate was not relaxed. Native llama.cpp documents batch-dependent logits;
+quantized/repacked CPU kernels are a hypothesis, not yet proven cause.
+One attributable runtime recovery disables optional CPU weight repacking
+(use_extra_bufts=false), leaving weights, text, KV and tolerance unchanged.
+Run in a separate result directory with exact same frozen manifest/input hashes.
+Retain failed output and execute no corpus scoring unless smoke passes. This is
+not repeated failed model-quality evaluation: no candidate path was consumed.
+
+### Sequential-only replacement after two failed batch comparisons
+Disabling repacking produced the identical0.0320915 mismatch; repacking hypothesis
+not supported. Both trials consumed only synthetic smoke, no candidate paths.
+Do not relax1e-3 or claim batched equivalence. Change numerical method to entirely
+single-token decode (prefix AND answer, n_batch=n_ubatch=1). This avoids mixing
+GEMV/GEMM batch paths; exact underlying kernel cause remains unproven. Keep model,
+template, candidate set, score normalization and resource/time limits unchanged.
+Replace failed batched method rather than silently pass its test. Numerical
+preflight now checks causal prefix invariance: same prefix/answer with extended
+future text must have identical logprobs on shared token prefix (tolerance1e-6).
+Save two smoke outputs and explicitly label this narrower property; it is not
+independent native-vs-reference validation. The single-token score branch is
+experiment-only and must not be marketed as exact cross-runtime likelihood.
+New immutable outputdirectory likelihood-sequential;110 candidatepaths still
+untouched. Run all within600s scoring/900s overall; retain partial if limit hit.
+
 ## Decision and continuation
 No automatic promotion: free editing, index-only selection and embedding-only
 ranking are not supported as a usable transcription repair by this evidence.
