@@ -196,3 +196,28 @@ probability. No additional runtime/dependency. Background reference:
 https://github.com/huggingface/audio-transformers-course/blob/main/chapters/en/chapter3/ctc.mdx
 explains CTC collapse and multiple paths; custom finitewordevent algorithm is
 ours, not a claimed official implementation or published benchmark.
+
+### Round13 observed result
+Frozen1ed85cc5af5aa0b2f74961810b687fdd5efadd21,job1868exit0collected. All28records,
+133unique record/target events,28auxiliaryrecordwords,4fixedhints perrecordwith
+intersectionsdeduplicated. Greedypresents3events;allother130evaluatedwithout
+forcingtarget. Tennewenumerationcontrolsactuallyexecutedbeforecorpus:6targets
+x243paths+4targets x256paths, maximumabsoluteerror2.220446e-16. Notthousands of
+modelcalls/audioqualitytests. Corpusmaximumlogmassconservationerror1.851958e-14.
+No newtranscripts/modelcalls/headroutingorproductionchanges. Allfullperframe
+firstcompletionmassesandEOFmassretained;nofitteddecisionthreshold.
+
+Nonargmaxevidenceexistsbutoftenveryweak. Privatec018DSHevent.0004313467937,
+c028ChatGPTevent5.89514744e-7;earliercontextualoutputshadthesespellings butare
+notgold. RepeatedauxChatGPTc0217.43832638e-12,c0264.62691603e-11;thisobservation
+isnotgeneralizablethreshold. Topnon-greedyauxevent.0839717347;greedyGemini/GPT
+.3263792458/.1249878047. Probabilitydependsliteralword/phraseandlength,allpossible
+subwordsegmentationsincludedbutphonetic/transliterated/spaced-acronymaliasesNOT.
+No reliablelanguageconfidencemodelclaimed. Need audio-supported broadercandidate
+pathsorbetterauxiliarytiming,notstackinguncalibratedscoresanddeclaringtruth.
+
+Worker13.407699s/supervised13.628471s;medianrecord.376547s;highwater61.15625MiB,
+sampled61.242188MiB,minavailable8965.65625MiB,swapgrowth0. Limits1536MiBprocess /
+2048MiBavailablefloor,notallocations. LocalNumPy-onlyhost,savedDeckarrays;noDeck
+latencyclaim. Tencontrolsnewalgorithmactualrun,notdeniedround11unittestretries.
+FullobservationsoutsideGit and cumulativeprivateHTML; rawASRbaselineunchanged.

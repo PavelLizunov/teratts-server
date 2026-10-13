@@ -981,6 +981,35 @@ production or main-pipeline integration. `corroborated_report.py` records all
 comparisons privately; the [repair contract](../../docs/specs/asr-routing-repair.md)
 retains the fixed method, missing human gold and resource limits.
 
+### All-path CTC whole-word occurrence diagnostic
+
+`occurrence_diagnostic.py pilot MANIFEST` consumes the same saved English CTC
+arrays, not audio or model weights. `ctc_occurrence.py` computes an exact event
+probability under the head distribution: the collapsed subword stream contains
+the requested whole word/phrase. A deterministic character-prefix automaton is
+crossed with the previous raw CTC label, summing every raw path once. All piece
+segmentations of the same spelling contribute; repeated labels collapse before
+blank removal and full word boundaries are required. Log-space exclude-one sums
+avoid subtraction near probability1. Found/unfound mass conservation is checked.
+
+This is not forced alignment, a lexical constraint on final output, calibrated
+word confidence, phonetic alias search or language ID. First-completion mass is
+not a ground-truth audio boundary. No transcript or routing is changed, and no
+probability threshold is selected. Diagnostic targets are the four existing
+hints plus unique representable auxiliary English words, never comparator text.
+
+All28 retained head sets completed133 word/phrase events; only3 requested events
+were present in greedy output. Ten small-vocabulary enumeration controls matched
+within2.23e-16; maximum corpus log-mass conservation error1.86e-14. These establish
+numerical agreement, not audio accuracy. Some previously recovered technical
+names still have very small model mass. This does not justify an automatic gate.
+Worker13.408s, supervised13.628s, medianrecord.377s, highwaterRSS61.156MiB,
+sampled61.242MiB, minimumavailable8965.656MiB, swapgrowth0; local NumPy analysis,
+not Deck or full-ASR latency. No new model call, encoder pass or transcript.
+`occurrence_report.py` preserves all133 private observations in the cumulative
+report. Source/algorithm scope remains in the
+[repair contract](../../docs/specs/asr-routing-repair.md).
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

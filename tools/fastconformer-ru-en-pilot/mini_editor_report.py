@@ -51,6 +51,10 @@ def report(root,filename='mini-editor-results.html'):
         from corroborated_report import section as corroborated_section
         sections.insert(1,corroborated_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 12</p><h1>Строгое подтверждение отсекает и нужный английский.</h1><p class="lead">Проверка подсказок по native CTC убрала четыре отказа на повторах, но все 16 изменённых маршрутов стали полностью русскими. Это отрицательный результат для двуязычной задачи, не улучшение точности.</p></header>'''
+    if (root.parent/'routing-repair/round13-observation.json').exists():
+        from occurrence_report import section as occurrence_section
+        sections.insert(1,occurrence_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 13</p><h1>Акустические альтернативы теперь измеряются без top1-фильтра.</h1><p class="lead">Рассчитана масса 133 словесных событий на 28 сохранённых записях. Это новый диагностический инструмент, но ещё не надёжный критерий коррекции: прежние технические названия могут иметь очень малую массу.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
