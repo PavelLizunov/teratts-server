@@ -1083,6 +1083,43 @@ highwatermax135.320MiB/samplemax133.254MiB,minavailable8887.840MiB,swap0. Host
 only, not Deck/full-chain timing. Source/limits/results are in the
 [repair contract](../../docs/specs/asr-routing-repair.md).
 
+### Auxiliary phrase context scoped to native intervals
+
+`routing_repair.py` supports opt-in `context_mode: auxiliary-interval-v1`; default
+remains `global-fixed`. The mode uses each existing auxiliary English phrase's
+unchanged trained IDs as a soft context path only inside its already aligned
+interval. Outside the interval there are no context hints. The full trained
+EN/RU vocabulary remains open; Russian predictor history and CTC/output state
+continue without independent region decoding or waveform segmentation.
+
+`interval_context.py` schedules the existing ContextBias graphs. At interval exit,
+a virtual context-only boundary completes whole phrases/refunds unfinished credit,
+then clears the context state. It emits no acoustic token. Because identical text
+can earn different credits at different times, scoped search partitions states
+and same-text sums by accumulated credit. Final top4 may contain the same string
+with different credit; it does not claim exact text posterior marginalization.
+Reuse requires matching mode, score, graph retention and auxiliary phrase IDs,
+not merely matching routes. Raw acoustic pieces and formatting remain separate.
+
+All10previous English routes completed with unchanged intervals and11proposal
+phrases;6/10texts changed from baseline. Literal proposal agreement rose5/11→10/11,
+but is now coupled evidence, not accuracy. Some previously crowded-out names
+appear and earlier ChatGPT spellings remain; an auxiliary spelling error and
+Latinization of Russian are also reinforced. One proposed name still loses to
+an open-vocabulary alternative. Do not promote this mode or combine handpicked
+fragments. Human gold0; original global baseline and production are unchanged.
+
+Six credit-settlement cases, two tiny open searches and a state-key observation
+ran before the corpus: a weak hint can lose, incomplete credit refunds, and
+same-text paths with different credits stay separate. No full decoder parity or
+ASR quality claim. Ten new finaldecodes,0newQwen/encoderpasses. Hostwall115.523s,
+decode109.723s/median5.614s,longest55.984s; highwater199.398MiB,
+sampled199.551MiB,minavailable8826.313MiB,swap0,maxstates58400. These are not Deck
+or full-chain timings; cost growth is not profiler-attributed.
+`interval_context_report.py ROOT` records all comparisons and candidates in the
+private cumulative HTML. The [repair contract](../../docs/specs/asr-routing-repair.md)
+contains frozen scope, invariants and observed limitations.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

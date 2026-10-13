@@ -448,3 +448,42 @@ all10 outcomes, new names vs lost names, RU changes and resources in privateHTML
 No production promotion, fullchain/Deck or accuracy claim from successful scripts.
 Verdict: Extend existing ContextBias and state_transducer; new small scheduling
 module, no dependency/model download. No coefficient grid or hard phrase filter.
+
+### Round16 observed result
+Frozenruntime f757a8b,job2197collectedexit0. All10selectedrecords completed new
+final decodes, all10routes exactly unchanged. Eleven original auxiliary English
+phrases became interval-local paths. Baseline literal proposed-phrase matches5/11,
+zero-control3/11,new10/11; coupled proposal agreement, NOT accuracy or timing
+validation. Against baseline6/10texts changed; againstzero7/10. Russian token
+histories changed in2(c005,c022),9bestoutputs have nonzero credit. Currenttop4
+contain no duplicate strings, although same-text/different-credit is supported.
+
+Private observations: c003globalDSH→GPT; c015globalDSH→GitHub; c022→GitHub but
+precedingRussianfragment and changedopeningremain. c027/28retainChatGPT(Pro).
+c018copiesQwenerrorGSHinsteadoldDSH throughrewardedacousticpath; c002reinforces
+LatinizationofRU. c009GitHubstilllosesandalltop4credit0:softbiasnotclosedlexicon.
+No selective splicing or hand-added names. Hold experimental; not baseline/production
+promotion. Two dependencies remain: correct auxiliary language/spelling and
+native phrase boundary/acoustic support. Identified gains do not establish gold.
+
+Six new credit-settlement controls, two tiny open-search controls and explicit
+credit-key identity control ran successfully before corpus. Weakproposal rejected;
+identicaltextpaths with credits0and7.5 retained separately. Not fulldecoderparity
+orquality. Runtime checks validatedtrainedpathconstraints, hashes and schedule;
+no new Qwen/audioencoder forward. Default global scoring remains unchanged in
+logic; consumed default corpus was not rerun. Production files untouched.
+
+Host supervised115.522938s,decode109.723221s/median5.614234s;
+longestc01555.984132s. Highwater199.398438MiB,sampled199.550781MiB,
+minavailable8826.3125MiB,swap0,maxstates58400 (oldglobal8364).
+Extra credit partitions increase state capacity, but no profiler attribution or
+clean speed comparison. Larger state search still approximate; credit timing
+classes are not marginalized across final candidates. Human gold0. Archive
+agreement stays5small/5substantial,notaccuracy. NoDeck/fullchain timing claim.
+
+Next not frozen: c009fails despite correct-looking auxiliary name, c022duplicates
+Russian namefragment. Inspect existing fixed phrase intervals against retained
+RU/EN acoustic evidence and search alternatives before adjusting boundaries.
+Do not pad waveform/hand-move intervals to desired output or raisecontextscore.
+Also auxiliary Latinization/GSH failure needs independent evidence; simply trust
+Qwenmore is contradicted. Preserve all methods and raw provenance.

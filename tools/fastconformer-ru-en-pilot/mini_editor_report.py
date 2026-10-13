@@ -66,6 +66,10 @@ def report(root,filename='mini-editor-results.html'):
             from context_ablation_report import graph_section
             sections.insert(1,graph_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 15</p><h1>Подсказки влияют на выбор имени. Их отключение не исправляет акустику.</h1><p class="lead">Два контроля на всех десяти английских маршрутах: нулевой бонус без контекстного автомата и с сохранённым автоматом. В обоих исчезли прежние DSH и ChatGPT, но GitHub не восстановился. Исходный вариант сохранён.</p></header>'''
+    if (root.parent/'routing-repair/round16-observation.json').exists():
+        from interval_context_report import section as interval_context_section
+        sections.insert(1,interval_context_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 16</p><h1>Локальная подсказка помогает имени — и может закрепить ошибку.</h1><p class="lead">Все десять английских маршрутов проверены с фразой Qwen только в её интервале. GitHub и GPT появились, ChatGPT сохранился, но GSH и ошибочная латинизация тоже усилились. Общая задача пока не решена.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
