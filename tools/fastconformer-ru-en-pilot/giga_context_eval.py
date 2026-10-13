@@ -46,13 +46,13 @@ def load_model(root):
     cfg = json.loads((root / 'config.json').read_text())['cfg']['model']['cfg']
     if cfg['model_name'] != 'multilingual_large_ctc':
         raise ValueError('Unexpected GigaAM variant')
-    # Retain every original tensor, including frontend buffers. Avoid a second
-    # initialized FP32 model copy; assign=True materializes exact mmap weights.
+    # Retain every original tensor, including frontend buffers. The official
+    # frontend performs scalar checks and cannot initialize under meta. Construct
+    # normally, then replace initialized storage with exact mmap checkpoint tensors.
     state = torch.load(root / 'pytorch_model.bin', weights_only=True, mmap=True, map_location='cpu')
     if not all(k.startswith('model.') for k in state):
         raise ValueError('Unexpected original state keys')
-    with torch.device('meta'):
-        model = module.GigaAMASR(OmegaConf.create(cfg))
+    model = module.GigaAMASR(OmegaConf.create(cfg))
     loading = model.load_state_dict({k[len('model.'):]: v for k, v in state.items()}, strict=True, assign=True)
     model.eval()
     if any(x.device.type != 'cpu' for x in list(model.parameters()) + list(model.buffers())):
