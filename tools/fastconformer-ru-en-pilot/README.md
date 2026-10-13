@@ -954,6 +954,33 @@ inspected but not separately exercised on consumed audio. See
 [repair contract](../../docs/specs/asr-routing-repair.md); private complete output
 is appended by `routing_repair_report.py`, never committed to Git.
 
+### Native CTC corroboration diagnostic — rejected as bilingual gate
+
+The retained-data runner additionally accepts
+`"timing_method": "ctc-corroborated-words-v1"`. `corroborated_timing.py` matches
+auxiliary English word occurrences monotonically and exactly against the native
+English CTC greedy transcript, with maximum-cardinality LCS. Only matching
+occurrences supply timing labels; unmatched occurrences become wildcard gaps.
+Final open trained-head decoding does not copy either transcript. If no English
+word matches, the result explicitly records English abstention/all-Russian
+fallback, not a successful bilingual solution. No threshold or fuzzy matching.
+
+On the same28 retained head sets,16 new decodes plus10 exact-route reuses
+returned26 outputs;2 unsupported auxiliary words still failed. All16 changed
+routes were all-Russian fallbacks. Only3/223 auxiliary English occurrences
+matched (223 includes146 repeats from one record). English frames remained in
+2 records versus14 previously successful routed records;11/22 comparable outputs
+lost prior English words, and12/22 strings changed. Previous outputs are not gold,
+but these losses reject top1 agreement as an automatic bilingual gate. Four
+repetition failures returning text do not establish increased accuracy.
+
+Local batch37.555s, sum16newdecodes25.991s, median.905s; sampledRSS110.230MiB,
+minimumavailable9239.797MiB, swapgrowth0. No encoder/WAV pass. Faster Russian-only
+decoding is not a speed improvement to equivalent bilingual recognition. No
+production or main-pipeline integration. `corroborated_report.py` records all
+comparisons privately; the [repair contract](../../docs/specs/asr-routing-repair.md)
+retains the fixed method, missing human gold and resource limits.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

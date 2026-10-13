@@ -125,3 +125,29 @@ If exact gate over-rejects true-looking names, retain negative result and do not
 loosen it post hoc. This is useful quality-focused counterexample, not automatic
 promotion or reason to silently adopt a monolingual fallback. No rerun of denied
 round11 unittests; method invariants checked in its actual authorized execution.
+
+### Round12 observed result
+Frozen code3e48ed70c3ef6c59576144b7cdc533cff3088975, job1820exit0collected.
+28completeheadsets:16newdecodes,10exact-route/outputreuses,2unchangedunsupported.
+All16newrouteswereall-Russianfallback;26outputs vs22round11, with4priorrepetition
+failuresnowreturningRussiantext. No usefulqualitypromotion: only3/223auxEnglish
+wordoccurrencesconfirmed (denominator includes146repeatsfromonesample). English
+framesremainonly2records, vs14previouslysuccessfulEnglishroutedrecords.
+12/22oldoutputschange;11/22loseatleastonepriorEnglishword. Prioroutputsnotgold:
+absenceisnotWER, but disablingEnglishdoesnotmeetrequestedbilingualoutcome.
+Specificpreviouslyrecoveredtechnicalnamesarenowtransliteratedoromitted;full
+privatepairsretained. Exactgreedygateisnotrecommended;donotloosenposthoc.
+Batch37.555438s,16newdecode sum25.990502s/median.904819s;sampledRSS110.230469MiB,
+minavailable9239.796875MiB,swapgrowth0.0MiB;CPUhostnotDeck. Lowerlatencyreflects
+all-Russianrouting,notaspeedupofsamebilingualwork. Noencoder/WAVpasses.
+Archivedrawagreementon22samepairs changed from2same/11small/9substantial to
+3same/13small/6substantial, butthisisNOTaccuracyorqualitygainandcannotjustifygate.
+Observedretainedarrays/reusedsourceshashchecked,realpathinvariantsexecuted;
+noadditionalunitchecksorblockedcommandretries. Production/primarypipeline
+unchanged;newgateonlyexplicit routing_repair timing_method setting. Reportadds
+all28pairsandfallbacklabelsintocumulativeprivateHTML,sourcecontainsnoprivategold.
+
+NextmechanismmustretainacousticallyplausiblenonargmaxEnglishlabelsandalsoallow
+Whispertimingtobeuncertain; exacttop1agreementcannotachieveboth. Candidate
+RNNT/CTCword-boundaryjointsearchortrainedlocalframeLIDneedsfixedwell-defined
+objectivebeforeexecution; no newvariantselectedorlaunchpendingthisround.

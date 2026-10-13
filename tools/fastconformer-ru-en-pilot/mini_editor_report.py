@@ -47,6 +47,10 @@ def report(root,filename='mini-editor-results.html'):
     if (root.parent/'routing-repair/round11-results/supervisor-summary.json').exists():
         from routing_repair_report import section as routing_section
         sections.insert(1,routing_section(root))
+    if (root.parent/'routing-repair/round12-observation.json').exists():
+        from corroborated_report import section as corroborated_section
+        sections.insert(1,corroborated_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 12</p><h1>Строгое подтверждение отсекает и нужный английский.</h1><p class="lead">Проверка подсказок по native CTC убрала четыре отказа на повторах, но все 16 изменённых маршрутов стали полностью русскими. Это отрицательный результат для двуязычной задачи, не улучшение точности.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
