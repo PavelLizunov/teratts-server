@@ -20,8 +20,12 @@ def cell(manifest_path,clip):
     from russian_boundary import NativeWordRules
     from state_transducer import search
     cfg=json.loads(Path(manifest_path).read_text());row=next(r for r in cfg['recordings'] if r['id']==clip)
-    output=Path(cfg['output'])/(clip+'.json');start=time.monotonic();guard=Guard(600,1536)
-    result={'id':clip,'status':'failed','encoder_rerun':False,'audio_modified':False,'new_decoder_run':False,'source_commit':cfg['source_commit']}
+    output=Path(cfg['output'])/(clip+'.json')
+    if output.exists():raise FileExistsError('Consumed/unknown routing cell')
+    method=cfg.get('timing_method','english-only')
+    if method not in ('english-only','ctc-corroborated-words-v1'):raise ValueError('Unknown timing method')
+    start=time.monotonic();guard=Guard(600,1536)
+    result={'id':clip,'status':'failed','timing_method':method,'encoder_rerun':False,'audio_modified':False,'new_decoder_run':False,'source_commit':cfg['source_commit']}
     try:
         receipts={k:json.loads(Path(row[k]).read_text()) for k in ('aux','eng','rus')}
         for key in receipts:
@@ -42,6 +46,10 @@ def cell(manifest_path,clip):
         with np.load(Path(row['eng']).with_suffix('.npz')) as f:lp=f['values'].astype(np.float64)
         with np.load(Path(row['rus']).with_suffix('.npz')) as f:encoded=f['values']
         lp[:,0]=-np.inf;lp-=np.logaddexp.reduce(lp,axis=1,keepdims=True)
+        if method=='ctc-corroborated-words-v1':
+            from corroborated_timing import corroborated_sequence
+            sequence,corroboration=corroborated_sequence(words,lp,sp,ep['english_case'])
+            result.update(corroboration=corroboration,auxiliary_sequence=sequence)
         events=[{'head':'eng','native_frame':i,'center_s':i*.08,'log_probs':v} for i,v in enumerate(lp)]
         events.extend({'head':'rus','native_frame':i,'center_s':i*.04+rp['nominal_origin_s']} for i in range(encoded.shape[-1]));events.sort(key=lambda e:e['center_s'])
         before=time.monotonic()
@@ -49,16 +57,25 @@ def cell(manifest_path,clip):
         except ValueError as error:
             result.update(status='unalignable_auxiliary',error=str(error));return
         result.update(alignment=alignment,alignment_s=time.monotonic()-before)
-        if row.get('old_alignment'):
+        prior=None;prior_path=None
+        if row.get('prior_result'):
+            prior_path=row['prior_result']
+            if digest(prior_path)!=row['hashes']['prior_result']:raise ValueError('Prior experiment changed')
+            prior=json.loads(Path(prior_path).read_text())
+            old=prior.get('alignment')
+        elif row.get('old_alignment'):
             if digest(row['old_alignment'])!=row['hashes']['old_alignment']:raise ValueError('Old routing changed')
             old=json.loads(Path(row['old_alignment']).read_text())
+            prior_path=row['old_final']
+            if digest(prior_path)!=row['hashes']['old_final']:raise ValueError('Old final changed')
+            prior=json.loads(Path(prior_path).read_text())
+        else:old=None
+        if old is not None:
             same=alignment['selected_events']==old['selected_events'];result['selected_events_identical']=same
-            if not same:raise ValueError('Unexpected route regression; do not run changed successful row')
-            if not row.get('old_final'):raise ValueError('Missing successful old decoder receipt')
-            if digest(row['old_final'])!=row['hashes']['old_final']:raise ValueError('Old final changed')
-            final=json.loads(Path(row['old_final']).read_text())
-            if final['status']!='success':raise ValueError('Old aligned record lacked successful decoder')
-            result.update(status='reused_unchanged',reused_final_sha256=digest(row['old_final']),search=final['search'],runtime_origin='saved Deck result, no rerun');return
+            if method=='english-only' and not same:raise ValueError('Unexpected route regression')
+            if same:
+                if not prior.get('search',{}).get('hypotheses'):raise ValueError('No previous complete output to reuse')
+                result.update(status='reused_unchanged',reused_final_sha256=digest(prior_path),search=prior['search'],runtime_origin='saved earlier result, no rerun');return
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
         result['search']=search(selected,encoded,lp,model,rules,2.5,guard.check,same_text_logsum=True)

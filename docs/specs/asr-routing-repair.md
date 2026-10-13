@@ -90,3 +90,38 @@ limitation must remain explicit. Executionmanifest source_commit names parent
 95711c8 because frozen beforecommit; exact source_files digests are authoritative,
 executed implementationcheckpoint957b46b. Laterhypothesis-emptyguard added but
 no successfulcellrepeated toexerciseit. AllprivateexamplesremainoutsideGit.
+
+## Round12 — one acoustically corroborated timing method (frozen before run)
+Cause: mandatory full auxiliary English phrases can hallucinate repetitions and
+consume Russian time. New independent *timing* gate uses existing trained English
+CTC argmax path, not an editor or another encoder. Collapse CTC repeats before
+removing blank; exclude unknown0 identically to established decoder. Decode
+publisher subwords to words with original separators/punctuation policy. Extract
+exact representable auxiliary English words with round11 extractor; retain
+unsupported Latin/mixed words as explicit failure (no transliteration/repair).
+Use deterministic maximum-cardinality monotone exact-word matching (LCS) between
+auxiliary English word occurrences and native greedy English word occurrences.
+No fuzzy match, similarity threshold, coefficient grid or human words. Matches
+retain original auxiliary trained token IDs. Unmatched English occurrences and
+original Russian/numeric gaps become separators, not output text. Repeated
+auxiliary words can therefore match no more occurrences than emitted by the CTC
+path. Reuse unchanged align_phrases over corroborated runs to obtain routing;
+matched greedy frame spans are diagnostic only, not manually shifted boundaries.
+If no word matches, record explicit all-Russian fallback/English abstention;
+never call this successful bilingual recognition. This remains uncalibrated
+cross-model agreement, NOT frame-LID; genuine names absent in greedy may be lost.
+The final open trained-head state-forward decoder and fixed hints2.5 do not change.
+
+Apply to all28 saved corpus head sets in original order, compare with round11
+routes and outputs, reuse identical successful routes without decoder repetition.
+Changed routes get one new decode, preserve every result including regressions.
+Human gold remains0: describe changed tokens, loss of previous names and agreement
+with archived raw model text, never accuracy/WER. Corpus is exploratory, not blind.
+No training, no waveform/encoder pass, no new baseline, no service/config changes.
+Budget unchanged: localCPU2;600s/record,900s/batch,1536MiB RSS,2048MiB availablefloor,
+256MiB swapgrowth. Hash source/inputs, preserve round11 receipts. All model calls
+are native GigaAM joiner/predictor only; report local rather than Deck timing.
+If exact gate over-rejects true-looking names, retain negative result and do not
+loosen it post hoc. This is useful quality-focused counterexample, not automatic
+promotion or reason to silently adopt a monolingual fallback. No rerun of denied
+round11 unittests; method invariants checked in its actual authorized execution.

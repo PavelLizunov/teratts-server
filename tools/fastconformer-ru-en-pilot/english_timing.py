@@ -6,13 +6,18 @@ enters either acoustic head. Latin-like unsupported words still fail explicitly.
 import unicodedata
 
 
-def english_timing_labels(text, processor, english_case='original'):
+def auxiliary_words(text):
     words=[];pending=''
     for char in text:
         if char.isspace() or (unicodedata.category(char)[0] in 'PZS' and char!="'"):
             if pending:words.append(pending);pending=''
         else:pending+=char
     if pending:words.append(pending)
+    return words
+
+
+def english_timing_labels(text, processor, english_case='original'):
+    words=auxiliary_words(text)
     if not words:raise ValueError('Empty auxiliary proposal')
     sequence=[];provenance=[]
     for word in words:
