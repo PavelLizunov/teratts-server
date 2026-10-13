@@ -888,6 +888,43 @@ invented. The serialization fix is for future calls, not a repeated inference.
 Neither free editing, index generation nor embedding-only selection is approved
 for automatic transcript replacement by these observations.
 
+### Independent conditional candidate likelihood
+
+`candidate_likelihood.cpp` is a small driver linked to the unmodified pinned
+b11429 libllama C API. `candidate_likelihood.py` freezes exact Jinja-rendered
+prompts and candidate text, supervises resource limits and retains every target
+token/log probability. Build against the version-matched public headers and
+libraries, placing the binary at `ROOT/likelihood-native/candidate-likelihood-sequential`.
+It uses Qwen3 Q8_0, CPU2, FP16 KV, context4096, no weight repacking or generation.
+
+```sh
+python candidate_likelihood.py prepare /private/mini-editor
+python candidate_likelihood.py run /private/mini-editor
+python mini_editor_report.py /private/mini-editor --filename mini-editor-round10.html
+```
+
+Each candidate is scored independently as an assistant continuation conditioned
+on original ASR. Primary score is mean full-vocabulary log probability including
+end-of-turn. KV is cleared per candidate; equal different-text maxima are kept
+explicit. No candidate list is fed to the model. This remains conditional text
+likelihood, not acoustic confidence.
+
+The initial chunk64/chunk1 parity check failed with0.0320915 maximum per-token
+logprob difference against the fixed0.001 tolerance. Disabling CPU repacking did
+not change it; both launches stopped before any real candidate. The replacement
+method uses only single-token decoding. Its narrower causal-prefix check passed
+exactly on7 shared target tokens; cross-runtime numerical parity is not claimed.
+All35 frozen cases/110 unique candidate paths then completed:13/13 synthetic
+reference matches,19/20 collected-ASR texts unchanged, both development texts
+unchanged including a residual error. Cached-score selection was invariant in
+594 permutations with zero additional model calls. No acoustic improvement is
+established without human references.
+
+Host CPU wall431.342s, sampled peakRSS1110.695MiB; median total candidate-scoring
+time per corpus recording12.587s. This is not Deck latency and does not justify
+production promotion. `likelihood_report.py` adds the complete private scores
+and observed changes to the existing report without publishing transcripts.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

@@ -186,6 +186,31 @@ experiment-only and must not be marketed as exact cross-runtime likelihood.
 New immutable outputdirectory likelihood-sequential;110 candidatepaths still
 untouched. Run all within600s scoring/900s overall; retain partial if limit hit.
 
+### Observed sequential result
+Sequential-only execution completed all35cases/110unique candidatepaths plus2
+causal-smoke passes, exit0. Shared7targettokens had exactly0 logprob difference
+with future suffix changed. Original model and full-vocabulary teacher-forced
+scores retained in JSONL; exact prompt/token boundaries and EOS verified.
+Synthetic13/13 normalizedreference matches. Corpus19/20 unchanged relative to
+acousticbest, one terminalfragment omitted; bothdevelopmentclips unchanged.
+Across35cases no protectedLatin/numeric token missing and no negative-tokencount
+change, which is NOT a semantic preservation proof. Residual ASRerror remains;
+this shows conservative selection, not improved acoustic accuracy.
+
+All594 permutations of stored score sets produce identical winnerTEXTsets,
+zero additional modelcalls. This verifies selection mechanics only; no claim
+of594 independent modeltests. Tiesexplicit(noambiguousdifferent-texttieshere).
+Wall431.342360s, sampled peak1110.695313MiB, minimumavailable8717.691406MiB,
+zero sampled swapgrowth. Corpus median all-candidate evaluation12.586736s on
+harnessCPU2 (notDeck). Too slow and unprovenqualitygain for promotion.
+
+Report amendment preserves initial91generationrequests separately from
+110newscoredpaths,2successfulcausalchecks and4failedbatchdiagnosticpaths.
+No acoustic pass or production change. Next useful mechanistic branch may
+reuse common prefixKV for numerical scoring (performance) or enrich acoustically
+supported alternatives (quality); currentcopy-biasedNbestselection cannot repair
+words absentfromallcandidates. Do not repeatthissuiteasnewvalidation.
+
 ## Decision and continuation
 No automatic promotion: free editing, index-only selection and embedding-only
 ranking are not supported as a usable transcription repair by this evidence.
