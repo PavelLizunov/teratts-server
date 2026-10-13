@@ -35,14 +35,15 @@ class PathState:
         return (*base,self.credit_key) if self.credit_key is not None else base
 
 
-def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=False,retain_context_graph=False,interval_alignment=None,**unused):
+def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=False,retain_context_graph=False,interval_alignment=None,spelling_context=False,**unused):
     import numpy as np
     scoped=interval_alignment is not None
+    if spelling_context and not scoped:raise ValueError('Spelling context requires saved intervals')
     # Diagnostic structural control: preserve context partitions but pay no credit.
     graph=ContextBias(rules.paths if bonus or retain_context_graph else (),bonus or (1. if retain_context_graph else 0.))
     if scoped:
         from interval_context import schedule, settle
-        graphs,graph_ids,scoped_receipts=schedule(events,interval_alignment,rules,bonus)
+        graphs,graph_ids,scoped_receipts=schedule(events,interval_alignment,rules,bonus,spelling=spelling_context)
         graph=graphs[0]
     else:graphs=[graph];graph_ids=[0]*len(events);scoped_receipts=[]
     graph_id=0
@@ -52,6 +53,7 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=Fals
     @lru_cache(maxsize=100000)
     def transition(active_graph,context,previous_head,token):
         graph=graphs[active_graph]
+        if spelling_context:return graph.token_step(context,previous_head,token,rules)
         symbols=rules.symbols(token)
         if previous_head and previous_head!=rules.language[token] and (not symbols or symbols[0]!=BOUNDARY):
             symbols=[BOUNDARY,*symbols]
@@ -200,7 +202,7 @@ def search(events,encoded,ctc_logp,model,rules,bonus,check,same_text_logsum=Fals
             'recombination':'native RU history, last emitted trained token, CTC blank state, context automaton state'+('; accumulated context credit' if scoped else ''),
             'english_global_prefix_limit':None,'native_russian_history_beam':4,'rnnt_max_symbols':10,
             'all_trained_non_special_tokens_considered':True,'hint_paths':scoped_receipts if scoped else (rules.hint_receipts if bonus or retain_context_graph else []),
-            'context_mode':'auxiliary-interval-v1' if scoped else 'global-fixed',
+            'context_mode':'auxiliary-spelling-interval-v1' if spelling_context else ('auxiliary-interval-v1' if scoped else 'global-fixed'),
             'credit_partitioned_state':scoped,'interval_context_graph_ids':graph_ids if scoped else None,
             'retain_context_graph':bool(retain_context_graph),'context_graph_active':bool(bonus or retain_context_graph),
             'context_score':bonus,'state_stats':stats,'prediction_cache':prediction.cache_info()._asdict()}

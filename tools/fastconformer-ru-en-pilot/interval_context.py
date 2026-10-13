@@ -9,8 +9,11 @@ def settle(graph, state):
     return delta + graph.finalize(state)
 
 
-def schedule(events, alignment, rules, bonus):
-    graphs = [ContextBias((), bonus)]
+def schedule(events, alignment, rules, bonus, spelling=False):
+    if spelling:
+        from spelling_context import SpellingContext
+        graphs = [SpellingContext(score=bonus)]
+    else:graphs = [ContextBias((), bonus)]
     intervals = alignment['english_phrase_intervals']
     phrases = alignment['english_phrases']
     if len(intervals) != len(phrases):
@@ -20,11 +23,14 @@ def schedule(events, alignment, rules, bonus):
         if interval['phrase'] != i or not tokens or any(t not in rules.heads['eng'] for t in tokens):
             raise ValueError('Invalid trained English context phrase')
         symbols = [s for token in tokens for s in rules.symbols(token)] + [BOUNDARY]
-        graphs.append(ContextBias([symbols], bonus))
+        graph = SpellingContext(rules.text(tokens),len(symbols),bonus) if spelling else ContextBias([symbols], bonus)
+        graphs.append(graph)
         receipts.append({'graph': i + 1, 'phrase': i, 'token_ids': tokens,
                          'context_symbols': symbols, 'first_en_frame': interval['first_en_frame'],
                          'last_en_frame': interval['last_en_frame'],
                          'source': 'unaltered auxiliary alignment phrase, not human reference'})
+        if spelling:receipts[-1].update(spelling_symbols=list(graph.paths[0]),spelling_unit_weights=list(graph.weights),
+                                       original_completion_credit=bonus*len(symbols),spelling=rules.text(tokens))
     graph_ids = []
     for event in events:
         matches = [i + 1 for i, x in enumerate(intervals)

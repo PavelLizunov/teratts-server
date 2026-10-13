@@ -26,7 +26,7 @@ def cell(manifest_path,clip):
     method=cfg.get('timing_method','english-only')
     if method not in ('english-only','ctc-corroborated-words-v1'):raise ValueError('Unknown timing method')
     context_mode=cfg.get('context_mode','global-fixed')
-    if context_mode not in ('global-fixed','auxiliary-interval-v1'):raise ValueError('Unknown context mode')
+    if context_mode not in ('global-fixed','auxiliary-interval-v1','auxiliary-spelling-interval-v1'):raise ValueError('Unknown context mode')
     retain_graph=bool(cfg.get('retain_context_graph',False))
     bonus=float(cfg.get('context_score',2.5))
     if not math.isfinite(bonus) or bonus<0:raise ValueError('Invalid context score')
@@ -94,7 +94,7 @@ def cell(manifest_path,clip):
                 result.update(status='reused_prior_route',reused_final_sha256=candidate['sha256'],reused_result=candidate['path'],search=retained['search'],runtime_origin='another previously consumed identical route, no rerun');return
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
-        result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True,retain_context_graph=retain_graph,interval_alignment=alignment if context_mode=='auxiliary-interval-v1' else None)
+        result['search']=search(selected,encoded,lp,model,rules,bonus,guard.check,same_text_logsum=True,retain_context_graph=retain_graph,interval_alignment=alignment if context_mode!='global-fixed' else None,spelling_context=context_mode=='auxiliary-spelling-interval-v1')
         if not result['search']['hypotheses']:raise ValueError('No complete constrained output')
         result.update(decode_s=time.monotonic()-before,status='new_constrained_output',runtime_origin='local host joiner/predictor with retained Deck encoder output',formatting=rules.formatting)
         import onnxruntime as ort

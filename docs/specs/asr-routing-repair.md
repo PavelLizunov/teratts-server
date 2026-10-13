@@ -567,3 +567,45 @@ per-character bonus increase), no newnames/aliases/Qwenchanges; openalltrainedID
 actualacousticpiecesandcreditpartitions retained. Empty/partial/wrong/outside
 spelling must refund; punctuation/boundaries explicit. Compare all10routes rather
 than justc005. This addresses representation bias, not QwenGSH/Latinization truth.
+
+## Round18 — spelling-invariant interval context, unchanged full credit
+
+Add opt-in `auxiliary-spelling-interval-v1`. Keep all10round16routes/11unaltered
+Qwen phrases, native events, open trained vocabularies, RUbeam4/history and score2.5.
+No new acoustic/Qwen passes or post-edit, no route change/manualnames. Context
+reads the characters actually emitted by trained subword tokens; output remains
+those exact tokens. Reuse the boundary convention from ctc_occurrence: SentencePiece
+marker/whitespace/punctuation(PZS except apostrophe) become context-only BOUNDARY.
+No case rewrite, alias, transliteration or approximate spelling match.
+
+For each phrase the one-completion budget is EXACTLY its previous canonical
+context-symbol count times2.5. Match an entire normalized spelling with left/right
+word boundaries. Borrow/refund credit for partial prefix as before. To avoid float
+state-key drift, allocate integer units along the spelling path: both outer
+boundaries get1unit; the remaining originalunits are distributed by cumulative
+floor(k*interiorunits/interiorcharacters). Each unit pays2.5. Thus equal emitted
+character prefixes have identical state/credit regardless of subword segmentation;
+no per-character bonus inflation, fractions or arbitrary coefficient search.
+Partial-prefix credit shape necessarily differs from token matching; search/pruning
+may change independently of the winning spelling. Repeated/overlapping matches
+retain existing covered-symbol semantics using position-specific integer weights;
+shared covered symbols do not earn another award. No one-match cap is introduced.
+
+Extend the existing single-pattern ContextBias machinery in a small subclass;
+retain old global and token-interval branches. Cache reuse requires the new mode,
+same score and identical phrases/routes. Different timing credits still partition
+search states/final retained alternatives; do not claim full posterior. Exact
+bonus2.5 is required for this first mode, whose integer2.5 units are binary-exact.
+
+Before corpus, compare all chunkings of small spellings and their every common
+prefix, mismatch/partial/EOS refunds, whole-word containment, punctuation, repeated
+matches, cross-interval reset, weak hint loss in tiny open search, and the actual
+c005twoGPTtokenizations receiving the same10credit. Check each of11phrasecompletion
+budgets against the retained round16graph. These algorithm controls are not new
+speech references, full decoder parity or a replay of old experiments.
+
+One final decode per10existingroutes, oldresults preserved. Frozen source/manifest
+and600s/cell,900s/batch,RSS1536MiB/floor2048MiB/swap256MiB agent limits. Report all10
+texts/tokenpaths/RUchanges/credits/resources, including known QwenGSH/Latinization
+regressions. Improvement not inferred from more proposal agreement. Training,
+waveform padding/segmentation, production switch and external audio remain excluded.
