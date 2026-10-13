@@ -59,6 +59,13 @@ def report(root,filename='mini-editor-results.html'):
         from qwen_auxiliary_report import section as qwen_auxiliary_section
         sections.insert(1,qwen_auxiliary_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 14</p><h1>Другой источник подсказки; те же обученные RU/EN-головы.</h1><p class="lead">Qwen3-ASR заменяет только вспомогательный Whisper. Сравнены все28 оригиналов, новые языковые маршруты и финальные результаты — без копирования Qwen-текста и без объявления его эталоном.</p></header>'''
+    if (root.parent/'routing-repair/round15-observation.json').exists():
+        from context_ablation_report import section as context_section
+        sections.insert(1,context_section(root))
+        if (root.parent/'routing-repair/round15-graph-observation.json').exists():
+            from context_ablation_report import graph_section
+            sections.insert(1,graph_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 15</p><h1>Подсказки влияют на выбор имени. Их отключение не исправляет акустику.</h1><p class="lead">Два контроля на всех десяти английских маршрутах: нулевой бонус без контекстного автомата и с сохранённым автоматом. В обоих исчезли прежние DSH и ChatGPT, но GitHub не восстановился. Исходный вариант сохранён.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target

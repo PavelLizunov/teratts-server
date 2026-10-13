@@ -1047,6 +1047,42 @@ all28 raw/proposal/final comparisons to the private cumulative HTML. Human gold0
 archived model agreement is not WER. Method and pins are in the
 [repair contract](../../docs/specs/asr-routing-repair.md).
 
+### Fixed-route context-credit controls
+
+The retained-data runner now accepts `context_score` (default2.5),
+`retain_context_graph` (defaultfalse) and `require_prior_route` (defaultfalse).
+When exact prior routing is required, every selected native event must match;
+reuse additionally requires identical context score and graph-retention mode.
+An unchanged route alone cannot reuse an output from a different decoder variant.
+
+`context_score: 0.0` removes the context graph as before. For a diagnostic control,
+`retain_context_graph: true` preserves the fixed hint automaton and state keys
+while paying exactly zero credit, including finalization. It does not restrict
+the open trained vocabulary or copy hint words. Default nonzero scoring is
+unchanged. Graph retention only separates structural state effects from scoring;
+score changes still affect search pruning, not only final ranking.
+
+Both zero-credit variants completed on all10round14 routes with English events,
+with identical original routes and no new Qwen/audio-encoder passes. Each produced
+10newfinaldecodes; the other18all-Russian routes were not new trials. A separate
+45sequence/351transition check matched context states and credit scaling exactly;
+this is not complete decoder parity or speech accuracy. The two zero variants
+had identical best trained-token paths10/10, changed8/10texts versus2.5, and lost
+all prior fixed-hint spellings. The unresolved non-hint name did not recover.
+Reject simply disabling context as a replacement; preserve the baseline.
+
+Seven of10new best paths were absent from the old top4: subtracting stored credit
+alone is not a replacement for a new search. Retained path mass is approximate,
+not an exact posterior across differently pruned searches. Human gold remains0.
+`context_ablation_report.py ROOT` derives the first private comparison;
+`context_ablation_report.py ROOT --graph` derives the second, with all candidates.
+Neither command reruns inference; cumulative rendering preserves older reports.
+
+Combined20decode control: supervised107.222s, summeddecode93.109s; sequential
+highwatermax135.320MiB/samplemax133.254MiB,minavailable8887.840MiB,swap0. Host
+only, not Deck/full-chain timing. Source/limits/results are in the
+[repair contract](../../docs/specs/asr-routing-repair.md).
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

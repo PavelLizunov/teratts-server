@@ -363,3 +363,44 @@ not a preregistered blinded test. Same host bounds and previous safety invariant
 The count is20 genuinely distinct final decodes if both ten-record controls finish,
 not20 recordings or acoustic encoder calls. Numerical state/credit identities can
 be checked with the configured hint symbols before consuming this control.
+
+### Round15 final observed result
+Both controls completed: runtime d279017 (no graph), e27e1f5 (retained graph),
+jobs2018/2062 collected exit0. Exactly20 new final decodes on10records,0Qwen/audio
+encoder calls; no baseline2.5 repeats. Both reproduce prior selected_events10/10,
+all zero-context outputs have context_credit0. Graph transitions verified on45
+synthetic sequences/351 steps with identical states and exact scaled credit;
+not full decoder parity or a speech-quality test.
+
+Best trained-token paths match10/10 between the two zero controls. Both differ
+from baseline in8/10 texts,7/10ENtoken paths and2/10RUtoken paths. All5priorDSH
+spellings and2ChatGPTspellings disappear (one alsoChatGPTPro); no literal fixed
+hint spelling remains. This is diagnostic spelling comparison, not correctness.
+Original hints includeOracle, absent from this ten-record best-output subset.
+Seven zero-best paths were absent from oldtop4; mere stored-score subtraction
+matches3/10. No old acoustic mass is treated as exact posterior across searches.
+
+Therefore the score intervention, including its influence on pruning, explains
+the observed best-output change under the same retained automaton; state removal
+alone did not change these ten best paths. This does NOT prove beam-independent
+acoustic truth, pure final-score causality or a general failure rate. Private
+examples: name replacement disappears but sought name does not return; known
+prior names fragment. Zero controls rejected as replacement. Preservedefault2.5.
+No learned contextual relevance or new name-specific hint introduced in this round.
+
+No-graph wall60.669856s/decode52.491205s/median3.480537s; retained-graph
+wall46.552394s/decode40.617951s/median3.945650s. Reconciled combinedwall107.222250s,
+combineddecode93.109156s. Highwatermax135.320313MiB,sampledmax133.253906MiB,
+minavailable8887.839844MiB,swap0. Sequentialmemorypeaksnotadded; runtime noise
+not investigated and faster batch not attributed to graph retention. Maxstates
+baseline8364/no-graph8189/retained8364. Host-only, no full-chain/Deck claim.
+Raw/archiveagreement10records5small/5substantial inallthreevariants,notaccuracy.
+No human gold. All comparisons/alternatives in private cumulative HTML; outputs,
+raw-piece provenance, separate formatting and prior artifacts remain untouched.
+
+Next bounded direction, NOT frozen/launched: interval-local contextual relevance
+using an unmodified auxiliary phrase, with open-vocabulary final heads and raw
+provenance. Must not become a closed phrase decoder, replace text, hardcode the
+observed missing name or assign model agreement the status of acoustic truth.
+Alternatively examine stronger English specialist support for Russian-accented
+names; known consumed model matrix must be checked first. No coefficient sweep.
