@@ -1147,12 +1147,45 @@ the conditional boundary graph. Canonical target mass is below the interval's
 greedy token sequence in9/11; this excludes alternative spellings/segmentations
 and is not a mixed-RNNT search counterfactual. One identical spelling uses different
 IDs and receives different context credit: the current token-based context is not
-segmentation-invariant. A character-based matching experiment is not yet executed.
+segmentation-invariant. The subsequent spelling-based experiment below addresses
+this representation issue without claiming to fix language/timing errors.
 
 Host worker0.274s/supervised0.602s,highwater42.734MiB/sample42.883MiB,
 minavailable8930.734MiB,swap0. This is NumPy diagnosis, not ASR speed or Deck timing.
 `boundary_report.py ROOT` adds all eleven rows and full per-frame evidence to the
 private cumulative report. Baseline, production and prior results are preserved.
+
+### Spelling-invariant interval context with the same completion budget
+
+`context_mode: auxiliary-spelling-interval-v1` is an opt-in alternative to the
+canonical-token interval context. `spelling_context.py` reads the characters of
+emitted trained IDs, with explicit whole-word boundaries, without rewriting output
+or constraining the open acoustic vocabulary. Each unmodified auxiliary phrase
+keeps its former full credit. The two outer boundaries receive one unit each;
+remaining units follow cumulative-floor distribution across interior characters.
+Only exact2.5-unit credit is supported, preventing floating-key drift. Partial
+credit shape changes and can affect pruning, even when completion credit is equal.
+Covered shared boundaries retain the existing no-double-payment semantics.
+
+All32chunkings of a small phrase agree on every common prefix and full credit;
+nine complete/partial/wrong/punctuation/repeat cases, interval resets and weak-hint
+rejection passed. All11actual phrase budgets matched; two real GPT tokenizations
+now both earn10 instead of10and0. These are algorithm controls, not speech gold.
+
+All10fixed-route decodes completed. Every alignment and graph schedule exactly
+matched round16. Five best EN tokenizations changed, zero RU token paths changed,
+and ALL10best text strings stayed identical. Prior incorrect language/spelling,
+missing name and duplicated RU fragment persist. Proposal agreement remains10/11,
+not accuracy. A same-text top4 duplicate appears from different EN tokenizations;
+these are still max-compared, not summed into a spelling posterior. Keep the
+baseline; this fixes representation bias but demonstrates no ASR quality gain.
+
+Hostsupervised118.945s,decode113.442s/median6.060s/max57.263s;
+highwater198.895MiB,sampled199.121MiB,minavailable8931.375MiB,swap0,maxstates59012.
+No new Qwen/encoder calls, no Deck/full-chain or speedup claim. All18prior all-RU
+routes were excluded by route, not success. `spelling_context_report.py ROOT`
+records every old/new candidate and credit budget in the cumulative privateHTML.
+The default global and token-interval modes and production are unchanged.
 
 ## Limits
 

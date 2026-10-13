@@ -609,3 +609,24 @@ and600s/cell,900s/batch,RSS1536MiB/floor2048MiB/swap256MiB agent limits. Report 
 texts/tokenpaths/RUchanges/credits/resources, including known QwenGSH/Latinization
 regressions. Improvement not inferred from more proposal agreement. Training,
 waveform padding/segmentation, production switch and external audio remain excluded.
+
+### Round18 observed result
+Frozenruntime288f0dd,manifest-round18.json,job2298exit0collected. All10newdecodes
+complete,all10alignmentsandgraphscheduleEXACTround16,all11fullcompletionbudgets
+unchanged.32chunkings/commonprefixes,9spellingcases,outside/reset,weak-hintopen
+search passed beforecorpus; realGPT[41,287]and[41,1015,998] bothcredit10.
+No floating-unitrounding introduced; accumulatedcreditscheckedexactmultiples2.5.
+Defaultglobal/tokenintervalbranches preserved; no consumedbaseline parityrerun.
+
+Observedtop1textsUNCHANGED10/10;ENIDschange5(c003,c005,c015,c022,c027),RUIDschange0.
+Proposalspellingmatchesremain10/11,notaccuracy. Same-texttop4duplicatesnowc003
+(differentENtokenizations). Existingc009GitHubfailure,c022RUfragment,c018GSHand
+c002Latinizationpersist. Priorcorrect-lookingChatGPT(Pro)/GitHub/GPTremain.
+Do not claim quality gain or promote. Differenttokenizationsarestillmax-compared,
+notjointlymarginalizedbyspelling; alteredprefixcreditalsocausesdifferentpruning.
+
+Hostsupervised118.945167s,decode113.441723s,median6.059764s,max57.262979s(c015).
+Highwater198.894531MiB,sampled199.121094MiB,minavailable8931.375MiB,swap0,
+maxstates59012. NoDeck/fullchain/clean speedcomparison. Auxiliary/encodercalls0,
+18allRUroutesnotrerun,human gold0. spelling_context_report.py recordsall10texts,
+old/newtop4IDs/scores/budgets inprivatecumulativeHTML. Baseline/productionunchanged.

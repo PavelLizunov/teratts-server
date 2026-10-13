@@ -74,6 +74,10 @@ def report(root,filename='mini-editor-results.html'):
         from boundary_report import section as boundary_section
         sections.insert(1,boundary_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 17</p><h1>Сначала причина ошибки, затем новая граница.</h1><p class="lead">Разобраны все одиннадцать английских интервалов. GitHub местами проигрывает акустически; blank размывает оценку конца, а одинаковое GPT получает разную премию из-за токенизации. Новые границы и тексты не выдавались за исправление.</p></header>'''
+    if (root.parent/'routing-repair/round18-observation.json').exists():
+        from spelling_context_report import section as spelling_context_section
+        sections.insert(1,spelling_context_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 18</p><h1>Правильнее учёт подсказки — тот же текст.</h1><p class="lead">Все десять записей проверены с премией, не зависящей от токенизации. В пяти случаях изменились английские IDs, но ни одна итоговая строка не изменилась. Ошибки акустики, языка и границ остались.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
