@@ -1,30 +1,132 @@
-# Local <=1B ASR post-editor evaluation
+# Local sub-billion ASR editor and embedding evaluation
 
-## Contract and coordination
-Latest direct human asks to continue with as many useful tests as possible, possibly a <=1B mini-model for editing or similar. This authorizes experiments and tests, including separately labeled semantic edits. Preserve raw acoustic transcripts, trained RU/EN acoustic-head restriction, opt-outs and provenance. No production change/restart, external private audio/text upload, training, waveform segmentation or padding. Editing does not become acoustic truth.
+## Contract
+The human authorized as many useful tests as possible, including a <=1B local
+editor or similar method, then specifically suggested EmbeddingGemma2. Preserve
+raw ASR, original audio, provenance, opt-outs and trained RU/EN acoustic-head
+restriction. Editing is a separately labeled experiment, not acoustic truth.
+No production change/restart, external private audio/text upload, training,
+waveform segmentation or appended waveform padding.
 
-Shared disk contains newer completed compact-ASR/Deck/corpus work not in the inherited checkpoint. Do not repeat it. Corpus job1566 is owned by another session; actual local results-v2/evaluation-summary exists. Do not collect/relaunch that job. Concurrent changes to the existing ASR spec triggered FS_STALE_VERSION; keep this work in this separate spec and new mini-editor source/private directory, preserving other's corpus_report.py/README changes. Existing current model outputs can be read as data. Goal in this session resumed/expanded rev4, agent-selected20-round cap, objective unmet.
+Shared disk has another session's compact-ASR/Deck/corpus work. Reuse its saved
+outputs, do not repeat or claim ownership of its jobs. Keep this branch's files
+separate; do not overwrite the other session's ASR spec or continuity record.
+The overall goal remains active and unmet. Its 20-round cap is agent-selected,
+not a user deadline or an instruction to request blanket reapproval.
 
-## First decision and fixed cells
-Can a local <=1B instruction model correct mixed RU/EN text without losing names, numbers, negations or unclear fragments? Compare official Q8_0 Qwen2.5-0.5B-Instruct and Qwen3-0.6B, each conservative editing and index-only Nbest selection: four cells, sequential CPU2. No existing ruGPT fusion repeat. Defer other candidates until this method decision; >1B models excluded. No claim that tiny models can infer missing acoustic information.
+## Frozen models and runtime
+- llama.cpp b11429, source d81235049384534c167caea52b85a694f6103d14.
+  Official CPU archive SHA256
+  f6d25dde8f51133143d1453da4fd5f73b145127177612a283bf7995957af3392.
+- Qwen2.5-0.5B-Instruct Q8_0, revision
+  9217f5db79a29953eb74d5343926648285ec7e67. Artifact 675710816 bytes,
+  SHA256 ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e.
+  Actual native GGUF tensor count: 630167424 parameters, below 1B.
+- Qwen3-0.6B Q8_0, revision 23749fefcc72300e3a2ad315e1317431b06b590a.
+  Artifact 639446688 bytes, SHA256
+  9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031.
+  Actual native GGUF tensor count: 596049920 parameters.
 
-Compose native llama.cpp b11429 CPU server, source d81235049384534c167caea52b85a694f6103d14. Official CPU archive SHA f6d25dde8f51133143d1453da4fd5f73b145127177612a283bf7995957af3392. Qwen2.5 GGUF revision9217f5db79a29953eb74d5343926648285ec7e67, file675710816bytes SHAca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e. Qwen3 revision23749fefcc72300e3a2ad315e1317431b06b590a, file639446688bytes SHA9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031. Both Apache2. Qwen2.5 card0.49B vs HF-GGUF summary0.63B will be checked against runtime tensor count; both below limit.
+Use native /v1/chat/completions and Jinja exactly once, context4096, CPU2,
+KV-f16 defaults, temperature0, seed42, top_p1, repeat_penalty1, no GPU/MTP.
+Qwen3 enable_thinking=false. Preserve model/runtime digest, payload, server
+props/template, model metadata, raw response, usage, finish reason and timing.
+The rendered prompt for each request was not separately exported; do not claim
+it was. Greedy is a deliberate task setting, not a universal publisher setting.
 
-Use /v1/chat/completions with native Jinja exactly once, Qwen3 enable_thinking=false, no reasoning output. Context4096/KVf16, temperature0, seed42, top_p1, repeat_penalty1, no MTP/GPU. Greedy is a deliberate preservation task setting, not publisher-recommended universal sampler. Save exact payload, rendered template, model/runtime SHA, response, usage, EOS/finish reason and timings. No existing production posteditor path: isolated candidate endpoint only.
+## First batch: fixed text controls and two saved ASR Nbest
+Compare conservative free editing and index-only selection for each model.
+Ten synthetic cases cover negation, numbers, unknown names, Latin identifiers,
+spelling, grammar, slang and incomplete phrases. Freeze inputs, candidates and
+expected outputs before inference; never identify the correct candidate in the
+prompt. Two real inputs use saved closed-word ASR Nbest, not the newer
+state-forward decoder; no human gold exists.
 
-Fixed BEFORE inference: synthetic controls covering negatives, numbers, unseen names, punctuation, obvious spelling, slang and incomplete phrases; plus two existing ASR outputs with their actual Nbest. Synthetic references never appear in prompts. Synthetic score is not audio accuracy. Rerank returns only an index into existing candidates; it cannot restore words absent from candidates. Separate real-text change observations from objectively scored controls; real transcripts have no human gold.
+Observed: 24 requests per model, 48 total. Normalized reference matches:
+free editing Qwen2.5 3/10, Qwen3 5/10; selection 9/10 and10/10. These scores are
+synthetic text control scores, not WER or audio accuracy. Free edits translated
+Russian and dropped content. Qwen2.5 selection completed an unfinished thought.
+Neither corrected the persistent ordinary-word error in the longer ASR text.
+Whole batch wall36.243/48.316s; sampled peak RSS817.355/1152.723MiB.
 
-## Added user-named EmbeddingGemma 2 branch
-Direct suggestion names EmbeddingGemma2. Primary sources verify google/embeddinggemma-2 revision914f7f89142e33e77833254d9c9b90c3cef7303b,744371512 BF16 parameters, Apache2, ungated. Full weights1488915288bytes SHA197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79. Text+audio selective load (vision_config=None) nominal570M. Embeddings768D, not text generation or ASR. Test ONE native FP32 CPU configuration via Transformers5.19.0 isolated environment reusing existing Torch only if compatible; no change to established acoustic venv. Whole original mono16k audio, no manual waveform padding/segmentation, standard model-internal feature padding disclosed. Audio no task prefix; text SentenceSimilarity prefix as published. Mask-aware mean pool then FP32 L2 normalize, dot-product cosine. Do not confuse semantic closeness with token correctness.
-Candidate ranking: saved actual ASR Nbest and later actual editor outputs; no replacement of acoustic model or claim rawembedding score calibrated confidence. Controls before audio: text near-identical negatives/numbers/names plus irrelevant sentence, identifying dangerous semantic insensitivity. Audio branch observes whether changednegation/name/number probes outrank unchanged real transcript, but realASRnohuman gold. Probe generation fixed deterministic minimalchanges, separatefromactualASRcandidates. No coefficient search; reportrankingsnotautomaticallyedit. Preserveaudiohashes/weights/config/embeddingvectors/scorematrices. Budget separate900s inference, guardRSS6144MiB/MemAvailable2048,CPU2, two originals first; stop technicalfaultretainreceipt. Do notsendprivateaudio/texttoexternalservice.
-Sources https://huggingface.co/google/embeddinggemma-2/tree/914f7f89142e33e77833254d9c9b90c3cef7303b and https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2?hl=en .
+## EmbeddingGemma 2: native whole-audio/text comparison
+Primary sources:
+- https://huggingface.co/google/embeddinggemma-2/tree/914f7f89142e33e77833254d9c9b90c3cef7303b
+- https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2?hl=en
 
-## First observed results and next bounded batch
-Both editors completed24requests each. Qwen2.5 actualGGUF630167424params/Qwen3 596049920, nativeAPIverified. Synthetic normalizedreference edit3/10and5/10; rank9/10and10/10. FreeedittranslatedRussian/droppednegation/numbers orwords; Qwen2.5realshortselectedextra trailingtoken inrank. Qwen3rankpreservedrealbestbutcouldnotfixresidualword. Whole36.243/48.316s,peakRSS817.355/1152.723MiB. No deploymentrecommendation.
-EmbeddingGemma2 FP32 nativeaudio/text completedboth originals and10textcontrols. RuntimeTorch2.5.1incompatible(torch.acceleratorabsent), isolatedTorch2.8CPU+Transformers5.19repaired, ASRvenvunchanged. Audioforward1.300317/3.575227s,validfeatures580/1808,audiotokens145/452,nottruncated/cropped. Nativefrontendsemicausalhalfwindowinternalpaddingonly. Textcontrol10/10doesNOTestablishaudiofidelity: shorttopASRextra trailingconjunction;longtopnegation-removedprobe(.692962)aboveunchanged(.690761),wrongnamealsohigher. Originalexit1 atFINALsummaryJSONloading_info set serialization afterallperclipreceipts/vectorssaved;partialsummarypreserved,recovered-summaryassembledonlyfromsavedreceipts, totalwall/peakRSSUNAVAILABLE. Serialize sets forfuturecalls, doNOTrerunconsumedmodel/audioforcosmeticreceipt. Do notuseembeddingcosinealoneforwordcorrectness orautomaticgate.
-Next untouched text-onlybatch: Qwen3 SAMEprompt/model/settings rankonly onalllocally available successfulcollectedcorpusfinalNbest, fixedsourcehashes beforeinference; noaudio/modelbaseline repeat. Reverseeachcandidatearray ratherthanleaveacousticbestatindex0, documentindexmapping. No score/qualitylabelgivenmodel. Include3new syntheticconservativeabstentioncontrols(negation,unknownname,numbers), separatefromrealcorpus. DisagreementsnotgoldWER, flagdeletions/newLatin/numeric/negationchangesandcandidateacousticloss. Noautomaticapply. Runtimebudget600s,model900s/perrequest90/resourceguardsunchanged. ExistingcollectedASRfailures arenotfilledwithinventededitedtext. Corpusownerongoingworkkeptseparate.
+Verified repository is ungated, Apache2, 744371512 BF16 parameters in full
+checkpoint. Weights1488915288bytes, SHA256
+197a32965d4b1105faf060417baa899e193fb73cd401f42ec9295234d5553d79.
+Text+audio selective load disables vision; nominal size570M. It emits embeddings,
+not generated text. Use one native FP32 CPU2 configuration, Transformers5.19.0.
+Torch2.5.1 was incompatible (torch.accelerator missing); install Torch2.8.0 CPU
+inside the new isolated environment, leaving the acoustic environment unchanged.
 
-## Budgets and outcome evidence
-Skill fast defaults: smoke120s, paired screen600s, total inference900s per iteration. Agent bounds: request90s, modelRSS3072MiB, host available floor2048MiB, swapgrowth256MiB. CPU-only; host initially available9347MiB. Sequential model lifetimes. Time/resource/protocol faults stop task-owned server and preserve consumed/unknown rows. A wrong answer is a score, not a new approval/admission gate. Continue distinct untouched work in new bounded iterations, not reset budgets or replay completed cells. No large corpus download or soak.
+Whole original mono16k PCM16 WAV, no waveform padding, segmentation, resampling
+or truncation. Explicitly disable batch padding and default truncation. The
+native feature extractor's half-window semicausal STFT padding remains part of
+the model. Audio gets no task prefix; candidate texts get the published
+SentenceSimilarity prefix. Mean pool using attention mask, then FP32 L2
+normalize to768D. Preserve vectors and raw cosine scores, not confidence labels.
 
-Measure exact normalized reference match for synthetic controls, name/number/negation preservation, edit distance, added/missing Latin tokens, real drift examples, request latency and peakRSS. Raw and corrected texts stay private. Inspect actual results before recommending; no automatic promotion. Later test the same frozen prompts on collected speech outputs, reusing existing ASR rather than repeating audio passes. Update existing private HTML when coordination allows, or a separate private editor report linked from the outcome.
+Completed ten text controls and both original audio passes. Controls selected
+expected candidate10/10. Audio forward1.300317/3.575227s, valid feature frames
+580/1808, audio tokens145/452. Two whole recordings were not cropped.
+Short clip preferred an ASR candidate with an extra trailing conjunction. Long
+clip's negation-removed probe scored0.692962 against unchanged0.690761; a name
+replacement probe also ranked higher. Probes were fixed minimal modifications,
+not actual ASR candidates and not passed off as human references.
+
+Original process exited1 AFTER both per-clip receipts and vectors were saved:
+Transformers loading_info contained a set that JSON could not serialize. Partial
+summary retained; recovered summary assembled only from existing observations.
+Full-run wall time, peakRSS and loading details did not survive and are unknown.
+No inference rerun for cosmetic evidence. Serialize sets for future executions;
+that code fix has not itself been exercised by another embedding inference.
+Do not use embedding cosine alone for word correctness or automatic editing.
+
+## Corpus selection and attributable order diagnostic
+Freeze all20 locally available successful corpus final Nbest at selection time,
+with source hashes, plus3 new synthetic controls. Exclude missing/failed results;
+no additional acoustic inference. Later another session completed an additional
+corpus item; that item is not part of this frozen editor batch.
+
+Same Qwen3 model, prompt and inference settings. First display candidates in
+reverse acoustic order, exposing neither reference nor acoustic scores. Batch
+completed23 requests: three controls matched3/3, real text changed14/20 from
+acoustic rank0. A technical name changed and one negation was dropped.
+Sixteen of20 real choices selected displayed index0. Whole51.796s,
+sampled peakRSS1171.469MiB. No human gold: differences are not correctness counts.
+
+Follow with ONE paired variant, preserving exact same20 texts/candidate sets,
+model, prompt and sampler; change only display order to original acoustic rank.
+This is a distinct order-sensitivity diagnostic, not a replay to improve scores.
+Completed20 requests, displayed index0 selected20/20. Selected text changed in
+14/20 pairs solely with candidate order. Whole47.030s, peakRSS1171.496MiB.
+Reject native index generation as a reliable reranker in this configuration.
+Do not combine its failures with embedding scores and assume they cancel out.
+
+## Budgets and evidence
+Skill defaults: smoke120s, paired screen600s, total900s per bounded iteration.
+Agent guards: per-request90s, editor RSS3072MiB, available memory floor2048MiB,
+swap growth256MiB. Embedding iteration900s, RSS6144MiB, same memory floor.
+These are guard ceilings, not reservations, hardware maxima or a user deadline.
+Models run sequentially. Retain consumed/unknown results after faults; do not
+reset budgets or silently rerun completed cells. Wrong model answers are scores,
+not a reason to request new approval for unchanged scope.
+
+Total generation requests91 =48 initial +23 corpus +20 order diagnostic.
+Separately: ten embedding text-control cases and two whole-audio passes.
+Do not combine them into a misleading independent-test or audio-accuracy count.
+Private self-contained HTML is rendered by mini_editor_report.py. Private
+transcripts, manifests, vectors and weights remain outside Git.
+
+## Decision and continuation
+No automatic promotion: free editing, index-only selection and embedding-only
+ranking are not supported as a usable transcription repair by this evidence.
+This closes the named candidate evaluation, not the overall bilingual ASR goal.
+Potential next bounded branch: order-independent numerical likelihood per
+candidate or acoustic verification of differing words with trained heads,
+using retained evidence where possible. Neither is implemented/proven here.
+Keep original baseline and opt-outs; no new acoustic model repeat or deployment
+is justified merely by the editors' negative results.

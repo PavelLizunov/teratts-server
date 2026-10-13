@@ -812,6 +812,44 @@ this candidate based on that result. Auxiliary repetition/unsupported-word
 handling and hard routing remain concrete weaknesses; this evaluation did not
 retune them to improve the held-out score.
 
+## Experimental <=1B editors and EmbeddingGemma 2
+
+The separate [mini-editor contract](../../docs/specs/asr-mini-editor.md) covers
+`mini_editor.py`, `embedding_selector.py` and `mini_editor_report.py`. These are
+private-artifact evaluation tools, not a production postprocessor. They preserve
+raw ASR and do not satisfy or replace the trained RU/EN acoustic-head constraint.
+The mini-editor runner starts a task-owned loopback llama.cpp server temporarily
+and terminates it after its bounded batch; it does not restart existing services.
+
+With the pinned assets and frozen suite described in that contract:
+
+```sh
+python mini_editor.py qwen3 --root /private/mini-editor \
+  --suite corpus-suite.json --result-name results-qwen3-corpus --modes rank
+python embedding_selector.py --root /private/mini-editor --base /private/audio-root
+python mini_editor_report.py /private/mini-editor
+```
+
+Initial evaluation completed91 generation requests across two Q8_0 models and
+four batches, plus10 text-similarity controls and2 whole-audio embedding passes.
+Qwen2.5/Qwen3 free editing matched synthetic normalized references3/10 and5/10;
+index selection matched9/10 and10/10, but Qwen3's chosen text changed in14/20
+real-corpus pairs when candidate order alone was reversed. Original-order
+selection chose displayed index0 in20/20. These are not human-gold ASR scores.
+
+EmbeddingGemma2 revision914f7f89142e33e77833254d9c9b90c3cef7303b uses native
+Transformers5.19.0/Torch2.8.0 CPU in a separate environment, FP32 text+audio with
+vision disabled. Mask-aware mean pooling and768D L2-normalized embeddings follow
+the publisher. Audio padding/truncation is disabled outside the native STFT.
+On the long development clip a negation-deleted probe outranked unchanged ASR;
+on the short clip a candidate with an extra trailing conjunction ranked first.
+Its cosine score is not word correctness or calibrated acoustic confidence.
+Both per-clip outputs/vectors survived, but the original overall summary failed
+on a set-valued loading-info field; full-run RSS/time were not recovered or
+invented. The serialization fix is for future calls, not a repeated inference.
+Neither free editing, index generation nor embedding-only selection is approved
+for automatic transcript replacement by these observations.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published
