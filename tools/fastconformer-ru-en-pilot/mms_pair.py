@@ -214,13 +214,18 @@ def cell(args):
         print(json.dumps({k: v for k, v in result.items() if k not in ('variants', 'numeric_token_provenance', 'allowed_ids')}, ensure_ascii=False), flush=True)
 
 
-def supervise(args, cell_script=None):
+def supervise(args, cell_script=None, limits=None, batch_seconds=None):
+    limits = LIMITS if limits is None else limits
+    batch_start = time.monotonic()
     path = Path(args.manifest)
     manifest = json.loads(path.read_text())
     root = Path(manifest['results_directory'])
     root.mkdir(mode=0o700, exist_ok=False)
+    for name, sha in manifest.get('source_files', {}).items():
+        if digest(Path(__file__).parent / name) != sha: raise ValueError('Changed frozen source')
     baseline = memory_snapshot()
     for clip in manifest['recordings']:
+        if batch_seconds is not None and time.monotonic()-batch_start > batch_seconds: raise TimeoutError('Batch deadline')
         output = root / (clip['id'] + '.json')
         command = [sys.executable, str(Path(cell_script or __file__).resolve()), 'cell', '--model', manifest['model'],
                    '--wav', clip['wav'], '--audio-sha256', clip['sha256'], '--output', str(output)]
@@ -236,11 +241,12 @@ def supervise(args, cell_script=None):
                               'available_bytes': mem['MemAvailable'],
                               'swap_growth_bytes': mem['swap_used'] - baseline['swap_used'], **sensor}
                     samples.append(sample)
-                    if peak > LIMITS['rss_mib'] * 1048576: reason = 'rss_limit'
-                    if mem['MemAvailable'] < LIMITS['available_mib'] * 1048576: reason = 'available_memory_floor'
-                    if sample['swap_growth_bytes'] > LIMITS['swap_growth_mib'] * 1048576: reason = 'swap_limit'
-                    if any(t >= LIMITS['temperature_c'] * 1000 for t in sensor['temperatures_millic'].values()): reason = 'thermal_limit'
-                    if time.monotonic() - start > LIMITS['seconds']: reason = 'timeout'
+                    if peak > limits['rss_mib'] * 1048576: reason = 'rss_limit'
+                    if mem['MemAvailable'] < limits['available_mib'] * 1048576: reason = 'available_memory_floor'
+                    if sample['swap_growth_bytes'] > limits['swap_growth_mib'] * 1048576: reason = 'swap_limit'
+                    if any(t >= limits['temperature_c'] * 1000 for t in sensor['temperatures_millic'].values()): reason = 'thermal_limit'
+                    if time.monotonic() - start > limits['seconds']: reason = 'timeout'
+                    if batch_seconds is not None and time.monotonic()-batch_start > batch_seconds: reason = 'batch_timeout'
                     if reason: break
                     time.sleep(.5)
             finally:
@@ -251,7 +257,7 @@ def supervise(args, cell_script=None):
                 code = proc.wait()
         receipt = {'exit_code': code, 'stop_reason': reason, 'elapsed_s': time.monotonic() - start,
                    'peak_rss_bytes': peak, 'samples': samples, 'command': command,
-                   'manifest_sha256': digest(path), 'limits': LIMITS, 'limits_source': 'agent-selected method protection'}
+                   'manifest_sha256': digest(path), 'limits': limits, 'limits_source': 'agent-selected method protection'}
         save(output.with_name(output.stem + '-supervisor.json'), receipt)
         print(clip['id'], json.dumps({k: v for k, v in receipt.items() if k not in ('samples', 'command')}), flush=True)
         if code or reason:

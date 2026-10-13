@@ -630,3 +630,47 @@ Highwater198.894531MiB,sampled199.121094MiB,minavailable8931.375MiB,swap0,
 maxstates59012. NoDeck/fullchain/clean speedcomparison. Auxiliary/encodercalls0,
 18allRUroutesnotrerun,human gold0. spelling_context_report.py recordsall10texts,
 old/newtop4IDs/scores/budgets inprivatecumulativeHTML. Baseline/productionunchanged.
+
+## Round19 — independent compact English acoustic head
+
+Select NVIDIA `parakeet-tdt_ctc-110m` CTC branch, originalrevision
+431a349f3051ab85c22b9b7a2741b5fe77065665, documented Sherpa F32 export
+`csukuangfj/sherpa-onnx-nemo-parakeet_tdt_ctc_110m-en-36000` revision
+3af92f152d32c836acabf38f4c993bc96b80eb2d. This is NOT production multilingual
+Parakeet TDT, consumedEnglishCTC0.6B or consumedFastConformer model. Published
+card: roughly114M hybridparameters,36KhoursEnglish,1024BPE,8xdownsample,
+CC-BY-4.0. Published WER pertains to TDT, not thisCTCbranch or bilingualquality.
+Sources: https://huggingface.co/nvidia/parakeet-tdt_ctc-110m and
+https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-ctc/nemo/english.html .
+
+Search-first: consumedmatrix includes generalASRmodels and earlierwav2vecspecialists;
+this110Mcheckpointnotrecorded. Prefer documentedCTC export compatiblewithcurrent
+native80msheads over adding new RNNTarchitecture/largeinfrastructure. Original
+and F32 export download task-locally; verify trainedhead/tokenizer/weights/frontend
+before inference, reuse english_fc preparation/frontend machinery where valid.
+No automatic int8/quantization sweep; F32 first separates newmodel from newquant.
+A preparation mismatch stops only this dependentbranch; do not weaken validation
+or consume speech merely to claim a run. Pin allasset hashes before executing.
+
+Run ALL28existing acoustic-corpus originalWAVs once through the newENhead with
+rawgreedy decoding/nohints; retaincomplete native1025class scores andrawtoken IDs.
+No cuts, silenceappend, VAD, resampling or privateaudio upload. Originaltrained
+frontend spectralcentering is not added waveform silence. Preservecase/punctuation;
+no textualtranslation/correction. OldENscores reused for comparisons, not rerun.
+This is English-only component assessment, NOT constrained bilingualfinaloutput.
+Keep allRU/production unchanged. No new Qwen or Russian encoder call.
+
+Use lexicalcasefold only in explicitly labelled name-evidence comparisons; raw
+modeloutput preserved. Inspect all11existing ENphrase intervals fromround18 for
+localgreedy targetpresence and rawacousticevidence without shifting boundaries.
+Originalcliphasunchangedtiming; confidence fromoneheadnotcalibratedLID. Newhead's
+wholeWAVEnglishnonsenseonRussianmustnotbereportedascorrecttranscription. Exact
+samecasefoldedspellingsneednotshareBPEIDs; no numericIDmappingbetweenmodelvocabularies.
+If100% trainedmappingandnativegeometryhold, downstreammixednewheadexperimentcan
+use theseretainedscores later withoutanotherforward; it is not yet countedcomplete.
+
+Agentlimits600s/cell,900s/batch,RSS4096MiB,floor2048MiB,swap256MiB; twoCPUthreads,
+sequentialpersistentmodelallowedwithperclipreceiptsandfailedcallprovenance. Asset
+preparation mayneed8192MiB bound and is not inference. Hostresourceobservations
+separatefromDeck/fullchain. All28outcomes/resource/modelpinsinprivatecumulativeHTML.
+Nohuman gold/WERorproductionrecommendationfromEnglishgreedyagreement.
