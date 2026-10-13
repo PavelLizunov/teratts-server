@@ -221,3 +221,51 @@ sampled61.242188MiB,minavailable8965.65625MiB,swapgrowth0. Limits1536MiBprocess 
 2048MiBavailablefloor,notallocations. LocalNumPy-onlyhost,savedDeckarrays;noDeck
 latencyclaim. Tencontrolsnewalgorithmactualrun,notdeniedround11unittestretries.
 FullobservationsoutsideGit and cumulativeprivateHTML; rawASRbaselineunchanged.
+
+## Round14 — replace auxiliary generator, retain trained-head decoder
+Hypothesis: Whisper's repeated/out-of-vocabulary English timing proposals are an
+upstream failure; more gates on those same proposals cannot create missing good
+intervals. Use existing pinnedQwen3-ASR-0.6B nativeBF16 as AUXILIARYonly, not a
+replacementtrainedpair or transcripteditor. NativeEnglishCTC+GigaAMRURNNT remain
+ONLYfinalemittingheads. Same28originalcorpusheadsets, samefixedhints2.5 forfinal,
+round11English-onlyextractor, originalorderedphrasealignment/state-forward.
+Qwen gets wholeoriginalWAV, autolanguage, no hints/context, -S0, --past-text no,
+--silent, CPU2. No new variant sweep or default-multilingual output promotion.
+Qwen itself is multilingual and cannot satisfystrictpairalone; only itsEnglish
+phraseorderingreachesfinaldecoding. Unsupportedproposalsstillfailratherthan
+rewritingtheirwords. Unlikehardgreedygate, noEnglishconfirmationthreshold.
+
+ExistingmodelQwen/Qwen3-ASR-0.6Brev5eb144179a02acc5e5ba31e748d22b0cf3e303b0;
+existingnativeantirez/qwen-asrrev924694251d9e0f18e5d86bbd06aa3ab5f870002d.
+Reuse downloadedweights/engine, inspectsource/hashbinary/actualtensorcount.
+Priorsevenclipmatrix andtwooriginalcodeswitchrunsdoNOTproveperformanceonthis
+28recordcorpus. InspectknownpriorreceiptsbyoriginalaudioSHA/config;reusesuccessful
+identicalauxiliaryconfiguration iffound; neverduplicateconsumed/unknowninference.
+OriginalcorpusWAVs nowverifiedavailableingigaam-followup/clips fromother-session;
+read/hashsamebytes, don'tdownloadorcopyinventednewaudio. Oldmissing29thheadset
+excludedfromthispairedtrial, notrerun.
+
+Runtimepreflightfoundlibgfortranmissingwithouttaskenv; establishedtask-local
+LD_LIBRARY_PATH resolvesit, nofailedinferenceconsumed/systemchanges. Source
+qwen_transcribe_audio -S0callsonewholetranscribe_segment,bypassingsegmentation
+andits shortsegmentzeropadding. skip-silenceoff; nofile/waveformappend. Native
+STFTreflect-centering ismodelfrontendnotappendedsilence, retained/disclosed.
+Pinall8modelassets, nativebinary, linkedtasklibs, selectedruntimeCfiles,source
+revision;validateWAVgeometry/length/hashbeforeeachcall, privatefileprovenance.
+
+Twoindependentboundedstages: auxiliarybatch900s,180s/clip,RSS4096MiB,availablefloor
+2048MiB,swapgrowth256MiB,nice19CPU2; thenfinal-onlyretaineddata900s/600sperclip,
+RSS1536MiB/samefloor. Agentmethodlimitsnotuserdeadline orreservedallocation.
+Hostonly: noDeckrun/budgetclaim. Exactroutealreadyseeninround11or12reuseoutput
+ratherthannewdecode; preservebaselinecomparisons andwhichresultwasreused.
+Changedroutegetsonefreshfinaldecodewitholdheadarrays,noacousticheadrerun.
+SaveallQwenrawstdout/stderr/output/status,samples,startedmarker,receipt/hash.
+Onefailedproposalisnotnoaudioquality;knownfailurespreservedandindependentother
+recordscontinueunlessresourceguardstopsbatch. Noautoresumeunknownresults.
+Newsourceownspec/README/privateHTMLonly;productionunchanged.
+
+Observe whole28statuscounts,Englishroutingdrop/add,technicalnamechanges,
+originalrawmodelagreementNOTaccuracy,auxvsfinaldisagreements,exactreuse/novel
+finaldecodes,hoststagewall/RSS. Human gold remains0; noWERorpassedqualityclaim.
+Verdict: Extend — alreadyinspected/pinnednativeQwenCLI plus existingretained-head
+runner; no new dependency, modeldownload, enginefeature or externalprivatecall.

@@ -72,10 +72,17 @@ def cell(manifest_path,clip):
         else:old=None
         if old is not None:
             same=alignment['selected_events']==old['selected_events'];result['selected_events_identical']=same
-            if method=='english-only' and not same:raise ValueError('Unexpected route regression')
+            if method=='english-only' and not same and not cfg.get('auxiliary_replaced',False):raise ValueError('Unexpected route regression')
             if same:
                 if not prior.get('search',{}).get('hypotheses'):raise ValueError('No previous complete output to reuse')
                 result.update(status='reused_unchanged',reused_final_sha256=digest(prior_path),search=prior['search'],runtime_origin='saved earlier result, no rerun');return
+        for candidate in row.get('reuse_results',[]):
+            if digest(candidate['path'])!=candidate['sha256']:raise ValueError('Changed route reuse receipt')
+            retained=json.loads(Path(candidate['path']).read_text())
+            if retained['audio_sha256']!=result['audio_sha256']:raise ValueError('Route cache belongs to different audio')
+            same=alignment['selected_events']==retained.get('alignment',{}).get('selected_events')
+            if same and retained.get('search',{}).get('hypotheses'):
+                result.update(status='reused_prior_route',reused_final_sha256=candidate['sha256'],reused_result=candidate['path'],search=retained['search'],runtime_origin='another previously consumed identical route, no rerun');return
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
         result['search']=search(selected,encoded,lp,model,rules,2.5,guard.check,same_text_logsum=True)
