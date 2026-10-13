@@ -44,6 +44,9 @@ def report(root,filename='mini-editor-results.html'):
     if (root/'likelihood-sequential/summary.json').exists():
         from likelihood_report import section
         sections.insert(1,section(root))
+    if (root.parent/'routing-repair/round11-results/supervisor-summary.json').exists():
+        from routing_repair_report import section as routing_section
+        sections.insert(1,routing_section(root))
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target

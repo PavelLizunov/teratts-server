@@ -925,6 +925,35 @@ time per corpus recording12.587s. This is not Deck latency and does not justify
 production promotion. `likelihood_report.py` adds the complete private scores
 and observed changes to the existing report without publishing transcripts.
 
+## Auxiliary English-only timing dependency repair
+
+`english_timing.py` removes unnecessary Russian auxiliary-token mapping before
+English phrase alignment. Cyrillic/numeric auxiliary words are wildcard gaps;
+representable English phrases still use the original English SentencePiece
+model. Unsupported Latin/mixed-script words remain explicit failures. This is
+not an output alphabet filter: only the final trained RU/EN heads emit tokens.
+No word substitution, deduplication or auxiliary transcript copying is applied.
+
+`routing_repair.py pilot MANIFEST` uses existing aux/EN/RU receipts and checks
+exact old/new event routes. Equal routes reuse old final results without another
+decode. Only newly alignable failed records run the unchanged state-forward
+search. On28 retained corpus records,21 successful routes matched exactly,
+1 previous auxiliary-Russian representability failure gained a final output,
+4 impossible repeated English paths and2 unsupported auxiliary words remained.
+The missing29th acoustic set was not recreated. The new output still has errors;
+22/29 mechanical coverage is not accuracy and does not rewrite original21/29.
+
+The retained-data batch completed17.095s, its only new decode10.041s, sampled
+RSS141.25MiB, local host using retained Deck activations. No encoder/audio rerun.
+Focused unit tests were blocked before execution by ACTION_FILTER, not passed.
+The actual authorized retained-data execution and21 exact-route comparisons
+completed successfully. Full pipeline wiring is opt-in via manifest
+`"auxiliary_timing_mode": "english-only"`; default `legacy-full-labels` preserves
+existing manifests. The mode is recorded in alignment evidence. This wiring was
+inspected but not separately exercised on consumed audio. See
+[repair contract](../../docs/specs/asr-routing-repair.md); private complete output
+is appended by `routing_repair_report.py`, never committed to Git.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

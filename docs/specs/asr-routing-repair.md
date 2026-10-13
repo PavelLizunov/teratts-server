@@ -67,3 +67,26 @@ connection needed. Externally guard any native decode. Save old/new routes,
 source/model/hash identities, final rawpiece output and formatting provenance.
 Commit task files to existing task branch, private report outside Git. This
 incremental mechanical repair does not complete the overall ASR goal.
+
+## Observed result and integration
+Five focused unittest methods were written, but ACTION_FILTER blocked the command
+before execution. They were NOT retried, disguised or called passed. The frozen
+retained-data application itself was allowed and completed exit0 (job1801).
+28retained rows:21oldsuccessful routes exactly identical and finals reused,
+1newconstrainedoutput,4unalignable repetitions,2unsupported auxiliary words.
+Record29missingheadset excluded, not recreated. No original encoder/WAV rerun.
+The28-row batch took17.095104s; onlyone finaldecode10.041421s, localhost ORT with
+saved Deckfeatures. SampledRSS141.25MiB, minavailable9185.121094MiB. New output
+has visible technical-name/ending distortions relative to other unverified
+transcripts; no qualitygain or human-WER claim. Mechanical coverage would be
+22/29previousattempts with this repair; original21/29benchmark remains unchanged.
+
+Implementation exposed through paired_pipeline optional
+auxiliary_timing_mode='english-only'; old manifests defaultlegacy-full-labels.
+Mode is recorded in alignment. Existing production/configs untouched. Optional
+fullpipelinewiring was inspected but not rerun on consumed audio; directrepair
+runner verifiedsameextractor+alignment+state-forward onretainedarrays. This
+limitation must remain explicit. Executionmanifest source_commit names parent
+95711c8 because frozen beforecommit; exact source_files digests are authoritative,
+executed implementationcheckpoint957b46b. Laterhypothesis-emptyguard added but
+no successfulcellrepeated toexerciseit. AllprivateexamplesremainoutsideGit.

@@ -62,6 +62,7 @@ def cell(manifest_path,clip):
         model=Model(rm);tokens={int(k):v for k,v in rp['tokens'].items()};rules=NativeWordRules({int(k):v for k,v in ep['vocab'].items()},tokens,sp,ep['english_case'])
         before=time.monotonic();result['new_decoder_run']=True
         result['search']=search(selected,encoded,lp,model,rules,2.5,guard.check,same_text_logsum=True)
+        if not result['search']['hypotheses']:raise ValueError('No complete constrained output')
         result.update(decode_s=time.monotonic()-before,status='new_constrained_output',runtime_origin='local host joiner/predictor with retained Deck encoder output',formatting=rules.formatting)
         import onnxruntime as ort
         result['onnxruntime']=ort.__version__

@@ -114,12 +114,18 @@ def final_decode(cfg,clip,out,guard):
     if digest(em/'prepared.json')!=results['eng']['prepared_sha256'] or digest(Path(cfg['russian_model'])/'prepared.json')!=results['rus']['prepared_sha256']:raise ValueError('Changed acoustic mapping')
     tokens={int(k):v for k,v in model.prepared['tokens'].items()};sp=spm.SentencePieceProcessor(model_file=str(em/'tokenizer.model'))
     rules=NativeWordRules({int(k):v for k,v in p['vocab'].items()},tokens,sp,p['english_case'])
-    sequence,words,_=auxiliary_labels(results['aux']['hypotheses'][0]['raw_text'],sp,{v:k for k,v in tokens.items() if k!=33},p['english_case'])
+    timing_mode=cfg.get('auxiliary_timing_mode','legacy-full-labels')
+    if timing_mode=='english-only':
+        from english_timing import english_timing_labels
+        sequence,words=english_timing_labels(results['aux']['hypotheses'][0]['raw_text'],sp,p['english_case'])
+    elif timing_mode=='legacy-full-labels':
+        sequence,words,_=auxiliary_labels(results['aux']['hypotheses'][0]['raw_text'],sp,{v:k for k,v in tokens.items() if k!=33},p['english_case'])
+    else:raise ValueError('Unsupported auxiliary timing mode')
     lp[:,0]=-np.inf;lp-=np.logaddexp.reduce(lp,axis=1,keepdims=True)
     events=[{'head':'eng','native_frame':i,'center_s':i*.08,'log_probs':r} for i,r in enumerate(lp)]
     events.extend({'head':'rus','native_frame':i,'center_s':i*.04+model.prepared['nominal_origin_s']} for i in range(encoded.shape[-1]));events.sort(key=lambda e:e['center_s'])
     start=time.monotonic();selected,alignment=align_phrases(events,sequence,guard.check);align_s=time.monotonic()-start
-    alignment.update(audio_sha256=clip['sha256'],label_path=sequence,proposal_words=words);save(out.with_name(stem+'-alignment.json'),alignment)
+    alignment.update(audio_sha256=clip['sha256'],label_path=sequence,proposal_words=words,auxiliary_timing_mode=timing_mode);save(out.with_name(stem+'-alignment.json'),alignment)
     options={'same_text_logsum':True} if cfg.get('search_method')=='sufficient-state-forward' else {}
     start=time.monotonic();value=search(selected,encoded,lp,model,rules,2.5,guard.check,rnnt_head='rus',ctc_beam=32,context_banks=cfg.get('context_banks',False),**options)
     if not value['hypotheses']:raise ValueError('No finite bilingual path')
