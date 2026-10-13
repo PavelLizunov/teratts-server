@@ -1187,6 +1187,51 @@ routes were excluded by route, not success. `spelling_context_report.py ROOT`
 records every old/new candidate and credit budget in the cumulative privateHTML.
 The default global and token-interval modes and production are unchanged.
 
+### Compact English acoustic component: Parakeet TDT-CTC 110M
+
+`parakeet_small.py prepare --model ROOT` reuses the existing original-checkpoint
+validation in `english_fc.py`, pinned to NVIDIA's English-only
+[parakeet-tdt_ctc-110m](https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) and its
+[documented Sherpa CTC export](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-ctc/nemo/english.html).
+This checkpoint is distinct from the consumed CTC0.6B and production multilingual
+TDT. Original revision431a349f3051ab85c22b9b7a2741b5fe77065665;
+F32 export revision3af92f152d32c836acabf38f4c993bc96b80eb2d. Published card reports
+about114M hybrid parameters and36Khours of English training; its published WER
+uses TDT and must not be claimed for the CTC branch or Russian-English switching.
+CC-BY-4.0. This experiment uses F32, not a newly tuned quantization.
+
+`parakeet_small.py pilot MANIFEST` runs one whole-original English CTC pass per
+recording, with no hints or postprocessing, retaining all native log probabilities.
+It uses the original stored frontend buffers and existing native80ms/origin0
+geometry. Original tokenizer/head and exported tensors must validate first;
+full operator equivalence is not claimed. No waveform segmentation, resampling,
+VAD or silence append. Preserve output case/punctuation and numerical token IDs.
+The shared supervisor supports explicit per-call limits and a batch deadline;
+old defaults remain unchanged, and declared source hashes are checked.
+
+This is an English-only component experiment, not a new mixed RU/EN recognizer.
+Whole English outputs on Russian speech must not be presented as valid transcripts.
+Old saved acoustic outputs are reused for comparison; no production/RU/Qwen
+restart or pass. `compact_english_report.py ROOT` compares all28whole outputs and
+all11previous English intervals, with explicitly labelled casefold-only name
+agreement. Timing selected by the old model is not independent language truth.
+All28originals completed (167.705s audio), with575direct/transposed and34folded
+exported tensor matches and no unmatched parameter. All native array shapes/clocks
+match the prior head; this is not identical emission timing. No unknownID0 emitted.
+Greedy exact casefold target agreement in11old intervals drops3→1; whole-recording
+agreement drops3→2. The missing name/ChatGPT spellings did not recover. One word
+appears in the new whole-output but outside its previous one-frame interval:
+old timing cannot be transferred as proven language truth. No mixed decode yet,
+no quality recommendation, no gold/WER. New native arrays remain available for a
+separate new-head timing/search experiment without repeating encoder calls.
+
+Hostmodel-forward total4.604s/median0.132s; coldworker total57.129s/median2.023s;
+supervisedtotal112.673s. Highwater1341.934MiB,sampled1341.691MiB,
+minavailable7561.813MiB,swap0. Measured layers are separate, not added together.
+These are fresh-process English-only host timings, not Deck/fullchain or a clean
+speedup comparison against the older int8 model. Maximum raw log-normalization
+error9.06e-7. Every full raw output and interval comparison is in the privateHTML.
+
 ## Limits
 
 Language-branch masking is not semantic language classification. Published

@@ -78,6 +78,10 @@ def report(root,filename='mini-editor-results.html'):
         from spelling_context_report import section as spelling_context_section
         sections.insert(1,spelling_context_section(root))
         sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 18</p><h1>Правильнее учёт подсказки — тот же текст.</h1><p class="lead">Все десять записей проверены с премией, не зависящей от токенизации. В пяти случаях изменились английские IDs, но ни одна итоговая строка не изменилась. Ошибки акустики, языка и границ остались.</p></header>'''
+    if (root.parent/'routing-repair/round19-observation.json').exists():
+        from compact_english_report import section as compact_english_section
+        sections.insert(1,compact_english_section(root))
+        sections[0]='''<header><p class="eyebrow">ЛОКАЛЬНЫЙ RU/EN ASR · РАУНД 19</p><h1>Другая английская акустика — пока без нужного улучшения.</h1><p class="lead">CTC-ветвь Parakeet110M проверена на всех28целых записях. Нужные GitHub и ChatGPT без подсказок не восстановились; перенос старых интервалов тоже оказался ненадёжным. Полные вероятности сохранены, двуязычная замена ещё не проверена.</p></header>'''
     target=root/filename
     with target.open('x') as file:file.write('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Мини-модели и EmbeddingGemma 2 · результаты ASR</title><style>'+css+'</style><main>'+''.join(sections)+'</main></html>')
     return target
