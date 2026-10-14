@@ -16,7 +16,7 @@ Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache
 
 ## Steam Deck speech source snapshots
 
-The user rejected the GigaAM trial and requested the old pipeline back. **Parakeet TDT v3 Q8_0 / NeMo-Speech.cpp 0.1.0 Vulkan is active again**, with native punctuation and existing dictionary/corpus. See the [verified return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>). The [GigaAM experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are retained history, not active speech backends.
+The user requested hands-on activation of the newly trained [GigaAM RU/EN support pilot](<tools/ruen-support-pilot/README.md>) on 2026-10-14, despite its weaker measured mixed-speech result. See its task record for observed deployment status. The [Parakeet return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>) is retained for reversal. The earlier [GigaAM Large experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are different, historical models.
 
 A separate [bounded Qwen3-ASR comparison](<tools/qwen-stt-pilot/README.md>) and
 [broader Russian STT evidence review](<tools/qwen-stt-pilot/RESEARCH.md>) use

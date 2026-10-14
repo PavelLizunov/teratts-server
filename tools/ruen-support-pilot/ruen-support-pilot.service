@@ -1,0 +1,26 @@
+[Unit]
+Description=Trained GigaAM RU/EN support pilot (CPU, experimental)
+After=network.target
+
+[Service]
+Type=simple
+Slice=voice-ai.slice
+WorkingDirectory=/home/deck/homelab/ruen-support-pilot-20261014
+ExecStart=/home/deck/homelab/gigaam-multilingual-20261005/venv/bin/python /home/deck/homelab/ruen-support-pilot-20261014/deployment/tools/ruen-support-pilot/server.py --checkpoint /home/deck/homelab/ruen-support-pilot-20261014/model.ckpt --port 10002
+Environment=PYTHONPATH=/home/deck/homelab/ruen-support-pilot-20261014/GigaAM
+Environment=CUDA_VISIBLE_DEVICES=
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=OMP_NUM_THREADS=4
+Environment=MKL_NUM_THREADS=4
+CPUQuota=400%
+CPUWeight=900
+MemoryHigh=2500M
+MemoryMax=4G
+OOMPolicy=kill
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
