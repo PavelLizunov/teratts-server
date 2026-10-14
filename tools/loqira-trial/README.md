@@ -1,8 +1,8 @@
 # Loqira dictation corrector
 
-## Live user trial
+## Accepted current deployment
 
-The user requested hands-on activation after the initial screen. [Live task record](<../../docs/specs/loqira-live-corrector.md>) describes deployment and consumer verification. [Corrector](<corrector.py>) supports Parakeet and the trained pilot through the author's prompt and accepts lexical edits. The user subsequently requested [Parakeet restoration with Loqira](<../../docs/specs/parakeet-loqira-live.md>); the trained pilot is now stopped/disabled. It is a two-model cascade, not merged weights. The existing public speech URL and JSON `text` response stay unchanged.
+On2026-10-14 the owner accepted Parakeet + the existing dictionary + Loqira after live use and reported a strong improvement, including fast dictation. This accepts the combined configuration; Loqira's isolated contribution has not been measured. [Live task record](<../../docs/specs/loqira-live-corrector.md>) describes deployment and consumer verification. [Corrector](<corrector.py>) supports Parakeet and the trained pilot through the author's prompt and accepts lexical edits. The user subsequently requested [Parakeet restoration with Loqira](<../../docs/specs/parakeet-loqira-live.md>); the trained pilot is now stopped/disabled. It is a two-model cascade, not merged weights. The existing public speech URL and JSON `text` response stay unchanged.
 
 Install [loqira-corrector.service](<loqira-corrector.service>) from the pinned deployment checkout into the user systemd directory, then `systemctl --user daemon-reload` and `systemctl --user enable --now loqira-corrector.service`. The model is checksum-verified before launch; listen address is127.0.0.1:10004. Install `corrector.py` as `/home/deck/homelab/gateway/loqira_corrector.py`, the updated pilot gateway as `gateway/server.py`, and [zz-loqira-corrector.conf](<zz-loqira-corrector.conf>) into the gateway drop-in directory. Reload systemd and restart only `voice-gateway.service` after Loqira is ready.
 
@@ -32,6 +32,6 @@ Summarize existing receipts without repeating inference:
 python3 tools/loqira-trial/summarize.py /path/to/run-01 /path/to/new-comparison.json
 ```
 
-On2026-10-14 the pinned model completed35/35 requests on Deck. Postprocessing median0.916s (34 nonsmoke cases), range0.695–1.710s. The small paired sample improved mixed/English aggregate source edit counts, slightly worsened Russian counts, and did not restore any of24reference Latin tokens in12mixed snippets. Difficult corruptions and occasional wrong word replacements remained. It was not promoted to production; see task record for detailed results and limits.
+On2026-10-14 the pinned model completed35/35 requests on Deck. Postprocessing median0.916s (34 nonsmoke cases), range0.695–1.710s. The small paired sample improved mixed/English aggregate source edit counts, slightly worsened Russian counts, and did not restore any of24reference Latin tokens in12mixed snippets. Difficult corruptions and occasional wrong word replacements remained. The screen itself did not promote it. Subsequent user-authorized live use selected Parakeet + dictionary + Loqira; the screen remains evidence of limitations, not a general quality guarantee.
 
 Input is JSONL with unique `id`, `input`, `kind`, `language`, optional `reference` and `preserve` literals. Cases and outputs can contain private speech and must remain outside Git. Reference edit counts use one punctuation-insensitive Unicode tokenizer with ё normalized to е; these are not human-gold WER. Literal retention is only a diagnostic; human review must assess additions, lost negations, meaning and rare names. This runner is a short selection screen, not a soak or deployment.

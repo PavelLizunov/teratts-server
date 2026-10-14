@@ -6,6 +6,14 @@ Restore availability first with the existing Parakeet-capable gateway and exact 
 
 Observe real public default/raw audio requests, exact active backend/corrector, original/final/dictionary stages and service enabled states. This is restoration and integration verification, not a new model comparison. Leave Parakeet+Loqira active for human trial with no expiry. No training or weight merging.
 
+## Owner acceptance, 2026-10-14
+
+After live use, the owner reported a large subjective improvement, including fast and less distinct dictation, and explicitly requested keeping this result and updating homelab/project documentation. **Parakeet + approved dictionary + Loqira is now the accepted current speech configuration**, not an expiring experiment. The trained GigaAM pilot remains stopped/disabled.
+
+The benefit is attributed to the combined stack: Parakeet restoration, dictionary preprocessing and Loqira were changed together. Parakeet consumes audio; Loqira only edits text and cannot hear speech rate or re-listen to missing words. No paired Parakeet-only/Parakeet+Loqira quality comparison was run. Keep the owner's positive feedback separate from measured fidelity and performance claims.
+
+Documentation-only confirmation at2026-10-14T12:54:28Z found the same gateway/Parakeet/Loqira PIDs active/enabled with zero automatic restarts, pilot inactive/disabled, unchanged source/dictionary hashes and public readiness showing Parakeet plus Loqira ready. No services restarted, inference requests added, weights changed or training scheduled for acceptance recording.
+
 ## Restoration evidence, 2026-10-14
 
 Parakeet was started and its native readiness returned `ready=true`, device `vulkan:0`. The exact retained Parakeet routing file was restored; the trained-pilot routing file was moved outside the active drop-in directory. Public readiness confirmed Parakeet before the correction extension was deployed. The pilot service was disabled/stopped, files preserved.

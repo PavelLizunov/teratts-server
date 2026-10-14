@@ -28,7 +28,7 @@ adds numerical language-token restriction and technical-name context bias to a
 CPU ONNX decoder. It is a separate recording-matched pilot, not a production
 switch or a guarantee of code-switch accuracy.
 
-The [Loqira 0.8B corrector](<tools/loqira-trial/README.md>) adds lexical editing after Parakeet at the same speech endpoint. Existing dictionary aliases run before and after correction, with per-stage provenance and opt-out.
+**Accepted current speech stack,2026-10-14:** Parakeet → approved dictionary → [Loqira0.8B](<tools/loqira-trial/README.md>) → final dictionary, at the existing voice endpoint. The owner reported a strong live-use improvement, including fast dictation, and requested retaining the configuration. This is qualitative acceptance of the combined stack, not isolated proof of Loqira's gain. Per-stage provenance and raw/dictionary opt-outs remain available.
 
 ## Optional private voice telemetry
 
