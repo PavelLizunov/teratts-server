@@ -28,6 +28,10 @@ The user reported the loss of text editing and punctuation in normal dictation. 
 
 Acceptance: observed normal public request is formatted, raw request still bypasses; both use the same pilot SHA and retain raw/formatted/candidate metadata. Public readiness must report the warmed formatter. Deployment fetches a committed change and restarts only the gateway, leaving the decoder/model untouched. No additional benchmark campaign. Formatting quality on arbitrary wrong recognizer text remains unverified.
 
+### Formatting correction observed
+
+Code9098d5d4e29c63871f15c1f9d9d8cc24951bfae8 pushed and fetched on Deck; only gateway restarted (PID998878), decoder PID996158 unchanged. The retained formatter file matched committed SHA b88127b9d73f03dc508e05680f6831551fc6cb790a18b5b389641d32b79c7155. Public readiness reports SAGE ready. Same six-second audio through default and raw modes retained exact same model SHA and raw ASR. Default:0.852s wall including195.16ms SAGE; raw:0.764s wall/0ms SAGE. Default gained sentence case, comma and terminal full stop; status fallback_preserved_words because the SAGE candidate changed words and truncated the tail. Candidate was not passed through; all original words were preserved. Raw mode remained byte-equivalent to raw ASR. Both native corpus records verified audio hash, model hash, raw/final and explicit formatting stage. This repairs formatting loss, not incorrect recognized words. No sustained quality/latency claim.
+
 ## Observed initial deployment, 2026-10-14
 
 Completed model transfer SHA verification and actual public endpoint inference. Worker initially fetched exact code commit d8402229ce3552733f94ab3d66bdfdbac365fc36; subsequent commit records dependency correction and evidence without changing model/server/gateway code. Gateway deployed SHA e373f51a1a6b8ae47f93b8c832635efc1f10828e268afb47260db23c140b0e34 matches its committed snapshot.
