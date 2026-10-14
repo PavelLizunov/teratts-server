@@ -17,3 +17,19 @@ Retain raw ASR, corrector input/candidate/output, model revision/hash, segmentat
 ## Verification and delivery
 
 Commit/push exact source before remote deployment. Verify service enabled/active and SHA, then install gateway module/drop-in and restart only gateway. Observe real public audio transcription, compare default and raw on the same WAV/checkpoint, and inspect retained audio/model/correction provenance. Exercise token splitting and error fallback with small focused checks; do not repeat the completed model-quality campaign. Leave live services running for user feedback. Document one-drop-in return to SAGE and retain Loqira weights. A service-start receipt is not evidence of successful voice editing.
+
+## Activated and observed, 2026-10-14
+
+Implementation commit `5aadab99786de4c0bbe3608ce452cd2545a222ff` pushed and exact remote SHA verified before Deck fetched it. Installed gateway SHA256 `617ea049a4909d6563f5531c1c0cacde75a1c07fe6700ebf458e709f4ce7561b`; correction module `c6bfc5ddc7ba0d9f9fd4905cb7436eae762e9d4610d84b5a0d80103103e3f2a5`. Loqira service active/enabled PID1010886, gateway active/enabled PID1011247, ASR active/enabled PID996158 unchanged; zero automatic restarts. No trial expiration scheduled.
+
+Five focused checks passed: lexical changes accepted, transport failure falls back, incomplete candidate retained but not emitted, segmentation covers original offsets, unsplittable token falls back. Python compilation and task diff whitespace checks passed. Actual native `/apply-template` and `/tokenize` transport confirmed on the permanent service before routing activation.
+
+Public audio observation used the retained6-second WAV, with dictionary/cleanup disabled to attribute changes. `/readyz` identifies the unchanged trained ASR hash and pinned Loqira hash with status ready. Default response status applied: wall1.850s, ASR600.25ms, Loqira1123.99ms, SAGE0ms. Raw response wall0.646s, same ASR text, both corrector timings0. Actual private archive inspection verified audio hash, model hashes, raw/candidate/final text, completion finish=stop and status. The observed output matches the earlier quality screen including its known imperfect word edits; this is deployment verification, not a new quality claim.
+
+Evidence retained privately under `loqira-live/public-observation/`: request-start receipts, HTTP responses, native corpus metadata and summary. All download/deploy/request jobs collected, live services intentionally remain running. Full corrected-text quality, long natural dictation and cold-boot behavior remain unverified. User feedback is next; no additional benchmark or training scheduled.
+
+### Delivery Gate Verification (Prose)
+
+- PASS: activation claims and timings come from actual service/HTTP/corpus receipts.
+- PASS: documentation describes configuration, fallback mechanism and rollback directly.
+- PASS: current activation is distinguished from the historical screen and from weight merging.
