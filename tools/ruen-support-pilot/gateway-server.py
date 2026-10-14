@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, Query, HTTPException, Response, Request
 import functools
 from gateway.stt_dictionary import apply_dictionary, clean_opening
+from gateway.speech_formatting import Formatter
 from fastapi.responses import JSONResponse
 import numpy as np
 from PIL import Image
@@ -100,8 +101,10 @@ if STT_BACKEND == "gigaam":
     print("Loading STT GigaAM-v3 and SAGE...")
     stt_model = transcribe_cpp.Model("/home/deck/homelab/models/gigaam/gigaam-v3-e2e-ctc-Q8_0.gguf")
     stt_session = stt_model.session()
+
+if STT_BACKEND in {"gigaam", "ruen_support_pilot"}:
     sage_dir = "/home/deck/homelab/models/sage95m"
-    sage_tokenizer = AutoTokenizer.from_pretrained("ai-forever/sage-fredt5-distilled-95m")
+    sage_tokenizer = AutoTokenizer.from_pretrained("ai-forever/sage-fredt5-distilled-95m", local_files_only=True)
     ort_opts = ort.SessionOptions()
     ort_opts.intra_op_num_threads = 4
     ort_opts.inter_op_num_threads = 1
@@ -176,9 +179,18 @@ def run_sage_correction(text: str) -> tuple[str, bool]:
         print(f"[Formatting] stage=sage reason=exception steps={steps} eos={eos_seen}", flush=True)
         return text, False
 
-# Parakeet has native punctuation; do not rewrite bilingual text with SAGE.
+# Keep raw ASR separate; the pilot accepts punctuation/case, never generated words.
+speech_formatter = Formatter(run_sage_correction)
+SAGE_READY = False
 if STT_BACKEND == "gigaam":
-    run_sage_correction("тест")
+    _, SAGE_READY = run_sage_correction("тест")
+elif STT_BACKEND == "ruen_support_pilot":
+    _, warmup_meta = speech_formatter("тест")
+    SAGE_READY = bool(warmup_meta["segments"]) and all(
+        isinstance(segment["candidate_text"], str) and bool(segment["candidate_text"].strip())
+        for segment in warmup_meta["segments"])
+    if not SAGE_READY:
+        raise RuntimeError("Pilot formatter warmup failed")
 
 # 3. LLM Smart Structuring Function (Qwen2.5-1.5B)
 SMART_FEW_SHOT = [
@@ -250,7 +262,8 @@ def health():
         pilot_request()
     return {"status": "ok", "stt": "ready", "stt_backend": STT_BACKEND,
             "stt_model": STT_IDENTITY,
-            "sage": "ready" if STT_BACKEND == "gigaam" else "bypassed",
+            "sage": "ready" if SAGE_READY else "bypassed",
+            "formatting_policy": "punctuation-case-only-v1" if STT_BACKEND == "ruen_support_pilot" else None,
             "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" else "ready", "ocr": "ready"}
 
 @app.post("/v1/audio/transcriptions")
@@ -316,9 +329,15 @@ async def transcribe_audio(
     sage_latency_ms = 0.0
     llm_latency_ms = 0.0
     formatting_status = "bypassed"
+    formatting_meta = {"status": "disabled", "policy": "punctuation-case-only-v1"}
     final_text = raw_text
 
-    if STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
+    if STT_BACKEND == "ruen_support_pilot" and effective_mode in {"default", "smart"} and raw_text:
+        t_sage_0 = time.perf_counter()
+        final_text, formatting_meta = speech_formatter(raw_text)
+        sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
+        formatting_status = formatting_meta["status"]
+    elif STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
         t_llm_0 = time.perf_counter()
         structured, smart_ok = run_smart_structuring(raw_text)
         llm_latency_ms = (time.perf_counter() - t_llm_0) * 1000.0
@@ -377,7 +396,7 @@ async def transcribe_audio(
                 **STT_IDENTITY, "mode": effective_mode,
                 **({"runtime": pilot_result["model"], "segments": pilot_result["segments"]} if pilot_result is not None else {}),
                 "language_hint": language, "raw_text": raw_text, "final_text": final_text,
-                "formatting_status": formatting_status,
+                "formatting_status": formatting_status, "formatting": formatting_meta,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,
                 "pre_cleanup_text": pre_cleanup_text, "cleanup": cleanup_result,
                 "client_context": stt_context(request),
