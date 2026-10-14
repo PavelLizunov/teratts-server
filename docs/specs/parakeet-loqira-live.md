@@ -1,0 +1,7 @@
+# Restore Parakeet and retain Loqira
+
+User request2026-10-14: the trained pilot is too poor; return the previous working setup and put the new corrector on top. Restore retained Parakeet Q8_0 and existing personal dictionary at the same endpoint. Disable trained GigaAM service after route recovery; preserve files. Retain permanent Loqira and apply it to Parakeet default/smart requests. SAGE is a fallback only, not another normal editing pass. Raw bypass remains.
+
+Restore availability first with the existing Parakeet-capable gateway and exact retained routing file, then deploy the small correction extension from a committed/pushed SHA. Existing Loqira drop-in remains; initial gateway version bypasses Loqira for Parakeet until extension is deployed. Existing dictionary config must not be overwritten. Read current config and recent corpus receipts to distinguish dictionary failures from ASR/correction errors. Normalize existing approved aliases before Loqira and keep the existing final dictionary pass; no invented aliases. Store both passes separately, preserve raw ASR provenance.
+
+Observe real public default/raw audio requests, exact active backend/corrector, original/final/dictionary stages and service enabled states. This is restoration and integration verification, not a new model comparison. Leave Parakeet+Loqira active for human trial with no expiry. No training or weight merging.

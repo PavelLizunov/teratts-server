@@ -16,7 +16,7 @@ Set `TERATTS_MODEL_DIR` or pass `--model-dir PATH` to override the default cache
 
 ## Steam Deck speech source snapshots
 
-The user requested hands-on activation of the newly trained [GigaAM RU/EN support pilot](<tools/ruen-support-pilot/README.md>) on 2026-10-14, despite its weaker measured mixed-speech result. See its task record for observed deployment status. The [Parakeet return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>) is retained for reversal. The earlier [GigaAM Large experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are different, historical models.
+The user rejected the hands-on [trained GigaAM RU/EN pilot](<tools/ruen-support-pilot/README.md>) and requested [Parakeet with Loqira](<docs/specs/parakeet-loqira-live.md>) on2026-10-14. Parakeet is restored; trained pilot files are retained but its service is stopped/disabled. The [earlier Parakeet return snapshot](<tools/gigaam-multilingual/return-parakeet/README.md>) remains historical. The earlier [GigaAM Large experiment](<tools/gigaam-multilingual/README.md>) and [Ultra experiment](<tools/ultra-upgrade/README.md>) are different, historical models.
 
 A separate [bounded Qwen3-ASR comparison](<tools/qwen-stt-pilot/README.md>) and
 [broader Russian STT evidence review](<tools/qwen-stt-pilot/RESEARCH.md>) use
@@ -28,7 +28,7 @@ adds numerical language-token restriction and technical-name context bias to a
 CPU ONNX decoder. It is a separate recording-matched pilot, not a production
 switch or a guarantee of code-switch accuracy.
 
-The [Loqira 0.8B corrector](<tools/loqira-trial/README.md>) adds optional lexical editing after the trained GigaAM pilot at the same speech endpoint. The user requested a live trial after the retained-output screen; [activation record](<docs/specs/loqira-live-corrector.md>).
+The [Loqira 0.8B corrector](<tools/loqira-trial/README.md>) adds lexical editing after Parakeet at the same speech endpoint. Existing dictionary aliases run before and after correction, with per-stage provenance and opt-out.
 
 ## Optional private voice telemetry
 

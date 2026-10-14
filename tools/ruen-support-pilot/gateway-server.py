@@ -102,7 +102,11 @@ if STT_BACKEND == "gigaam":
     stt_model = transcribe_cpp.Model("/home/deck/homelab/models/gigaam/gigaam-v3-e2e-ctc-Q8_0.gguf")
     stt_session = stt_model.session()
 
-if STT_BACKEND in {"gigaam", "ruen_support_pilot"}:
+STT_CORRECTOR = os.environ.get("STT_CORRECTOR", "sage")
+if STT_CORRECTOR not in {"sage", "loqira"}:
+    raise RuntimeError("Unsupported STT_CORRECTOR")
+
+if STT_BACKEND in {"gigaam", "ruen_support_pilot"} or STT_CORRECTOR == "loqira":
     sage_dir = "/home/deck/homelab/models/sage95m"
     sage_tokenizer = AutoTokenizer.from_pretrained("ai-forever/sage-fredt5-distilled-95m", local_files_only=True)
     ort_opts = ort.SessionOptions()
@@ -181,11 +185,8 @@ def run_sage_correction(text: str) -> tuple[str, bool]:
 
 # SAGE remains the conservative fallback; Loqira is an explicit lexical editor.
 speech_formatter = Formatter(run_sage_correction)
-STT_CORRECTOR = os.environ.get("STT_CORRECTOR", "sage")
-if STT_CORRECTOR not in {"sage", "loqira"}:
-    raise RuntimeError("Unsupported STT_CORRECTOR")
 loqira_corrector = None
-if STT_BACKEND == "ruen_support_pilot" and STT_CORRECTOR == "loqira":
+if STT_BACKEND in {"ruen_support_pilot", "parakeet"} and STT_CORRECTOR == "loqira":
     from gateway.loqira_corrector import LoqiraCorrector, IDENTITY as CORRECTOR_IDENTITY, POLICY as CORRECTOR_POLICY
     loqira_corrector = LoqiraCorrector(speech_formatter)
 else:
@@ -194,7 +195,7 @@ else:
 SAGE_READY = False
 if STT_BACKEND == "gigaam":
     _, SAGE_READY = run_sage_correction("тест")
-elif STT_BACKEND == "ruen_support_pilot":
+elif STT_BACKEND == "ruen_support_pilot" or loqira_corrector is not None:
     _, warmup_meta = speech_formatter("тест")
     SAGE_READY = bool(warmup_meta["segments"]) and all(
         isinstance(segment["candidate_text"], str) and bool(segment["candidate_text"].strip())
@@ -274,8 +275,8 @@ def health():
             "stt_model": STT_IDENTITY,
             "sage": "ready" if SAGE_READY else "bypassed",
             "corrector": {**CORRECTOR_IDENTITY, "status": ("ready" if loqira_corrector.ready() else "fallback_sage") if loqira_corrector else ("ready" if SAGE_READY else "bypassed")},
-            "formatting_policy": CORRECTOR_POLICY if STT_BACKEND == "ruen_support_pilot" else None,
-            "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" else "ready", "ocr": "ready"}
+            "formatting_policy": CORRECTOR_POLICY if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else None,
+            "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else "ready", "ocr": "ready"}
 
 @app.post("/v1/audio/transcriptions")
 @retain_stt_attempt
@@ -343,15 +344,21 @@ async def transcribe_audio(
     formatting_meta = {"status": "disabled", "policy": CORRECTOR_POLICY}
     final_text = raw_text
 
-    if STT_BACKEND == "ruen_support_pilot" and effective_mode in {"default", "smart"} and raw_text:
-        if loqira_corrector is not None:
-            final_text, formatting_meta = loqira_corrector(raw_text)
-            llm_latency_ms = formatting_meta["loqira_ms"]
-            sage_latency_ms = formatting_meta["sage_ms"]
-        else:
-            t_sage_0 = time.perf_counter()
-            final_text, formatting_meta = speech_formatter(raw_text)
-            sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
+    pre_correction_dictionary = {"status": "not_run", "changes": []}
+    pre_correction_dictionary_ms = 0.0
+    if loqira_corrector is not None and effective_mode in {"default", "smart"} and raw_text:
+        t_dictionary = time.perf_counter()
+        correction_input, pre_correction_dictionary = apply_dictionary(raw_text,
+            os.environ.get("STT_DICTIONARY_CONFIG", "/home/deck/homelab/config/stt-dictionary.json"), dictionary)
+        pre_correction_dictionary_ms = (time.perf_counter() - t_dictionary) * 1000
+        final_text, formatting_meta = loqira_corrector(correction_input)
+        llm_latency_ms = formatting_meta["loqira_ms"]
+        sage_latency_ms = formatting_meta["sage_ms"]
+        formatting_status = formatting_meta["status"]
+    elif STT_BACKEND == "ruen_support_pilot" and effective_mode in {"default", "smart"} and raw_text:
+        t_sage_0 = time.perf_counter()
+        final_text, formatting_meta = speech_formatter(raw_text)
+        sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
         formatting_status = formatting_meta["status"]
     elif STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
         t_llm_0 = time.perf_counter()
@@ -377,7 +384,7 @@ async def transcribe_audio(
     t_dictionary = time.perf_counter()
     final_text, dictionary_result = apply_dictionary(final_text,
         os.environ.get("STT_DICTIONARY_CONFIG", "/home/deck/homelab/config/stt-dictionary.json"), dictionary)
-    dictionary_latency_ms = (time.perf_counter() - t_dictionary) * 1000
+    dictionary_latency_ms = (time.perf_counter() - t_dictionary) * 1000 + pre_correction_dictionary_ms
     pre_cleanup_text = final_text
     final_text, cleanup_result = clean_opening(final_text, cleanup)
     total_latency_ms = (time.perf_counter() - t0) * 1000.0
@@ -387,8 +394,9 @@ async def transcribe_audio(
         "X-STT-Backend": STT_BACKEND,
         "X-Cleanup-Status": cleanup_result["status"],
         "X-Cleanup-Changes": str(len(cleanup_result["changes"])),
-        "X-Dictionary-Status": dictionary_result["status"],
-        "X-Dictionary-Changes": str(len(dictionary_result["changes"])),
+        "X-Dictionary-Status": "applied" if pre_correction_dictionary["changes"] else dictionary_result["status"],
+        "X-Dictionary-Changes": str(len(dictionary_result["changes"]) + len(pre_correction_dictionary["changes"])),
+        "X-Dictionary-Pre-Correction-Status": pre_correction_dictionary["status"],
         "X-Dictionary-Latency-Ms": f"{dictionary_latency_ms:.2f}",
         "X-Mode": effective_mode,
         "X-Formatting-Status": formatting_status,
@@ -403,6 +411,10 @@ async def transcribe_audio(
         headers["X-STT-Model"] = PILOT_NAME
         headers["X-STT-Model-SHA256"] = PILOT_SHA
         headers["X-STT-Experimental"] = "true"
+    elif STT_BACKEND == "parakeet":
+        headers["X-STT-Model"] = STT_IDENTITY["model"]
+        headers["X-STT-Model-Revision"] = STT_IDENTITY["model_revision"]
+    if STT_BACKEND == "ruen_support_pilot" or loqira_corrector is not None:
         headers["X-Corrector-Model"] = CORRECTOR_IDENTITY["model"]
         headers["X-Corrector-Status"] = formatting_status
         headers["X-Corrector-Policy"] = CORRECTOR_POLICY
@@ -419,12 +431,13 @@ async def transcribe_audio(
                 **({"runtime": pilot_result["model"], "segments": pilot_result["segments"]} if pilot_result is not None else {}),
                 "language_hint": language, "raw_text": raw_text, "final_text": final_text,
                 "formatting_status": formatting_status, "formatting": formatting_meta,
+                "pre_correction_dictionary": pre_correction_dictionary,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,
                 "pre_cleanup_text": pre_cleanup_text, "cleanup": cleanup_result,
                 "client_context": stt_context(request),
                 "smart_requested": smart, "format_requested": format,
                 "response_format": response_format,
-                "smart_model": "Spark-X2.5-1.7B-Q4_K_M" if effective_mode == "smart" and STT_BACKEND != "ruen_support_pilot" else None,
+                "smart_model": "Spark-X2.5-1.7B-Q4_K_M" if effective_mode == "smart" and STT_BACKEND != "ruen_support_pilot" and loqira_corrector is None else None,
                 "audio_duration_s": audio_frames / framerate,
                 "sample_rate": framerate, "channels": channels, "sample_width": sampwidth,
                 "timings_ms": {"stt": stt_latency_ms, "sage": sage_latency_ms,

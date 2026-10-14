@@ -1,4 +1,6 @@
-# Active speech restored to old Parakeet
+# Historical Parakeet restoration snapshot
+
+The snapshot and PIDs below describe2026-10-06. Current routing is [Parakeet with Loqira](<../../../docs/specs/parakeet-loqira-live.md>), using the extended gateway rather than this historical source.
 
 User rejected GigaAM and requested the old working model. Active backend is again **Parakeet TDT 0.6B v3 Q8_0 / NeMo-Speech.cpp 0.1.0 / Vulkan**, not Ultra. The [gateway snapshot](<gateway-server.py>) is byte-identical to the pre-GigaAM gateway, SHA-256 `bb69b4defc50709fa2a14d16d90e61f403aedf22df92b1f77bb51c941071478f`. The [drop-in](<parakeet-default.conf>) selects Parakeet, SHA `b52a3f8387e9ec13f50cc466373df281dfa92467c59cb0bc27338a73143f8237`.
 

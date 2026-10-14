@@ -2,6 +2,8 @@
 
 User-requested hands-on deployment of the 2026-10-14 trained checkpoint, **not a quality winner**. This is SSL220M with a newly trained RU/EN CTC head, not the earlier pretrained GigaAM Large trial. Training used monolingual support data; preservation of pretrained Russian ASR quality and natural mixed technical-name accuracy are not established.
 
+The user ended this pilot on2026-10-14 because dictation quality was poor. Its service is stopped/disabled and files retained. [Parakeet with Loqira](<../../docs/specs/parakeet-loqira-live.md>) is the replacement. The gateway source below now supports Loqira for both backends.
+
 ## Components
 
 - [Server](<server.py>) subclasses the retained [WAV adapter](<../gigaam-multilingual/gigaam_multilingual_server.py>) and loads the exact local checkpoint through official GigaAM. SHA-256 must be `b1e64f5b0e6349deefc3534358cbe97becac78349ae5ddc3a28c380ac9974a6d`.
