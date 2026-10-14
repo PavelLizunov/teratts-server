@@ -1,0 +1,15 @@
+[Unit]
+Description=Loqira 0.8B dictation text corrector
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/deck/homelab/loqira-trial-20261014
+ExecStartPre=/usr/bin/python3 -c "import hashlib; p='Qwen3.5-0.8B-GEC-KAZ-RUS-ENG.Q4_0.gguf'; f=open(p,'rb'); assert hashlib.file_digest(f,'sha256').hexdigest()=='893f573db88f587e823b66847e06049cdb3029eff6177d92f6577179f7178871', 'Wrong Loqira checkpoint'"
+ExecStart=/home/deck/homelab/clef-flash-pilot/runtime/llama-b11429/llama-server -m /home/deck/homelab/loqira-trial-20261014/Qwen3.5-0.8B-GEC-KAZ-RUS-ENG.Q4_0.gguf --alias loqira-gec-0.8b-893f573db88f --host 127.0.0.1 --port 10004 -c 2048 -np 1 -b 256 -ub 128 -ngl all -t 2 -tb 2 -ctk f16 -ctv f16 --fit off --cache-ram 0 --no-webui --no-context-shift -fa on --jinja --reasoning off
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

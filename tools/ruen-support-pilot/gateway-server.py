@@ -179,8 +179,18 @@ def run_sage_correction(text: str) -> tuple[str, bool]:
         print(f"[Formatting] stage=sage reason=exception steps={steps} eos={eos_seen}", flush=True)
         return text, False
 
-# Keep raw ASR separate; the pilot accepts punctuation/case, never generated words.
+# SAGE remains the conservative fallback; Loqira is an explicit lexical editor.
 speech_formatter = Formatter(run_sage_correction)
+STT_CORRECTOR = os.environ.get("STT_CORRECTOR", "sage")
+if STT_CORRECTOR not in {"sage", "loqira"}:
+    raise RuntimeError("Unsupported STT_CORRECTOR")
+loqira_corrector = None
+if STT_BACKEND == "ruen_support_pilot" and STT_CORRECTOR == "loqira":
+    from gateway.loqira_corrector import LoqiraCorrector, IDENTITY as CORRECTOR_IDENTITY, POLICY as CORRECTOR_POLICY
+    loqira_corrector = LoqiraCorrector(speech_formatter)
+else:
+    CORRECTOR_IDENTITY = {"model": "sage95m-onnx-cpu"}
+    CORRECTOR_POLICY = "punctuation-case-only-v1"
 SAGE_READY = False
 if STT_BACKEND == "gigaam":
     _, SAGE_READY = run_sage_correction("тест")
@@ -263,7 +273,8 @@ def health():
     return {"status": "ok", "stt": "ready", "stt_backend": STT_BACKEND,
             "stt_model": STT_IDENTITY,
             "sage": "ready" if SAGE_READY else "bypassed",
-            "formatting_policy": "punctuation-case-only-v1" if STT_BACKEND == "ruen_support_pilot" else None,
+            "corrector": {**CORRECTOR_IDENTITY, "status": ("ready" if loqira_corrector.ready() else "fallback_sage") if loqira_corrector else ("ready" if SAGE_READY else "bypassed")},
+            "formatting_policy": CORRECTOR_POLICY if STT_BACKEND == "ruen_support_pilot" else None,
             "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" else "ready", "ocr": "ready"}
 
 @app.post("/v1/audio/transcriptions")
@@ -329,13 +340,18 @@ async def transcribe_audio(
     sage_latency_ms = 0.0
     llm_latency_ms = 0.0
     formatting_status = "bypassed"
-    formatting_meta = {"status": "disabled", "policy": "punctuation-case-only-v1"}
+    formatting_meta = {"status": "disabled", "policy": CORRECTOR_POLICY}
     final_text = raw_text
 
     if STT_BACKEND == "ruen_support_pilot" and effective_mode in {"default", "smart"} and raw_text:
-        t_sage_0 = time.perf_counter()
-        final_text, formatting_meta = speech_formatter(raw_text)
-        sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
+        if loqira_corrector is not None:
+            final_text, formatting_meta = loqira_corrector(raw_text)
+            llm_latency_ms = formatting_meta["loqira_ms"]
+            sage_latency_ms = formatting_meta["sage_ms"]
+        else:
+            t_sage_0 = time.perf_counter()
+            final_text, formatting_meta = speech_formatter(raw_text)
+            sage_latency_ms = (time.perf_counter() - t_sage_0) * 1000.0
         formatting_status = formatting_meta["status"]
     elif STT_BACKEND == "parakeet" and effective_mode == "smart" and raw_text:
         t_llm_0 = time.perf_counter()
@@ -387,6 +403,12 @@ async def transcribe_audio(
         headers["X-STT-Model"] = PILOT_NAME
         headers["X-STT-Model-SHA256"] = PILOT_SHA
         headers["X-STT-Experimental"] = "true"
+        headers["X-Corrector-Model"] = CORRECTOR_IDENTITY["model"]
+        headers["X-Corrector-Status"] = formatting_status
+        headers["X-Corrector-Policy"] = CORRECTOR_POLICY
+        headers["X-Corrector-Latency-Ms"] = f"{llm_latency_ms + sage_latency_ms:.1f}"
+        if "model_sha256" in CORRECTOR_IDENTITY:
+            headers["X-Corrector-Model-SHA256"] = CORRECTOR_IDENTITY["model_sha256"]
 
     if voice_corpus is not None:
         t_archive = time.perf_counter()
