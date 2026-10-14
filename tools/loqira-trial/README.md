@@ -12,4 +12,12 @@ python3 tools/loqira-trial/run.py \
   --output /home/deck/homelab/loqira-trial-20261014/run-01
 ```
 
+Summarize existing receipts without repeating inference:
+
+```sh
+python3 tools/loqira-trial/summarize.py /path/to/run-01 /path/to/new-comparison.json
+```
+
+On2026-10-14 the pinned model completed35/35 requests on Deck. Postprocessing median0.916s (34 nonsmoke cases), range0.695–1.710s. The small paired sample improved mixed/English aggregate source edit counts, slightly worsened Russian counts, and did not restore any of24reference Latin tokens in12mixed snippets. Difficult corruptions and occasional wrong word replacements remained. It was not promoted to production; see task record for detailed results and limits.
+
 Input is JSONL with unique `id`, `input`, `kind`, `language`, optional `reference` and `preserve` literals. Cases and outputs can contain private speech and must remain outside Git. Reference edit counts use one punctuation-insensitive Unicode tokenizer with ё normalized to е; these are not human-gold WER. Literal retention is only a diagnostic; human review must assess additions, lost negations, meaning and rare names. This runner is a short selection screen, not a soak or deployment.

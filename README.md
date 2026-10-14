@@ -28,6 +28,8 @@ adds numerical language-token restriction and technical-name context bias to a
 CPU ONNX decoder. It is a separate recording-matched pilot, not a production
 switch or a guarantee of code-switch accuracy.
 
+The [Loqira 0.8B correction screen](<tools/loqira-trial/README.md>) evaluates a separate text postprocessor on retained ASR output. It does not change the active speech route.
+
 ## Optional private voice telemetry
 
 Telemetry is off by default. Set `VOICE_TELEMETRY_INGEST` to a private HTTP

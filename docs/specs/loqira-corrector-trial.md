@@ -15,6 +15,22 @@ Verdict: Adopt — published GGUF plus installed llama.cpp b11429 d81235049; std
 - Agent-selected fast-mode budget: smoke120s, screen600s; no load/soak/other models. Per-request45s. Stop active iteration on timeout, context overflow/truncation, OOM, identity/template drift, temperature>=85C, MemAvailable<1536MiB or swap growth>256MiB; preserve records. These are bounded-run guards, not user-imposed permanent limits. Memoryheadroom chosen against3176MiB observed available.
 - Report engine/model hashes, timings, peak resources, raw evidence, supported decision and gaps. Check production readiness before/after. Retain installed weights but leave no temporary inference process after trial.
 
-## Unknowns
+## Observed result, 2026-10-14
+
+Committed worker source343c39cfe649d219d2a6f8c54f2302a60c242c09, model checksum verified. Cases manifest9cec475f9f3c28e2fece62873887d8687e8a5cca75191b1abf657450b474aef6. All35requests completed with stop finish and no exposed reasoning; exact apply-template string matched author contract. Model Q4_0, context2048, one slot and no speculation confirmed in props. Vulkan build and full-offload command selected; default log does not expose a per-layer device-allocation receipt, so no independently measured GPU-memory claim.
+
+Run wall37.02s; nonsmoke34requests median0.916s/min0.695/max1.710s. Process cgroup peak767.2MiB, process swap0MiB; minimum system available2481.60MiB, system swap growth0MiB, observed temperature peak59C. This is not a sustained thermal/throughput guarantee.
+
+| Paired source group | Cases | Reference words | Raw edits | Corrected edits | Improved/equal/worse |
+|---|---:|---:|---:|---:|---:|
+| mixed |12|166|109 (65.66%)|93 (56.02%)|9/2/1|
+| Russian |6|27|6 (22.22%)|7 (25.93%)|0/5/1|
+| English |6|189|29 (15.34%)|25 (13.23%)|3/3/0|
+
+These use one new Unicode tokenizer and source references, not adjudicated WER and not directly comparable to earlier pipeline metrics. Mixed reference Latin tokens24:raw0/corrected0. Correct existing technical names, URL, numbers, command text and negations survived the corresponding synthetic controls; the exact-case missing-literal diagnostic flagged lowercase kubernetes becoming Kubernetes, which is not a lost name. This does not establish general fidelity. The known-answer smoke was fluent but lost part of the greeting question; API completion is not quality acceptance. Four user-supplied corrupt texts were only partly repaired, including an incorrect verb substitution. No prompt/parameter tuning or additional cells used.
+
+Temporary server terminated successfully, port10004closed; gateway998878, pilot996158 and Clef3211342remained active with unchanged PIDs/zero restarts. Production remains trained pilot+conservative SAGE, not Loqira. Weights and exact-run evidence retained privately on Deck and in task artifacts. All launch/download/collection jobs collected. Decision: installed and tested, not sufficient as a reliable repair layer for severely corrupted mixed speech; no automatic promotion. Next potential task is a user-selected live trial or a separately selected stronger model, not unrequested continued benchmarking.
+
+## Remaining unknowns
 
 Q4_0 correctness and practical performance on Deck Vulkan not yet observed; trained mixed-script limitations acknowledged by author. Reference transcription boundaries may inflate edit ratios. Reference-free user examples need user judgment of intended wording. The fixed lexical-preservation filter used by current SAGE must NOT reject all Loqira word corrections in this isolated trial.
