@@ -22,6 +22,12 @@ Verdict: Extend — existing GigaAM WAV/HTTP adapter and live gateway — existi
 
 Direct observed acceptance, not a new benchmark campaign: verify transferred SHA and public CPU model load; readiness reports exact trained SHA; one short known WAV and a >25s request exercise decoder and chunk path; actual public endpoint returns pilot header/SHA and retains correct raw/final/model metadata. Observe service state and Deck memory/temperature. Confirm Parakeet is stopped but preserved. Compare deployed source SHA with committed code and remote Git commit. If load fails, keep production Parakeet until resolved. Cold boot, long soak and subjective quality remain unverified.
 
-## Status
+## Observed deployment, 2026-10-14
 
-Implementation in progress. Old live source and drop-in observed under the private task artifact directory. Model transfer/official-source setup job bash-332 must be collected, not duplicated.
+Completed model transfer SHA verification and actual public endpoint inference. Worker initially fetched exact code commit d8402229ce3552733f94ab3d66bdfdbac365fc36; subsequent commit records dependency correction and evidence without changing model/server/gateway code. Gateway deployed SHA e373f51a1a6b8ae47f93b8c832635efc1f10828e268afb47260db23c140b0e34 matches its committed snapshot.
+
+Direct six-second WAV: 0.779s wall. Thirty-second repeated-input check:2.656s, two continuous nonoverlapping segments [0,23.8],[23.8,30], all samples covered; this checks chunk mechanics, not natural long-form accuracy. Normal public default request:0.768s wall, trained backend/model SHA confirmed in response and private native corpus; raw/final audio association and quantization none verified. SAGE/smart bypass explicit. Natural transcripts and audio retained only in private artifacts.
+
+Pilot and gateway active/enabled, zero observed restarts. Parakeet stopped/disabled with all files retained. A live `Wants` inspection found that empty Wants in a drop-in did not remove the historical Parakeet dependency; moved the exact existing routing file unchanged to `/home/deck/.config/systemd/user/ruen-pilot-disabled-routing/parakeet-default.conf`. Reloading systemd confirmed Wants now contains only the pilot; no gateway restart was needed for this correction. Rollback README reflects the moved routing file.
+
+After releasing Parakeet: available3378MiB; pilot cgroup memory2212253696bytes, gateway351645696bytes. Peak observed temperature after bounded requests62C. Prior overlap while both models loaded had1396MiB available and was ended by stopping Parakeet. These are observations, not soak guarantees. No extra benchmark campaign or nighttime schedule created. User trial stays active until changed explicitly.

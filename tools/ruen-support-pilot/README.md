@@ -7,7 +7,7 @@ User-requested hands-on deployment of the 2026-10-14 trained checkpoint, **not a
 - [Server](<server.py>) subclasses the retained [WAV adapter](<../gigaam-multilingual/gigaam_multilingual_server.py>) and loads the exact local checkpoint through official GigaAM. SHA-256 must be `b1e64f5b0e6349deefc3534358cbe97becac78349ae5ddc3a28c380ac9974a6d`.
 - [Gateway snapshot](<gateway-server.py>) extends the observed production Parakeet gateway with backend `ruen_support_pilot`. The existing `/v1/audio/transcriptions` URL and upload contract remain.
 - [Service](<ruen-support-pilot.service>) uses the retained Python3.13 / PyTorch2.10 CPU environment, four threads, loopback10002, and the pinned official GigaAM checkout `7447938d791c4f3e643386ee22c33777004293a5`.
-- [Routing drop-in](<zz-ruen-support-pilot.conf>) overrides the retained Parakeet default without editing that file. No silent fallback to Parakeet.
+- [Routing drop-in](<zz-ruen-support-pilot.conf>) selects the pilot. The previous Parakeet routing file is retained unchanged outside the active drop-in directory; systemd dependency lists cannot be cleared with an empty `Wants=` drop-in. No silent fallback to Parakeet.
 
 `/readyz` and each successful transcription verify the trained checkpoint hash. Responses include `X-STT-Backend`, `X-STT-Model`, `X-STT-Model-SHA256` and `X-STT-Experimental`. Private corpus records retain exact model identity, runtime, chunk intervals, raw output, existing dictionary result and final output. This keeps human feedback attributable to the right weights. Existing dictionary rules and cleanup opt-out remain unchanged; no new lexical rules are added. SAGE and smart text rewriting are bypassed for the pilot, even when requested, with `X-Formatting-Status: bypassed`.
 
@@ -24,7 +24,7 @@ systemctl --user enable --now parakeet-stt.service
 curl --fail http://127.0.0.1:10001/ready
 ```
 
-Remove only the pilot route drop-in `/home/deck/.config/systemd/user/voice-gateway.service.d/zz-ruen-support-pilot.conf` after verifying that exact path. The retained `parakeet-default.conf` then selects Parakeet; the extended gateway still supports it. Reload systemd, restart the gateway, verify the public `/readyz` backend is `parakeet`, then stop/disable `ruen-support-pilot.service`. Preserve corpus and model files.
+Remove only the pilot route drop-in `/home/deck/.config/systemd/user/voice-gateway.service.d/zz-ruen-support-pilot.conf` after verifying that exact path. Restore `/home/deck/.config/systemd/user/ruen-pilot-disabled-routing/parakeet-default.conf` to `/home/deck/.config/systemd/user/voice-gateway.service.d/parakeet-default.conf`; its contents remain unchanged. The extended gateway still supports Parakeet. Reload systemd, restart the gateway, verify the public `/readyz` backend is `parakeet`, then stop/disable `ruen-support-pilot.service`. Preserve corpus and model files.
 
 ## Limits
 
