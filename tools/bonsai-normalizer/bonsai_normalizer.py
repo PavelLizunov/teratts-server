@@ -192,6 +192,13 @@ class BonsaiNormalizer:
             return self.config.token.strip()
         return None
 
+    def _messages_for_source(self, source_text: str) -> list[dict[str, str]]:
+        return [{"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": source_text}]
+
+    def _render_candidate(self, source_text: str, response_text: str) -> str:
+        return response_text.strip()
+
     def normalize(self, source_text: str) -> Tuple[str, dict[str, Any]]:
         """Normalize transcript text.
 
@@ -234,12 +241,14 @@ class BonsaiNormalizer:
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
+        try:
+            messages = self._messages_for_source(source_text)
+        except ValueError:
+            return _fallback("invalid_edit_plan")
+
         payload = {
             "model": self.config.model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": source_text},
-            ],
+            "messages": messages,
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
             "top_k": self.config.top_k,
@@ -318,8 +327,11 @@ class BonsaiNormalizer:
             candidate.encode("utf-8")
         except UnicodeEncodeError:
             return _fallback("invalid_content_encoding")
-        candidate = candidate.strip()
-        if not candidate:
+        try:
+            candidate = self._render_candidate(source_text, candidate)
+        except ValueError:
+            return _fallback("invalid_edit_selection")
+        if not candidate.strip():
             return _fallback("empty_candidate")
 
         # Modest growth validation

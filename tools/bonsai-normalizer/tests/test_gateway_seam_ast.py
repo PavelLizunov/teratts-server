@@ -303,6 +303,29 @@ class TestExecutedGatewaySeam(unittest.TestCase):
                 self.assertTrue(encoded)
                 self.assertEqual(response.headers["X-Bonsai-Status"], "fallback")
 
+    @patch("urllib.request.OpenerDirector.open")
+    def test_literal_editor_exact_fallback_and_edit_reach_real_gateway_function(self, opened):
+        from bonsai_literal_editor import BonsaiLiteralEditor
+        from bonsai_normalizer import DEFAULT_MODEL, DEFAULT_REVISION
+        source = 'Этот дурацкий таймер ждёт 7 секунд.'
+        for selection, expected, status in (
+            ('{"delete":[0]}', 'Этот таймер ждёт 7 секунд.', 'applied'),
+            ('{"delete":[999]}', source, 'fallback'),
+            ('{"delete":[]}', source, 'unchanged'),
+        ):
+            body = {'model': DEFAULT_MODEL, 'revision': DEFAULT_REVISION,
+                    'choices': [{'finish_reason': 'stop', 'message': {'content': selection}}]}
+            mock_response = MagicMock()
+            mock_response.__enter__.return_value = mock_response
+            mock_response.read.return_value = json.dumps(body).encode()
+            opened.return_value = mock_response
+            response, record, _, _, _ = self._execute(
+                real_normalizer=BonsaiLiteralEditor(), asr_text=source)
+            self.assertEqual(record['accepted_stt_text'], source)
+            self.assertEqual(record['final_text'], expected)
+            self.assertEqual(response.content, {'text': expected})
+            self.assertEqual(response.headers['X-Bonsai-Status'], status)
+
     def test_blocked_normalizer_yields_event_loop(self):
         # A deterministic callback, not a fragile wall-time threshold, releases the mock.
         class LoopProbe:
