@@ -7,6 +7,7 @@ via an OpenAI-compatible HTTP endpoint serving prism-ml/Ternary-Bonsai-2-9B-mlx-
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
 import json
 import math
 import os
@@ -196,6 +197,9 @@ class BonsaiNormalizer:
         return [{"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": source_text}]
 
+    def _response_format_for_source(self, source_text: str) -> Optional[dict[str, Any]]:
+        return None
+
     def _render_candidate(self, source_text: str, response_text: str) -> str:
         return response_text.strip()
 
@@ -243,6 +247,14 @@ class BonsaiNormalizer:
 
         try:
             messages = self._messages_for_source(source_text)
+            response_format = self._response_format_for_source(source_text)
+            expected_response_format = None
+            if response_format is not None:
+                profile = response_format["json_schema"]
+                schema_bytes = json.dumps(profile["schema"], sort_keys=True, separators=(",", ":"),
+                                          ensure_ascii=False).encode("utf-8")
+                expected_response_format = {"name": profile["name"],
+                                            "schema_sha256": hashlib.sha256(schema_bytes).hexdigest()}
         except ValueError:
             return _fallback("invalid_edit_plan")
 
@@ -259,6 +271,8 @@ class BonsaiNormalizer:
             "max_tokens": min(self.config.max_tokens, MAX_TOKENS),
             "stream": False,
         }
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         url = f"{self.config.endpoint_url}/v1/chat/completions"
         try:
@@ -287,6 +301,11 @@ class BonsaiNormalizer:
         # Response structure validation
         if not isinstance(data, dict):
             return _fallback("invalid_response_format")
+        if response_format is not None:
+            service_meta = data.get("bonsai")
+            if (not isinstance(service_meta, dict)
+                    or service_meta.get("response_format") != expected_response_format):
+                return _fallback("response_format_unverified")
         choices = data.get("choices")
         if not choices or not isinstance(choices, list):
             return _fallback("invalid_choices_format")
