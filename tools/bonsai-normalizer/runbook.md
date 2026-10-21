@@ -10,6 +10,12 @@ The deployment commands below are unexecuted instructions for the older free-tex
 
 ---
 
+## Actual dictation client
+
+The owner uses **Voxtype on their own Omarchy computer, holding Insert, with online transcription**, not the DSH built-in microphone. The actual endpoint, installed version, output driver, newline behavior, timeout and auto-submit configuration have not been inspected: the online owner machine currently refuses SSH. The separate `omarchy-test` VM is not that client and has no Voxtype binary/service. No Voxtype/STT settings were changed.
+
+[Current upstream configuration documentation](https://github.com/peteonrails/voxtype/blob/dev/docs/CONFIGURATION.md) describes a native stdin/stdout post-process hook with source fallback and profiles, but its availability in the owner's installed build is not yet verified. Inspect those owning settings only when a useful candidate is ready; preserve existing Insert recording, online recognition and active-field insertion. Do not silently replace it with DSH voice or infer its endpoint from the name alone. The deployment instructions below concern the separate gateway experiment, not an executed Voxtype integration.
+
 ## 1. File Placement on Steam Deck
 
 | Source Path (Repo) | Target Path (Host) | Permissions |

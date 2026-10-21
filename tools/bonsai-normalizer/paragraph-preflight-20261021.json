@@ -52,6 +52,6 @@
     "accepted_services_and_tunnel": "active/enabled, automatic restarts0",
     "production_activation": false
   },
-  "consumer_inspection": "Current DSH installed voice source uses separate SenseVoice remote and verbatim draft insertion, not the Deck upload path. This is source/configuration observation, not a live microphone test. Actual owner Deck recording UI remains unidentified; gateway readiness is not that UI acceptance.",
+  "consumer_inspection": "Owner identified Voxtype on their own Omarchy computer, holding Insert, configured online; not DSH built-in voice. Actual endpoint/version/output/newline/timeout/auto-submit settings remain uninspected because the online owner machine refuses SSH22. The separate omarchy-testVM has no Voxtype and is not the owner client. No client/STT settings changed. Current upstream docs describe a native post-process hook but do not establish installed capability; gateway readiness is not Voxtype acceptance.",
   "decision": "Implementation/framework gates pass; live grouping screen incomplete and all frozen cases untouched. Keep factory-unselected. Neutralization remains separately rejected after round8 semantic loss; Kodak caption quality and actual voice consumer remain unresolved."
 }
