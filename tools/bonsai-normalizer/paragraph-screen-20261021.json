@@ -1,0 +1,77 @@
+{
+  "iteration": "round16-owner-requested-model-unload-then-frozen-paragraph-screen",
+  "decision": "Reject activation: 0/4 exact grouping plus expected status, 0/4 useful grouping. The resource gate was met after native LFM unload; memory admission is no longer the blocker.",
+  "scope": "Four pre-frozen synthetic text requests from the real isolated paragraph client on Deck through the existing loopback tunnel to the dedicated Mac adapter; no ASR or actual Voxtype request",
+  "model": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+  "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+  "Deck_implementation_commit": "35dc8068a6a04a758ff9a9c07c0531aca9d25ecc",
+  "Mac_service_commit": "c05ebac2df0e03b6473b1242dcffdec01056e521",
+  "service_sha256": "35472797d745bfce5f5726122dd6361f49b17f21ee51ead8aa5df42933f858f0",
+  "collector_sha256": "6b0a2224d85e579bdad23c4322b3f77bc2551011d48fe0ba96369eddf4742b7e",
+  "module_sha256": {
+    "bonsai_normalizer.py": "809aac74b11e3a68aa635c945c0d128ac0c5d2b84122aa18f56fa1f58bb6a092",
+    "bonsai_literal_editor.py": "803dceef9d7ca68b2869106cc43014408b90aafa76405d6c9d5cb7fa839afe14",
+    "bonsai_paragraph_structurer.py": "5edd9e33524cba67e343157b4ba8edd31bb9087c94ab44760ee068f3a66266aa"
+  },
+  "inputs_sha256": "57fab275f08d3c505a09c2542f94dbe0baef089b704af4a20d8369027c0586f4",
+  "prompt_sha256": "803fd323ff61ffdfde79cdfb808140e749f267f898e40737a76b4a49f3a6ca25",
+  "private_raw_result_sha256": "5bc1d9e624664e7f21db3201ff0f0f6be59e2c4427ebc428627652eb3c490353",
+  "profile": {"temperature": 0, "seed": 42, "max_tokens": 1024, "stream": false, "thinking": false, "decoding": "baseline", "response_format": null},
+  "admission": {
+    "at": "2026-10-21T15:43:44.605933+00:00",
+    "available_GiB": 8.773727416992188,
+    "global_swap_GiB": 1.650576171875,
+    "unchanged_threshold_GiB": 5.5,
+    "Bonsai_loaded": false,
+    "LFM_loaded_count": 0,
+    "vision_lock_free": true,
+    "fresh_source_and_copied_module_hashes_matched": true
+  },
+  "rows": [
+    {"id": "two_topical_blocks", "expected_selection": [1], "raw_selected_ids_inside_rejected_fences": [0,1,2], "strict_selection_valid": false, "returned_status": "fallback", "reason": "invalid_edit_selection", "exact_source_fallback": true, "exact_expected_bytes": false, "expected_status": false, "useful_grouping": false, "client_seconds": 9.839691178873181, "cold": true, "load_seconds": 5.695593667216599},
+    {"id": "condition_action_block_then_travel", "expected_selection": [2], "actual_selection": [0,1,2], "strict_selection_valid": true, "returned_status": "applied", "exact_expected_bytes": false, "expected_status": true, "useful_grouping": false, "client_seconds": 2.564261212013662, "cold": false, "load_seconds": 0},
+    {"id": "single_topic_requires_abstention", "expected_selection": [], "raw_selected_ids_inside_rejected_fences": [0,1,2], "strict_selection_valid": false, "returned_status": "fallback", "reason": "invalid_edit_selection", "exact_source_fallback": true, "exact_expected_bytes": true, "expected_status": false, "useful_grouping": false, "client_seconds": 2.3485856628976762, "cold": false, "load_seconds": 0},
+    {"id": "mixed_language_preservation_and_meeting", "expected_selection": [1], "actual_selection": [0,1,2], "strict_selection_valid": true, "returned_status": "applied", "exact_expected_bytes": false, "expected_status": true, "useful_grouping": false, "client_seconds": 2.014628312084824, "cold": false, "load_seconds": 0}
+  ],
+  "result": {
+    "completed": true,
+    "protocol_identity_finish_profile_pass": "4/4",
+    "strict_selection_valid": "2/4",
+    "exact_expected_bytes": "1/4, solely an exact-source fallback on the abstention case",
+    "exact_grouping_and_expected_status": "0/4",
+    "useful_grouping": "0/4",
+    "fallbacks": "2/4",
+    "exact_insertion_plan_or_source_fallback_verified": "4/4",
+    "scope_safety_or_general_semantic_acceptance": false,
+    "production_acceptance": false
+  },
+  "timing": {"screen_seconds": 16.778688340913504, "total_collection_seconds": 17.023422790691257, "screen_budget_seconds": 600, "budget_source": "Per-iteration skill/agent bound, not user total-task cap"},
+  "resources_GiB": {
+    "physical_RAM": 16,
+    "first_response_memory_before_available": 8.794143676757812,
+    "minimum_sampled_response_end_available": 5.0893707275390625,
+    "response_memory_global_swap": 1.330078125,
+    "sampled_swap_growth": 0,
+    "max_owner_lifetime_MLX_high_water": 4.316429374739528,
+    "limits": "Host available, global swap and process lifetime high-water are nonadditive scopes. End samples do not measure transient minimum availability. Falling historical swap is not negative model allocation."
+  },
+  "settlement": {
+    "unload_acknowledged": true,
+    "http_health_loaded": false,
+    "independent_Mac_lock_checked_at": "2026-10-21T15:44:34.324093+00:00",
+    "vision_lock_free": true,
+    "LFM_loaded_count": 0,
+    "unknown_outcome": false,
+    "Deck_gateway_sha256": "0fee7132c77769bff880607a0f41afe4ab308230ed4c5cd3d229c11ecf05f6c1",
+    "Deck_accepted_services_and_tunnel_active_during_screen": true,
+    "Deck_publication_preservation_observed_at": "2026-10-21T16:09:19.163761+00:00",
+    "Deck_accepted_services_and_tunnel_active_enabled_at_publication_check": true,
+    "Deck_service_restart_counts_at_publication_check": 0,
+    "production_normalizer_or_dropin_installed_at_publication_check": false
+  },
+  "model_calls_this_screen": 4,
+  "recorded_model_calls_after_paragraph_screen": 41,
+  "telegram_calls": 0,
+  "retries_or_parser_repairs": 0,
+  "limits": "Finite failure of this exact prompt/profile, not universal model incapability, quantization causality or evidence that memory changes caused the output pattern. No consumed case may be replayed or tuned. Useful neutralization and actual owner Voxtype acceptance remain incomplete."
+}
