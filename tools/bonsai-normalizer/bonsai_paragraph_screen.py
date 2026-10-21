@@ -106,14 +106,16 @@ def observe_deck():
 
 
 def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
-            clock=time.monotonic, wall_clock=time.time, deck_observer=observe_deck):
+            clock=time.monotonic, wall_clock=time.time, deck_observer=observe_deck,
+            manifest_validator=validate_inputs, runtime_validator=runtime_hashes,
+            cell_editor=None):
     """No retry; unknown submission/body-read skips unload and further calls.
 
     Mac admission is a fresh coordinator observation, not an automated headroom
     poll. HTTP settlement does not prove a new Mac vision-lock observation.
     """
-    cells = validate_inputs(inputs, inputs_hash)
-    hashes = runtime_hashes()
+    cells = manifest_validator(inputs, inputs_hash)
+    hashes = runtime_validator()
     if len(token.strip()) < 32:
         raise ValueError('Invalid token')
     output = Path(output)
@@ -162,6 +164,8 @@ def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
         validate_admission(admission, wall_clock())
         start = clock()
         for cell in cells:
+            if cell_editor is not None:
+                editor = cell_editor(cell, token.strip())
             if clock() - start >= 600:
                 raise TimeoutError('Screen budget exhausted before case')
             active = dict(cell, outcome='not_submitted')
