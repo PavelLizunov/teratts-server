@@ -1,0 +1,137 @@
+{
+  "created_at": "2026-10-21T10:48:41.633114+00:00",
+  "source_commit": "a6f4e8b08fdccbdd487c95eef0ac584bebe853a9",
+  "editor_sha256": "803dceef9d7ca68b2869106cc43014408b90aafa76405d6c9d5cb7fa839afe14",
+  "normalizer_sha256": "677366072915131076e0eff390c5096dafd48e9839c5dc1ea30651086bd2c3a6",
+  "system_prompt_sha256": "71c7103f0ea9bc8639fc289da03237d46aa808d5e96a5dd94a5e35158b1810ff",
+  "inputs_sha256": "a03f8c495aa77a548045b8427aaaba7c0e298618bbfb4193a6fab6720e893daa",
+  "model": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+  "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+  "path": "exact temporary Deck editor ->existing18091 tunnel ->Mac8091 launchd",
+  "profile": {
+    "temperature": 0.0,
+    "seed": 42,
+    "max_tokens": 1024,
+    "stream": false,
+    "thinking": false,
+    "decoding": "baseline"
+  },
+  "protocol": "Four fresh fixed synthetic cells, one request each, no retries/tuning/parser repair. First invalid JSON rejection retained. Evaluator stopped after unhandled scoring JSONDecodeError; corrected evaluator ran only three unsubmitted cells with unchanged frozen implementation/inputs. Explicit unload between segments made the second segment first cell cold.",
+  "rows": [
+    {
+      "case": 1,
+      "kind": "emotion",
+      "offered_candidates": 2,
+      "status": "fallback",
+      "reason": "invalid_edit_selection",
+      "exact_expected_bytes": false,
+      "client_seconds": 9.331470024771988,
+      "cold": true,
+      "load_seconds": 6.418424000032246,
+      "prompt_tokens": 281,
+      "completion_tokens": 20,
+      "finish_reason": "stop",
+      "selection": "invalid JSON: Markdown fences"
+    },
+    {
+      "case": 2,
+      "kind": "emotion",
+      "offered_candidates": 1,
+      "status": "applied",
+      "reason": null,
+      "exact_expected_bytes": true,
+      "client_seconds": 7.475065596401691,
+      "cold": true,
+      "load_seconds": 5.6557712918147445,
+      "prompt_tokens": 257,
+      "completion_tokens": 7,
+      "finish_reason": "stop",
+      "selection": {
+        "delete": [
+          0
+        ]
+      }
+    },
+    {
+      "case": 3,
+      "kind": "emotion",
+      "offered_candidates": 1,
+      "status": "applied",
+      "reason": null,
+      "exact_expected_bytes": true,
+      "client_seconds": 1.8338236059062183,
+      "cold": false,
+      "load_seconds": 0.0,
+      "prompt_tokens": 258,
+      "completion_tokens": 7,
+      "finish_reason": "stop",
+      "selection": {
+        "delete": [
+          0
+        ]
+      }
+    },
+    {
+      "case": 4,
+      "kind": "literal_meaning_control",
+      "offered_candidates": 1,
+      "status": "unchanged",
+      "reason": "empty_edit_selection",
+      "exact_expected_bytes": true,
+      "client_seconds": 2.042860981076956,
+      "cold": false,
+      "load_seconds": 0.0,
+      "prompt_tokens": 265,
+      "completion_tokens": 5,
+      "finish_reason": "stop",
+      "selection": {
+        "delete": []
+      }
+    }
+  ],
+  "calls": 4,
+  "telegram_calls": 0,
+  "model_calls_since_access_recheck": 28,
+  "request_segment_seconds": [
+    9.36883566295728,
+    11.382318910211325
+  ],
+  "request_segment_total_seconds": 20.751154573168606,
+  "first_submission_to_final_response_seconds": 115.40803408622742,
+  "result": {
+    "useful_target_deletions": "2/3",
+    "literal_meaning_abstention": "1/1",
+    "exact_expected_outputs": "3/4",
+    "schema_valid": "3/4",
+    "complete_pinned_responses": "4/4",
+    "exact_source_fallback": "1/4",
+    "arbitrary_prose_reconstruction": false,
+    "production_acceptance": false
+  },
+  "decision": "Mechanism is promising but fails frozen4/4gate because of one fenced JSON response; keep isolated and undeployed. Do not strip fences or rerun consumed cell to manufacture success. Contextual abstention passed once, not proven generally.",
+  "resources_GiB": {
+    "global_swap_before": 8.7241796875,
+    "global_swap_end": 8.7241796875,
+    "observed_swap_growth": 0.0,
+    "minimum_sampled_available": 3.436248779296875,
+    "process_lifetime_mlx_high_water": 4.9042094852775335
+  },
+  "settlement": {
+    "at": "2026-10-21T10:51:19.537150+00:00",
+    "unload_acknowledged": true,
+    "health_loaded": false,
+    "vision_lock_free": true,
+    "unknown_outcome": false,
+    "production_changed": false,
+    "gateway_sha256": "0fee7132c77769bff880607a0f41afe4ab308230ed4c5cd3d229c11ecf05f6c1",
+    "accepted_services_and_tunnel_active": true
+  },
+  "verification": {
+    "local": "85total:82pass+3ASGI opt-in skips",
+    "exact_Deck_archive": "85/85pass including3framework cases,3.810s,exit0;hardware/model stages stubbed",
+    "formatting": "7pass",
+    "loqira_mocked": "5pass",
+    "independent_context_review": "no remaining concrete blocking defect for isolated finite screen;82pass+3skips,5default differential fixtures,60interleaved mocked literal calls;no live inference by reviewer"
+  },
+  "limits": "Finite vocabulary/local shields, no logical restructuring/newlines, no proof of broad semantics or every quote/name/negation/command form. One literal-control success is not general abstention evidence. Cold/warm distinct-text timings are not speed ratios; zero sampled swap growth is not sustained safety and process high-water is not exclusive consumption. No actual ASR/voiceUI consumer/deployment/Telegram test. Raw synthetic source/results omitted."
+}
