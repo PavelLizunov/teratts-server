@@ -97,7 +97,8 @@ class TestLiteralSelection(unittest.TestCase):
             source = f'Этот {adjective} скрипт готов.'
             with self.subTest(adjective=adjective):
                 self.assertEqual([s['text'] for s in candidate_spans(source)], [adjective + ' '])
-        for text in ('дурацкий\nскрипт', 'дурацкий-скрипт', 'сверхдурацкий скрипт'):
+        for text in ('дурацкий\nскрипт', 'дурацкий-скрипт', 'сверхдурацкий скрипт',
+                     'сверх‑дурацкий скрипт', 'сверх‐дурацкий скрипт'):
             self.assertEqual(candidate_spans(text), [])
 
     def test_literal_use_still_needs_contextual_model_decision(self):
