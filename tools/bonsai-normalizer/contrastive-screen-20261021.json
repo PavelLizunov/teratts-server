@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-10-21T10:21:21.688338+00:00",
+  "source_commit": "0b5f4b288513d74105f452e7a4cc6b5fb136b8b8",
+  "module_sha256": "b93e736fd2de22d734bd38a6e151d4d662c9a849b41c3690c419206ffe60c699",
+  "system_prompt_sha256": "72bf8901ae2a719cb80069106727c89681d747f0d7915ef01d966793fb387e31",
+  "model": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+  "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+  "path": "exact temporary Deck normalizer -> existing loopback18091 tunnel -> Mac loopback8091 launchd",
+  "profile": {"temperature": 0.0, "seed": 42, "max_tokens": 1024, "stream": false, "thinking": false, "decoding": "baseline"},
+  "protocol": "One candidate, four frozen synthetic texts, one sequential request each; no retries or output-driven tuning. Historical results are context, not a new paired baseline.",
+  "scoring": "Three emotion targets require only the designated deletion; one protected-use control permits no deletion. Only sentence-boundary spaces may become newlines; no case/punctuation/path repair is performed by the scorer.",
+  "rows": [
+    {"case": "introductory_emotion", "seconds": 10.467180225998163, "cold": true, "load_seconds": 6.755949625279754, "prompt_tokens": 385, "completion_tokens": 43, "finish_reason": "stop", "raw_exact_expected": false, "delivered_exact_expected": false, "status": "fallback", "reason": "validation_qualifier_lost", "manual_result": "raw candidate removed uncertainty and source wording; exact accepted text restored, emotion therefore remains"},
+    {"case": "emotional_adjective", "seconds": 3.9646931211464107, "cold": false, "load_seconds": 0.0, "prompt_tokens": 386, "completion_tokens": 47, "finish_reason": "stop", "raw_exact_expected": true, "delivered_exact_expected": true, "status": "applied", "reason": null, "manual_result": "target adjective removed; facts, quantities, conditional criterion, prohibition and action order retained"},
+    {"case": "separate_emotional_reaction", "seconds": 3.9878559252247214, "cold": false, "load_seconds": 0.0, "prompt_tokens": 398, "completion_tokens": 42, "finish_reason": "stop", "raw_exact_expected": false, "delivered_exact_expected": false, "status": "fallback", "reason": "validation_negation_lost", "manual_result": "raw candidate kept emotion and omitted a substantive final requirement; exact accepted text restored"},
+    {"case": "protected_use_control", "seconds": 6.510947562754154, "cold": false, "load_seconds": 0.0, "prompt_tokens": 445, "completion_tokens": 111, "finish_reason": "stop", "raw_exact_expected": true, "delivered_exact_expected": true, "status": "applied", "reason": null, "manual_result": "negated and quoted evaluation, title, Cyrillic names, signed quantity and unit, uncertainty, necessary condition, order, urgency and spaced command retained"}
+  ],
+  "result": {"useful_neutralization": "1/3 emotion-bearing cases", "protected_control": "1/1", "exact_expected_delivered": "2/4", "applied": "2/4", "exact_accepted_text_fallback": "2/4", "raw_full_expected_content_retention": "2/4", "delivered_content_retention_manual": "4/4 including2exact fallbacks", "promotion": false},
+  "elapsed_seconds": 24.99782208399847,
+  "model_calls": 4,
+  "model_calls_total_since_access_recheck": 24,
+  "telegram_calls": 0,
+  "resources_GiB": {"available_before_first_request": 6.7696380615234375, "minimum_sampled_available": 3.6540985107421875, "global_swap_before": 8.7319921875, "global_swap_end": 8.7319921875, "observed_swap_growth": 0.0, "process_lifetime_mlx_high_water": 4.9042094852775335},
+  "settlement": {"at": "2026-10-21T10:22:20.188214+00:00", "unload_acknowledged": true, "health_loaded": false, "vision_lock_free": true, "unknown_outcome": false, "production_gateway_sha256": "0fee7132c77769bff880607a0f41afe4ab308230ed4c5cd3d229c11ecf05f6c1", "accepted_services_and_tunnel_active": true, "production_normalizer_or_dropin_installed": false},
+  "decision": "Reject this candidate for activation. It improves one adjective case but does not improve the1/3delivered useful-neutralization denominator and introduces new raw content loss; guards correctly restore two exact sources.",
+  "limits": "Four synthetic related cases, manually scored by lead. No population-level semantic proof, real ASR or voice/UI consumer check. Preserved output through fallback is not successful editing. Client cold/warm timings are different texts, not a speed ratio. Process high-water is not this iteration's exclusive consumption or additive host memory; zero sampled swap growth is not a sustained guarantee. Raw synthetic texts/responses and credentials are omitted."
+}
