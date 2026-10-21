@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 from types import SimpleNamespace
 import unittest
@@ -99,7 +100,7 @@ class TestGatewaySeamAST(unittest.TestCase):
         self.assertIn('os.environ.get("BONSAI_NORMALIZER_CONFIG")', func_source)
 
         # 3. Call to normalizer with accepted_stt_text
-        self.assertIn("bonsai_normalizer.normalize(accepted_stt_text)", func_source)
+        self.assertIn("await asyncio.to_thread(bonsai_normalizer.normalize, accepted_stt_text)", func_source)
 
         # 4. Fallback preserves accepted_stt_text
         self.assertIn("final_text = accepted_stt_text", func_source)
@@ -164,7 +165,7 @@ class TestExecutedGatewaySeam(unittest.TestCase):
         namespace = {
             "__name__": "gateway_contract_test", "Optional": __import__("typing").Optional,
             "Request": object, "UploadFile": object, "io": io, "wave": wave,
-            "time": time, "os": os, "np": SimpleNamespace(int16=object(), float32=object(),
+            "time": time, "os": os, "asyncio": asyncio, "np": SimpleNamespace(int16=object(), float32=object(),
                 frombuffer=lambda *a, **kw: SimpleNamespace(astype=lambda _: 0.0)),
             "STT_BACKEND": "parakeet", "STT_CORRECTOR": corrector,
             "STT_IDENTITY": {"model": "parakeet", "model_revision": "pinned"},
@@ -279,6 +280,52 @@ class TestExecutedGatewaySeam(unittest.TestCase):
         self.assertEqual(record["bonsai"]["reason"], "validation_word_order_changed")
         self.assertEqual(response.headers["X-Bonsai-Status"], "fallback")
         mock_open.assert_called_once()
+
+    @patch("urllib.request.OpenerDirector.open")
+    def test_invalid_unicode_candidate_falls_back_in_both_formats(self, mock_open):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from bonsai_normalizer import BonsaiNormalizer, DEFAULT_MODEL, DEFAULT_REVISION
+        source = "Проверь сервер."
+        body = {"model": DEFAULT_MODEL, "revision": DEFAULT_REVISION,
+            "choices": [{"finish_reason": "stop", "message": {"content": source + "\ud800"}}]}
+        response_mock = MagicMock()
+        response_mock.__enter__.return_value = response_mock
+        response_mock.read.return_value = json.dumps(body).encode("utf-8")
+        mock_open.return_value = response_mock
+        for response_format in ("text", "json"):
+            with self.subTest(response_format=response_format):
+                response, record, _, _, _ = self._execute(real_normalizer=BonsaiNormalizer(),
+                    asr_text=source, response_format=response_format)
+                self.assertEqual(record["final_text"], source)
+                self.assertEqual(record["bonsai"]["reason"], "invalid_content_encoding")
+                content = response.content
+                encoded = (content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)).encode("utf-8")
+                self.assertTrue(encoded)
+                self.assertEqual(response.headers["X-Bonsai-Status"], "fallback")
+
+    def test_blocked_normalizer_yields_event_loop(self):
+        # A deterministic callback, not a fragile wall-time threshold, releases the mock.
+        class LoopProbe:
+            model, revision, enabled = "bonsai", "revision", True
+            def __init__(self):
+                self.callback_ran_during_wait = False
+            def normalize(self, text):
+                released = threading.Event()
+                self.loop.call_soon_threadsafe(released.set)
+                self.callback_ran_during_wait = released.wait(0.5)
+                return text, {"status": "applied"}
+        probe = LoopProbe()
+        original_run = asyncio.run
+        def run_with_loop(coroutine):
+            async def wrapped():
+                probe.loop = asyncio.get_running_loop()
+                return await coroutine
+            return original_run(wrapped())
+        with patch.object(asyncio, "run", side_effect=run_with_loop):
+            response, record, _, _, _ = self._execute(real_normalizer=probe)
+        self.assertTrue(probe.callback_ran_during_wait)
+        self.assertEqual(record["final_text"], record["accepted_stt_text"])
+        self.assertEqual(response.headers["X-Bonsai-Status"], "applied")
 
     def test_health_does_not_probe_bonsai(self):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())

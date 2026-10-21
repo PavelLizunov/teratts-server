@@ -642,6 +642,18 @@ class TestLocalContractRegressions(unittest.TestCase):
                 self.assertEqual(result, "исходный текст")
                 self.assertEqual(meta["status"], "fallback")
 
+    @patch("urllib.request.OpenerDirector.open")
+    def test_escaped_lone_surrogate_falls_back_before_serialization(self, mock_open):
+        source = "Проверь сервер."
+        for surrogate in ("\ud800", "\udfff"):
+            with self.subTest(codepoint=ord(surrogate)):
+                mock_open.return_value = _make_mock_response(source + surrogate)
+                result, meta = BonsaiNormalizer().normalize(source)
+                self.assertEqual(result, source)
+                self.assertEqual(meta["status"], "fallback")
+                self.assertEqual(meta["reason"], "invalid_content_encoding")
+                result.encode("utf-8")
+
     def test_invalid_config_factory_is_content_free_and_never_opens_http(self):
         body = json.dumps({"model": "private transcript and token"})
         with patch("os.path.isfile", return_value=True), patch(

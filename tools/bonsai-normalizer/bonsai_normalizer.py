@@ -307,6 +307,10 @@ class BonsaiNormalizer:
         if not isinstance(candidate, str):
             return _fallback("invalid_content_type")
 
+        try:
+            candidate.encode("utf-8")
+        except UnicodeEncodeError:
+            return _fallback("invalid_content_encoding")
         candidate = candidate.strip()
         if not candidate:
             return _fallback("empty_candidate")

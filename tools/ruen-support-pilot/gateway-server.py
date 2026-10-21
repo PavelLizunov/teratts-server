@@ -1,3 +1,4 @@
+import asyncio
 import io, time, wave, struct, sys, urllib.request, urllib.error, json, os, uuid
 from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, Query, HTTPException, Response, Request
@@ -424,7 +425,7 @@ async def transcribe_audio(
     ):
         t_bonsai_0 = time.perf_counter()
         try:
-            rewritten_text, bonsai_meta = bonsai_normalizer.normalize(accepted_stt_text)
+            rewritten_text, bonsai_meta = await asyncio.to_thread(bonsai_normalizer.normalize, accepted_stt_text)
             if (not isinstance(bonsai_meta, dict) or not isinstance(rewritten_text, str)
                     or (bonsai_meta.get("status") == "applied" and not rewritten_text.strip())):
                 raise ValueError("invalid_normalizer_result")

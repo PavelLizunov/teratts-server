@@ -53,6 +53,8 @@ Environment=BONSAI_NORMALIZER_CONFIG=/home/deck/homelab/config/bonsai-normalizer
 
 Configuration is read at gateway startup, not hot-reloaded. `enabled` must be a JSON boolean. The exact model and nonempty revision above are mandatory; temperature must remain `0.0`. Limits may be reduced but cannot exceed 6,000 input characters or 1,024 output tokens. Timeout/sampling fields must be finite JSON numbers with valid ranges, not quoted strings. Invalid configuration disables Bonsai and leaves accepted dictation available.
 
+The optional client call runs in `asyncio.to_thread`, so its synchronous HTTP wait does not occupy the gateway event loop. Existing ASR/Loqira stages are unchanged and may still be synchronous. Concurrent Mac requests remain serialized by its service; this change is not a throughput claim, admission-control policy or remote-cancellation guarantee.
+
 Timeout defaults to 12 seconds and clamps to a 0.1–20-second socket-operation timeout. It is not a measured end-to-end deadline against a server that trickles a body, and does not cancel remote inference. Bodies larger than 64 KiB, HTTP redirects, wrong response identity/revision and incomplete generations all return the accepted post-cleanup text. No retries or alternate model calls are made.
 
 ### 2.3 Token File
@@ -140,6 +142,7 @@ If Mac Bonsai 9B experiences outages, instability, or is taken offline:
 | `fallback` | `token_unavailable` | Configured token file was unreadable/empty; no transcript sent. |
 | `fallback` | `response_too_large` / `http_error_30x` | Oversized body or redirect rejected; no redirect followed. |
 | `fallback` | `model_mismatch` / `revision_mismatch` | Pinned weights on Mac changed; verify git revision on Mac. |
+| `fallback` | `invalid_content_encoding` | JSON string contains a lone surrogate or other strict UTF-8 encoding failure; retain accepted text without character replacement. |
 | `fallback` | `validation_numeric_missing` | Model omitted a numeric occurrence or changed its sign. |
 | `fallback` | `validation_numeric_added` | Model added or duplicated a numeric occurrence. |
 | `fallback` | `validation_latin_missing` / `validation_latin_added` | Latin identifier counts changed, including unexpected tags such as "Notes:". |
@@ -155,7 +158,15 @@ Run from the repository root without models or network:
 PYTHONDONTWRITEBYTECODE=1 TMPDIR="$PWD/tools/bonsai-normalizer" python3 -m unittest discover -s tools/bonsai-normalizer/tests -v
 ```
 
-The suite mocks HTTP and executes the actual gateway function AST with hardware dependencies stubbed, using the real dictionary and cleanup functions. It checks stage ordering, default/raw bypass, smart/format precedence, source fallback, headers and private corpus metadata. It does not establish that the installed FastAPI service imports, the tunnel works, the Mac reports the pinned revision, or the model follows the prompt.
+The default suite mocks HTTP and executes the actual gateway function AST with hardware dependencies stubbed, using the real dictionary and cleanup functions. The three full-ASGI cases are skipped unless `BONSAI_ASGI_TEST=1` is set in an environment already containing FastAPI, Starlette, httpx, multipart, numpy and Pillow:
+
+```bash
+BONSAI_ASGI_TEST=1 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/bonsai-normalizer/tests -p test_gateway_asgi.py -v
+```
+
+This optional test imports the full gateway module with only model/hardware initializers stubbed and exercises real FastAPI decorators, multipart/query handling, text/JSON serialization and two concurrent in-process ASGI requests. It opens no sockets, performs no model calls and does not start or patch production. Passing is framework-boundary evidence, not hardware startup, real audio/STT/model quality or the owner voice UI.
+
+The default checks It checks stage ordering, default/raw bypass, smart/format precedence, source fallback, headers and private corpus metadata. It does not establish that the installed FastAPI service imports, the tunnel works, the Mac reports the pinned revision, or the model follows the prompt.
 
 The ordered-word check now rejects `Не удаляй базу, перезапусти сервер.` rewritten as `Удаляй базу, не перезапусти сервер.`, despite equal negation counts. Candidate words must occur in source order and cannot reuse a source occurrence; deletions, case changes and punctuation/line-break formatting are still allowed. This also rejects valid synonyms and reordered but equivalent phrases, returning the accepted source unchanged.
 

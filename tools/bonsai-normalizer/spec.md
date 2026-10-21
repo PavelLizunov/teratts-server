@@ -46,7 +46,7 @@ if (
 ):
     t_bonsai_0 = time.perf_counter()
     try:
-        rewritten_text, bonsai_meta = bonsai_normalizer.normalize(accepted_stt_text)
+        rewritten_text, bonsai_meta = await asyncio.to_thread(bonsai_normalizer.normalize, accepted_stt_text)
         if (not isinstance(bonsai_meta, dict) or not isinstance(rewritten_text, str)
                 or (bonsai_meta.get("status") == "applied" and not rewritten_text.strip())):
             raise ValueError("invalid_normalizer_result")
@@ -120,7 +120,7 @@ The candidate output must pass all validation checks; otherwise, `status = "fall
 1. **Finish Reason:** `choice["finish_reason"] == "stop"`. (Rejects `length`, `content_filter`, null, etc.)
 2. **Model Identity:** Response `model` must match configured model (`prism-ml/Ternary-Bonsai-2-9B-mlx-2bit`).
 3. **Revision Identity:** Response revision (from `data["bonsai"]["revision"]` or `data["revision"]`) must match expected revision (`f4e28a59531731c41b6dfac88cf271bd58f0a287`).
-4. **Non-Empty:** Output must not be empty or whitespace only.
+4. **Non-Empty and Encodable:** Output must not be empty or whitespace only and must strictly encode as UTF-8. Escaped lone surrogates return `invalid_content_encoding`, preserving accepted text instead of replacing characters.
 5. **Modest Growth Guard:** Output character and word length must not exceed modest bounds relative to input:
    - `len(output) <= max(int(len(input) * 1.5) + 30, len(input) + 100)`
    - `len(output_words) <= max(int(len(input_words) * 1.5) + 5, len(input_words) + 20)`
@@ -163,6 +163,16 @@ Root cause: occurrence counts discard word order, so the recorded negation-scope
 This is an additional rejection guard, not a semantic-equivalence proof. It does not authorize arbitrary deletions: deleted facts/clauses/connectors, changed punctuation and case, and ambiguous repeated-word alignments can still change meaning. Those remaining blind spots must remain explicit and a finite passing-but-wrong deletion case must be retained. Live usefulness and real consumer acceptance remain pending, so keep the integration undeployed.
 
 Verification: preserve the current 59-check baseline; change the historical reversal test to require exact-source fallback with a content-free reason; add bounded RU/EN word-order, name/unit/quantity reassociation, instruction-answer and repeated-token rejection cases, accepted deletion/formatting cases, and a residual blind-spot case. First run the new tests against unchanged source to reproduce failure, then run the full normalizer/actual-gateway-AST suite and retained formatting/Loqira checks. Preserve the known unchanged dictionary mismatch rather than editing accepted aliases. Review the task-owned diff and publish an exact checkpoint branch under existing owner authorization; no deployment claim follows.
+
+## Protocol and event-loop correction (2026-10-21)
+
+An independent read-only review of5783a4e found two concrete defects beyond the documented semantic limits. First, synchronous urllib normalization runs inside async `transcribe_audio`, adding Mac wait time to the gateway worker's event loop. Execute only the optional Bonsai call via `await asyncio.to_thread(...)`; preserve all stage order, opt-in checks, accepted STT and exact fallback. Do not add a pretend cancellation deadline: a socket-operation timeout still does not cancel remote inference. Verify a blocked mock normalizer permits an event-loop callback to run, plus existing bypass/order/error checks.
+
+Second, JSON permits an escaped lone surrogate inside a Python string. Such a candidate can pass lexical guards and then fail UTF-8 serialization after the fallback boundary. Strictly encode the candidate before acceptance; encoding failure returns exact accepted text with content-free `invalid_content_encoding`. Never replace invalid characters. Reproduce both with bounded local tests before changing implementation, then run normalizer/actual-function-AST, formatting and mocked Loqira checks. Update runbook and owning component README, inspect the task-only diff and publish a new exact checkpoint. This follow-up does not deploy/activate the gateway or claim semantic acceptance.
+
+Observed local red/green:66tests before fixes produced6failing assertions/subtests (surrogate at both encoding endpoints, blocked event-loop callback and source-seam expectation); after the two implementation corrections all66passed in1.774s. Existing7formatting and5mockedLoqira checks passed. Accepted dictionary/Loqira sources remain byte-for-byte unchanged; no dictionary mismatch was repaired or new inference run. Tests execute the actual transcription function AST with stubs, not production FastAPI initialization. Cancellation/thread scheduling does not cancel remote inference, and freeing the event loop does not establish resource admission or multi-client throughput.
+
+The proposed prefix-only extraction policy is not adopted as a substitute for the requested editor: it would cover a narrow class while leaving emotional attributes unchanged, and finite prefixes still do not prove general meaning preservation. Keep the current useful-neutralization gate unmet. Actual FastAPI multipart/serialization/concurrency and voice-consumer verification remain required before activation; the local AST harness does not establish them. Add an explicit opt-in ASGI integration module using the already installed Deck FastAPI/Starlette/httpx/multipart environment, a full gateway module import with hardware initializers stubbed, real decorators/requests/responses and only mocked ASR/Loqira/Bonsai transport. Check multipart/query precedence, both response encodings, exact fallback, accepted-text provenance and another coroutine while Bonsai waits. Default local suite skips it without extra dependencies. Export a committed exact snapshot to a new private Deck directory; no production files/configuration, model/network calls or service restarts. This test proves the real framework boundary with stubs, not actual speech, hardware startup, live inference or the owner voice UI.
 
 ## 7. Verification Plan
 
