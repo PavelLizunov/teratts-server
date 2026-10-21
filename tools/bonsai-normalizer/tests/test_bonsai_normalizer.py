@@ -593,6 +593,25 @@ class TestLocalContractRegressions(unittest.TestCase):
                 self.assertEqual(meta["status"], "applied")
 
     @patch("urllib.request.OpenerDirector.open")
+    def test_contrastive_instruction_is_sent_without_changing_source_or_sampler(self, mock_open):
+        source = 'Это не плохая сборка. Сохрани слово «плохая». Срочно проверь rm -rf / tmp.'
+        mock_open.return_value = _make_mock_response(source)
+        result, meta = BonsaiNormalizer().normalize(source)
+        self.assertEqual(result, source)
+        self.assertEqual(meta["status"], "applied")
+        mock_open.assert_called_once()
+        payload = json.loads(mock_open.call_args.args[0].data)
+        self.assertEqual(payload["messages"], [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": source},
+        ])
+        self.assertIn("эмоционально-оценочные определения", SYSTEM_PROMPT)
+        self.assertIn("Не удаляй оценку под отрицанием или в цитате", SYSTEM_PROMPT)
+        self.assertIn("Команды, пути и пробелы внутри них не меняй", SYSTEM_PROMPT)
+        self.assertEqual(payload["temperature"], 0.0)
+        self.assertEqual(payload["seed"], 42)
+
+    @patch("urllib.request.OpenerDirector.open")
     def test_ordered_copy_is_still_not_semantic_equivalence(self, mock_open):
         # Structural limits remain deliberate evidence against semantic acceptance.
         cases = (
