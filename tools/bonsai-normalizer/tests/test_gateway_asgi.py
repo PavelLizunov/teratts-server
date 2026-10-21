@@ -26,6 +26,8 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         # Imports are inside the opt-in; normal local checks need no web dependencies.
         import httpx
+        import numpy  # Keep extension modules outside patch.dict(sys.modules) restoration.
+        from PIL import Image
         self.httpx = httpx
         sys.path.insert(0, str(TOOLS / "stt-dictionary"))
         sys.path.insert(0, str(TOOLS / "bonsai-normalizer"))
