@@ -30,7 +30,7 @@ switch or a guarantee of code-switch accuracy.
 
 The [Loqira 0.8B corrector](<tools/loqira-trial/README.md>) adds lexical editing after Parakeet at the same speech endpoint. Existing dictionary aliases run before and after correction, with per-stage provenance and opt-out.
 
-The [optional Bonsai post-STT normalizer](<tools/bonsai-normalizer/runbook.md>) is a local, undeployed smart-mode experiment after that accepted path and opening cleanup. It requires explicit configuration, pins model/revision and temperature `0.0`, and leaves default/raw Bonsai calls bypassed. Added, substituted or reordered word tokens are rejected, while deletion and punctuation changes remain possible. These lexical guards are not a guarantee of semantic preservation.
+The [optional Bonsai post-STT normalizer](<tools/bonsai-normalizer/runbook.md>) is a local, undeployed smart-mode experiment after that accepted path and opening cleanup. It requires explicit configuration, pins model/revision and temperature `0.0`, and leaves default/raw Bonsai calls bypassed. Added, substituted or reordered word tokens are rejected, while deletion and punctuation changes remain possible. These lexical guards are not a guarantee of semantic preservation. The isolated constrained selector lost literal meaning in 3/4 [fresh held-out outputs](<tools/bonsai-normalizer/constrained-heldout-20261021.json>) despite valid syntax and schema acknowledgements; activation is rejected.
 
 ## Optional private voice telemetry
 
