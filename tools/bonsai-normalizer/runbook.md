@@ -143,8 +143,9 @@ If Mac Bonsai 9B experiences outages, instability, or is taken offline:
 | `fallback` | `validation_numeric_missing` | Model omitted a numeric occurrence or changed its sign. |
 | `fallback` | `validation_numeric_added` | Model added or duplicated a numeric occurrence. |
 | `fallback` | `validation_latin_missing` / `validation_latin_added` | Latin identifier counts changed, including unexpected tags such as "Notes:". |
-| `fallback` | `validation_negation_lost` / `validation_negation_added` | Negation count changed. Equal counts can still hide a scope reversal. |
+| `fallback` | `validation_negation_lost` / `validation_negation_added` | Negation count changed. |
 | `fallback` | `validation_qualifier_lost` | One of the selected uncertainty/condition/order markers was omitted. |
+| `fallback` | `validation_word_order_changed` | Candidate contains new, substituted or reordered word tokens, or no word tokens. Retain source instead of accepting rephrasing. |
 
 ## 6. Local regression checks and semantic limits
 
@@ -156,4 +157,6 @@ PYTHONDONTWRITEBYTECODE=1 TMPDIR="$PWD/tools/bonsai-normalizer" python3 -m unitt
 
 The suite mocks HTTP and executes the actual gateway function AST with hardware dependencies stubbed, using the real dictionary and cleanup functions. It checks stage ordering, default/raw bypass, smart/format precedence, source fallback, headers and private corpus metadata. It does not establish that the installed FastAPI service imports, the tunnel works, the Mac reports the pinned revision, or the model follows the prompt.
 
-The finite guards still accept `Не удаляй базу, перезапусти сервер.` rewritten as `Удаляй базу, не перезапусти сервер.` because the negation count is unchanged. Other facts, names, units, task order, uncertainty and urgency can also change without detection. Passing local tests is not deployment approval or semantic validation. The lead must first settle Mac OS access and establish useful semantic output, then install the exact checkpoint gateway/module/config via the existing tunnel and verify the real consumer. Do not activate solely because these protocol tests pass, or change accepted Parakeet/dictionary/Loqira/raw configuration to compensate.
+The ordered-word check now rejects `Не удаляй базу, перезапусти сервер.` rewritten as `Удаляй базу, не перезапусти сервер.`, despite equal negation counts. Candidate words must occur in source order and cannot reuse a source occurrence; deletions, case changes and punctuation/line-break formatting are still allowed. This also rejects valid synonyms and reordered but equivalent phrases, returning the accepted source unchanged.
+
+This is not semantic equivalence: `Перезапусти сервер только если копия готова.` rewritten as `Перезапусти сервер если копия готова.` still passes after weakening the condition. Deleting facts, clauses, names, units or urgency, changing punctuation, or choosing ambiguous repeated words can still alter meaning. Passing local tests is not deployment approval or semantic validation. The lead must first settle Mac OS access and establish useful semantic output, then install the exact checkpoint gateway/module/config via the existing tunnel and verify the real consumer. Do not activate solely because these protocol tests pass, or change accepted Parakeet/dictionary/Loqira/raw configuration to compensate.

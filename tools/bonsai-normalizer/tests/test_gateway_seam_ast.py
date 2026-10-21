@@ -10,6 +10,7 @@ import ast
 import asyncio
 import copy
 import io
+import json
 import os
 from pathlib import Path
 import sys
@@ -124,7 +125,8 @@ class TestExecutedGatewaySeam(unittest.TestCase):
 
     def _execute(self, mode="smart", smart=False, formatting=True, configured=True,
                  corrector="loqira", has_loqira=True, dictionary=True, cleanup=True,
-                 result=None, error=None, response_format="json"):
+                 result=None, error=None, response_format="json", real_normalizer=None,
+                 asr_text="Ну, смотри, открой гитхап"):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())
         function = copy.deepcopy(next(n for n in tree.body
                                       if isinstance(n, ast.AsyncFunctionDef) and n.name == "transcribe_audio"))
@@ -154,9 +156,11 @@ class TestExecutedGatewaySeam(unittest.TestCase):
             return result if result is not None else ("Нейтральный текст.", {"status": "applied"})
 
         normalizer.normalize.side_effect = normalize
+        if real_normalizer is not None:
+            normalizer = real_normalizer
         corpus = Mock()
         corpus.save.return_value = "sample-id"
-        source = "Ну, смотри, открой гитхап"
+        source = asr_text
         namespace = {
             "__name__": "gateway_contract_test", "Optional": __import__("typing").Optional,
             "Request": object, "UploadFile": object, "io": io, "wave": wave,
@@ -251,6 +255,30 @@ class TestExecutedGatewaySeam(unittest.TestCase):
                 self.assertEqual(record["final_text"], record["accepted_stt_text"])
                 self.assertEqual(response.headers["X-Bonsai-Status"], "fallback")
                 self.assertNotIn("private transcript", str(record["bonsai"]))
+
+    @patch("urllib.request.OpenerDirector.open")
+    def test_real_normalizer_rejection_reaches_gateway_response(self, mock_open):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from bonsai_normalizer import BonsaiNormalizer, DEFAULT_MODEL, DEFAULT_REVISION
+
+        source = "Не удаляй базу, перезапусти сервер."
+        body = {
+            "model": DEFAULT_MODEL, "revision": DEFAULT_REVISION,
+            "choices": [{"finish_reason": "stop", "message": {
+                "content": "Удаляй базу, не перезапусти сервер."}}],
+        }
+        mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.read.return_value = json.dumps(body).encode("utf-8")
+        mock_open.return_value = mock_response
+        response, record, _, _, _ = self._execute(
+            real_normalizer=BonsaiNormalizer(), asr_text=source)
+        self.assertEqual(response.content, {"text": source})
+        self.assertEqual(record["accepted_stt_text"], source)
+        self.assertEqual(record["final_text"], source)
+        self.assertEqual(record["bonsai"]["reason"], "validation_word_order_changed")
+        self.assertEqual(response.headers["X-Bonsai-Status"], "fallback")
+        mock_open.assert_called_once()
 
     def test_health_does_not_probe_bonsai(self):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())

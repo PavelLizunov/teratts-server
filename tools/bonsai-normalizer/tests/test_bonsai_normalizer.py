@@ -539,14 +539,75 @@ class TestLocalContractRegressions(unittest.TestCase):
             handler.redirect_request(request, None, 307, "redirect", {}, "https://elsewhere.test/")
 
     @patch("urllib.request.OpenerDirector.open")
-    def test_known_semantic_blind_spot_is_not_a_safety_guarantee(self, mock_open):
-        # Same numbers, identifiers, negation count and qualifiers; wrong negation scope.
+    def test_negation_scope_reversal_falls_back(self, mock_open):
+        # Same counts, but moving "не" violates ordered copying.
         source = "Не удаляй базу, перезапусти сервер."
         candidate = "Удаляй базу, не перезапусти сервер."
         mock_open.return_value = _make_mock_response(candidate)
         result, meta = BonsaiNormalizer().normalize(source)
-        self.assertEqual(result, candidate)
-        self.assertEqual(meta["status"], "applied")
+        self.assertEqual(result, source)
+        self.assertEqual(meta["status"], "fallback")
+        self.assertEqual(meta["reason"], "validation_word_order_changed")
+
+    @patch("urllib.request.OpenerDirector.open")
+    def test_substitution_addition_and_reordering_fall_back(self, mock_open):
+        cases = (
+            ("Сначала проверь логи, потом перезапусти сервер.",
+             "Потом перезапусти сервер, сначала проверь логи."),
+            ("Анна передала отчёт Борису.", "Борису передала отчёт Анна."),
+            ("Анна передала отчёт Борису.", "Анна передала отчёт Ивану."),
+            ("Один пакет весит 2 кг, другой 3 г.", "Один пакет весит 2 г, другой 3 кг."),
+            ("Первый сервер: 2, второй сервер: 3.", "Первый сервер: 3, второй сервер: 2."),
+            ("Проверь Slack, затем Telegram.", "Проверь Telegram, затем Slack."),
+            ("Do not delete data, restart service.", "Delete data, do not restart service."),
+            ("Не удаляй базу.", "Не удаляй базу, перезапусти сервер."),
+            ("Что происходит с сервером?", "С сервером всё хорошо."),
+            ("Проверь сервер.", "Проверь сервер сервер."),
+            ("Проверь сервер.", "."),
+        )
+        for source, candidate in cases:
+            with self.subTest(source=source, candidate=candidate):
+                mock_open.return_value = _make_mock_response(candidate)
+                result, meta = BonsaiNormalizer().normalize(source)
+                self.assertEqual(result, source)
+                self.assertEqual(meta["status"], "fallback")
+                self.assertEqual(meta["reason"], "validation_word_order_changed")
+
+    @patch("urllib.request.OpenerDirector.open")
+    def test_ordered_deletion_case_and_line_breaks_remain_supported(self, mock_open):
+        cases = (
+            ("Ну блин, кажется, сервер иногда не отвечает.",
+             "Кажется, сервер иногда не отвечает."),
+            ("Этот дурацкий скрипт работает 12 секунд, а должен меньше 3 секунд.",
+             "Этот скрипт работает 12 секунд, а должен меньше 3 секунд."),
+            ("Проверь логи. Потом перезапусти сервер.",
+             "Проверь логи.\nПотом перезапусти сервер."),
+            ("проверь сервер", "Проверь сервер."),
+            ("Сервер сервер готов.", "Сервер сервер готов."),
+        )
+        for source, candidate in cases:
+            with self.subTest(source=source, candidate=candidate):
+                mock_open.return_value = _make_mock_response(candidate)
+                result, meta = BonsaiNormalizer().normalize(source)
+                self.assertEqual(result, candidate)
+                self.assertEqual(meta["status"], "applied")
+
+    @patch("urllib.request.OpenerDirector.open")
+    def test_ordered_copy_is_still_not_semantic_equivalence(self, mock_open):
+        # Structural limits remain deliberate evidence against semantic acceptance.
+        cases = (
+            ("Перезапусти сервер только если копия готова.",
+             "Перезапусти сервер если копия готова."),
+            ("Казнить нельзя, помиловать.", "Казнить, нельзя помиловать."),
+            ("Это не дурацкий скрипт.", "Это не скрипт."),
+            ("rm -rf / tmp", "rm -rf /tmp"),
+        )
+        for source, candidate in cases:
+            with self.subTest(source=source, candidate=candidate):
+                mock_open.return_value = _make_mock_response(candidate)
+                result, meta = BonsaiNormalizer().normalize(source)
+                self.assertEqual(result, candidate)
+                self.assertEqual(meta["status"], "applied")
 
     @patch("urllib.request.OpenerDirector.open")
     def test_auth_header_finite_timeout_and_failures_do_not_echo_content(self, mock_open):

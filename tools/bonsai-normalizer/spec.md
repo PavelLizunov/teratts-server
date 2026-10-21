@@ -135,7 +135,9 @@ The candidate output must pass all validation checks; otherwise, `status = "fall
 
 9. **Selected Qualifier Retention:** Whole-token/phrase occurrence counts cannot decrease for `кажется`, `не уверен`, `возможно`, `вероятно`, `если`, `сначала`, `потом`.
 
-**Known acceptance limit:** these guards are lexical heuristics, not a semantic equivalence test. `Не удаляй базу, перезапусти сервер.` → `Удаляй базу, не перезапусти сервер.` passes them despite changing meaning. Facts, Cyrillic names, units, urgency, task ordering and the scope of negations/conditions can still be changed. A finite test retains this counterexample to prevent reporting these guards as a guarantee. Prior Bonsai rewrite failures are not resolved by the local protocol tests; no deployment quality claim follows.
+10. **Ordered Word Copy:** Candidate tokens from `[\w'-]+`, lowercased, must be a nonempty subsequence of the source tokens. A single forward iterator consumes every occurrence at most once. Added, substituted or reordered words return `validation_word_order_changed`, including the previously accepted negation-scope reversal. Deletions, case changes, line breaks and punctuation changes remain possible; this is not a literal character-copy contract.
+
+**Known acceptance limit:** these guards are lexical heuristics, not a semantic equivalence test. `Перезапусти сервер только если копия готова.` → `Перезапусти сервер если копия готова.` still passes despite weakening a necessary condition. Deleting facts, clauses, Cyrillic names, units or urgency can still change meaning, as can punctuation changes and ambiguous repeated-word alignment. A finite test retains this counterexample to prevent reporting ordered copying as a guarantee. Prior Bonsai rewrite failures are not resolved by the local protocol tests; no deployment quality claim follows.
 
 ---
 
@@ -152,7 +154,17 @@ Required local corrections and finite verification:
 - Execute the actual gateway function AST with hardware/network dependencies stubbed; cover default/raw and smart/format precedence, stage ordering, accepted-text fallback, headers and corpus metadata. Do not import hardware initializers or contact a service.
 - Run the normalizer, dictionary, formatting and retained Loqira checks locally; report commands, exit results, untested live behavior and the next deployment seam.
 
-## 6. Verification Plan
+## 6. Ordered-copy follow-up contract (2026-10-21)
+
+The owner-authorized overall task continues; Mac inference remains dependent on the owner granting the diagnosed OS permission. This follow-up changes only the local normalizer, finite mocked regressions and its documentation. It does not deploy or activate rewriting, alter accepted STT/dictionaries/Loqira, or call Mac inference/Telegram.
+
+Root cause: occurrence counts discard word order, so the recorded negation-scope reversal reaches `applied`. Add a conservative ordered-word-copy invariant after existing response/lexical checks: candidate word tokens must be a case-insensitive subsequence of source word tokens, consuming each source occurrence at most once. This rejects new/substituted/reordered words, including the recorded reversal, while allowing deletion-only neutralization and line-break/punctuation formatting. Rephrasing falls back to the exact accepted text; no new configuration, dependency, model or allowlist is introduced.
+
+This is an additional rejection guard, not a semantic-equivalence proof. It does not authorize arbitrary deletions: deleted facts/clauses/connectors, changed punctuation and case, and ambiguous repeated-word alignments can still change meaning. Those remaining blind spots must remain explicit and a finite passing-but-wrong deletion case must be retained. Live usefulness and real consumer acceptance remain pending, so keep the integration undeployed.
+
+Verification: preserve the current 59-check baseline; change the historical reversal test to require exact-source fallback with a content-free reason; add bounded RU/EN word-order, name/unit/quantity reassociation, instruction-answer and repeated-token rejection cases, accepted deletion/formatting cases, and a residual blind-spot case. First run the new tests against unchanged source to reproduce failure, then run the full normalizer/actual-gateway-AST suite and retained formatting/Loqira checks. Preserve the known unchanged dictionary mismatch rather than editing accepted aliases. Review the task-owned diff and publish an exact checkpoint branch under existing owner authorization; no deployment claim follows.
+
+## 7. Verification Plan
 
 1. **Unit Tests (`test_bonsai_normalizer.py`):**
    - Mock HTTP server / `urllib.request` handler.
@@ -166,7 +178,7 @@ Required local corrections and finite verification:
    - Verify condition: `effective_mode == "smart" and STT_CORRECTOR == "loqira" and os.environ.get("BONSAI_NORMALIZER_CONFIG")`.
    - Verify headers, server-timing, and corpus metadata fields.
 
-## 7. Observed local verification (2026-10-21)
+## 8. Observed local verification (2026-10-21)
 
 Worker verification scope: branch `checkpoint/bonsai9-neutral-dictation-20261021`, base `0623c2b47a54cbd71c448549aea178975f717cf9`, unstaged tracked edits plus the existing untracked normalizer directory. The delegated worker was restricted to local changes and checks, without commits, push, deployment or inference. Those are assignment boundaries, not new restrictions on the owner's already-authorized overall task. No local/ancestor repository AGENTS files were found. Existing Python cache files and the tunnel unit were not modified by that worker.
 
@@ -181,7 +193,7 @@ Commands were run from the repository root, with no HTTP server, remote access, 
 
 Focused local source review covered configuration → payload/authentication → response validation → metadata, and the accepted-text gateway seam. It does not constitute an independent review (this delegated session cannot delegate). No secrets or transcript contents are emitted by the new error paths in the finite mock checks. No dependencies were added.
 
-Remaining limits: the known semantic counterexample in section 4 still passes, socket timeout is not a total response deadline, full FastAPI imports/hardware startup and real Mac effective sampling/revision/latency have not been exercised. The next operator seam is the gateway/module/config placement and opt-in environment shown in the runbook, after the separate Mac diagnosis, followed by live default/raw bypass, smart failure fallback, exact response identity and human meaning review. Nothing here authorizes or reports that deployment as done.
+At this earlier checkpoint, the negation-scope counterexample still passed; the ordered-copy follow-up below changes that result while retaining a different semantic blind spot. Socket timeout is not a total response deadline, and full FastAPI imports/hardware startup and real Mac effective sampling/revision/latency have not been exercised. The next operator seam is the gateway/module/config placement and opt-in environment shown in the runbook, after the separate Mac diagnosis, followed by live default/raw bypass, smart failure fallback, exact response identity and human meaning review. Nothing here authorizes or reports that deployment as done.
 
 ## Lead integration checkpoint
 
@@ -195,3 +207,22 @@ This checkpoint may be committed/pushed by the lead under the owner's existing a
 - PASS: no invented performance/safety claims; local counts and failures are recorded separately from untested runtime behavior.
 - PASS: documentation explains the gates, failure mechanics and configuration without claiming semantic equivalence.
 - PASS: owning README sections link to the runbook/spec; next deployment seam and known acceptance limit are explicit.
+
+## Ordered-copy follow-up verification
+
+Snapshot: the task-owned working diff against `bddcb9809f20c4eeeb044a830ce3eaa3b807df21` on the same checkpoint branch. The implementation adds seven lines at the validation tail and no dependencies/configuration. Gateway production source, dictionary, formatting and Loqira source remain byte-for-byte unchanged against that checkpoint; only the local actual-function test harness additionally accepts a real normalizer instance.
+
+Observed commands from the repository root:
+
+- `PYTHONDONTWRITEBYTECODE=1 TMPDIR="$PWD/tools/bonsai-normalizer" python3 -m unittest discover -s tools/bonsai-normalizer/tests -v`: unchanged baseline 59 passed (1.354 s, exit 0); updated tests before implementation ran 62 tests with 12 failing assertions/subtests (1.515 s, exit 1), confirming the reversal and 11 new/substituted/reordered/empty-word candidates were wrongly accepted. After the seven-line guard and an actual-gateway-function test with the real normalizer plus mocked HTTP, 63 tests passed (1.662 s, exit 0).
+- `PYTHONDONTWRITEBYTECODE=1 TMPDIR="$PWD/tools/bonsai-normalizer" python3 -m unittest discover -s tools/gigaam-multilingual/tests -p test_speech_formatting.py -v`: 7 passed (exit 0).
+- `PYTHONDONTWRITEBYTECODE=1 TMPDIR="$PWD/tools/bonsai-normalizer" python3 tools/loqira-trial/check_corrector.py`: 5 passed (exit 0; existing mocked generation).
+- `git diff --exit-code bddcb9809f20c4eeeb044a830ce3eaa3b807df21 -- tools/stt-dictionary tools/loqira-trial tools/gigaam-multilingual tools/ruen-support-pilot/gateway-server.py`: exit 0, so the earlier unchanged dictionary result (16/19; three alias/test disagreements) was not rerun or rewritten.
+- `git diff --check`: exit 0.
+- A local one-shot Python replay read the four saved `minimal-copy-text-screen.json` responses from the private task evidence directory and mocked `OpenerDirector.open` for each. All four candidates were retained with `applied`; no transcript contents were printed, no HTTP/inference was performed, and this result does not improve the earlier two-of-four emotion-removal result.
+
+The actual gateway-function AST now executes the real normalizer rejection path with mocked HTTP and confirms exact accepted-source response, corpus output and `fallback` metadata. It remains a model-free function-level test, not a running FastAPI consumer check. Finite passing-but-wrong examples explicitly retain condition deletion, punctuation-scope inversion, deletion within a negated phrase and changed slash spacing. The guard does not protect all names/units/facts from deletion, punctuation or whitespace semantics, and case formatting can affect case-sensitive Cyrillic identifiers. A broad emotional-word deletion allowlist was not added because quoted/mentioned words and negative predicates make it unsafe as a semantic rule.
+
+An independent read-only context review inspected these seven task-owned files against the exact base, freshly ran all 63 model-free normalizer/gateway tests (1.646 s, exit 0), and checked final whitespace (exit 0). It found no additional concrete important defect in the narrow ordered-word invariant or fallback wiring. It explicitly retained the semantic, punctuation, spacing, case and repeated-word limits; this is not model-family-separated evaluation or live acceptance. An earlier design inspection recommended a stricter finite literal-edit gate but also demonstrated why broad emotional-word deletion is semantically ambiguous. That stricter contract was not adopted or claimed here; this checkpoint is only an incremental rejection improvement, not the finished neutral editor.
+
+No Mac restart, model call, Deck deployment/activation or Telegram request occurred during this follow-up. Mac OS access, live caption quality, useful meaning-preserving editing and actual consumer integration remain unverified. Kodak stays on the previous route and Deck's accepted gateway remains unchanged.

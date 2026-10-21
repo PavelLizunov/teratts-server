@@ -357,6 +357,13 @@ class BonsaiNormalizer:
         if added_latin:
             return _fallback("validation_latin_added")
 
+        # Consume each source occurrence once; counts alone permit scope/order reversals.
+        # This allows deletions and punctuation changes, not semantic equivalence.
+        source_words = iter(re.findall(r"[\w'-]+", source_text.lower()))
+        candidate_words = re.findall(r"[\w'-]+", candidate.lower())
+        if not candidate_words or not all(word in source_words for word in candidate_words):
+            return _fallback("validation_word_order_changed")
+
         # Success
         meta["status"] = "applied"
         meta["reason"] = None
