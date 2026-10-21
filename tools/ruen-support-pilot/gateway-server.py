@@ -192,6 +192,22 @@ if STT_BACKEND in {"ruen_support_pilot", "parakeet"} and STT_CORRECTOR == "loqir
 else:
     CORRECTOR_IDENTITY = {"model": "sage95m-onnx-cpu"}
     CORRECTOR_POLICY = "punctuation-case-only-v1"
+
+# Bonsai neutral normalizer is an optional post-STT stage when Loqira is corrector
+bonsai_normalizer = None
+if loqira_corrector is not None and STT_CORRECTOR == "loqira" and os.environ.get("BONSAI_NORMALIZER_CONFIG"):
+    try:
+        from gateway.bonsai_normalizer import get_bonsai_normalizer
+        bonsai_normalizer = get_bonsai_normalizer()
+    except ImportError:
+        try:
+            from bonsai_normalizer import get_bonsai_normalizer
+            bonsai_normalizer = get_bonsai_normalizer()
+        except Exception:
+            bonsai_normalizer = None
+    except Exception as exc:
+        print(f"[Bonsai] status=disabled reason=initialization error={type(exc).__name__}", flush=True)
+        bonsai_normalizer = None
 SAGE_READY = False
 if STT_BACKEND == "gigaam":
     _, SAGE_READY = run_sage_correction("тест")
@@ -276,7 +292,8 @@ def health():
             "sage": "ready" if SAGE_READY else "bypassed",
             "corrector": {**CORRECTOR_IDENTITY, "status": ("ready" if loqira_corrector.ready() else "fallback_sage") if loqira_corrector else ("ready" if SAGE_READY else "bypassed")},
             "formatting_policy": CORRECTOR_POLICY if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else None,
-            "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else "ready", "ocr": "ready"}
+            "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else "ready", "ocr": "ready",
+            "bonsai": "configured" if (bonsai_normalizer is not None and bonsai_normalizer.enabled) else "bypassed"}
 
 @app.post("/v1/audio/transcriptions")
 @retain_stt_attempt
@@ -387,8 +404,43 @@ async def transcribe_audio(
     dictionary_latency_ms = (time.perf_counter() - t_dictionary) * 1000 + pre_correction_dictionary_ms
     pre_cleanup_text = final_text
     final_text, cleanup_result = clean_opening(final_text, cleanup)
+    accepted_stt_text = final_text
+
+    bonsai_meta = {
+        "status": "bypassed",
+        "reason": "unconfigured" if bonsai_normalizer is None else "mode_bypassed",
+        "latency_ms": 0.0,
+        "model": getattr(bonsai_normalizer, "model", None),
+        "revision": getattr(bonsai_normalizer, "revision", None),
+    }
+    bonsai_latency_ms = 0.0
+    if (
+        bonsai_normalizer is not None
+        and effective_mode == "smart"
+        and STT_CORRECTOR == "loqira"
+        and loqira_corrector is not None
+        and os.environ.get("BONSAI_NORMALIZER_CONFIG")
+        and accepted_stt_text
+    ):
+        t_bonsai_0 = time.perf_counter()
+        try:
+            rewritten_text, bonsai_meta = bonsai_normalizer.normalize(accepted_stt_text)
+            if (not isinstance(bonsai_meta, dict) or not isinstance(rewritten_text, str)
+                    or (bonsai_meta.get("status") == "applied" and not rewritten_text.strip())):
+                raise ValueError("invalid_normalizer_result")
+        except Exception as error:
+            rewritten_text = accepted_stt_text
+            bonsai_meta = {"status": "fallback", "reason": type(error).__name__,
+                           "model": bonsai_normalizer.model, "revision": bonsai_normalizer.revision}
+        bonsai_latency_ms = (time.perf_counter() - t_bonsai_0) * 1000.0
+        bonsai_meta["latency_ms"] = bonsai_latency_ms
+        if bonsai_meta.get("status") == "applied":
+            final_text = rewritten_text
+        else:
+            final_text = accepted_stt_text
+
     total_latency_ms = (time.perf_counter() - t0) * 1000.0
-    print(f"[STT] Mode={effective_mode} | Audio={len(audio_bytes)/1024:.1f}KB | STT={stt_latency_ms:.1f}ms SAGE={sage_latency_ms:.1f}ms LLM={llm_latency_ms:.1f}ms | Total={total_latency_ms:.1f}ms", flush=True)
+    print(f"[STT] Mode={effective_mode} | Audio={len(audio_bytes)/1024:.1f}KB | STT={stt_latency_ms:.1f}ms SAGE={sage_latency_ms:.1f}ms LLM={llm_latency_ms:.1f}ms Bonsai={bonsai_latency_ms:.1f}ms | Total={total_latency_ms:.1f}ms", flush=True)
 
     headers = {
         "X-STT-Backend": STT_BACKEND,
@@ -403,9 +455,13 @@ async def transcribe_audio(
         "X-STT-Latency-Ms": f"{stt_latency_ms:.1f}",
         "X-SAGE-Latency-Ms": f"{sage_latency_ms:.1f}",
         "X-LLM-Latency-Ms": f"{llm_latency_ms:.1f}",
+        "X-Bonsai-Status": bonsai_meta.get("status", "bypassed"),
+        "X-Bonsai-Latency-Ms": f"{bonsai_latency_ms:.1f}",
         "X-Total-Latency-Ms": f"{total_latency_ms:.1f}",
-        "Server-Timing": f"stt;dur={stt_latency_ms:.1f}, sage;dur={sage_latency_ms:.1f}, llm;dur={llm_latency_ms:.1f}"
+        "Server-Timing": f"stt;dur={stt_latency_ms:.1f}, sage;dur={sage_latency_ms:.1f}, llm;dur={llm_latency_ms:.1f}, bonsai;dur={bonsai_latency_ms:.1f}"
     }
+    if bonsai_meta.get("model"):
+        headers["X-Bonsai-Model"] = str(bonsai_meta["model"])
 
     if STT_BACKEND == "ruen_support_pilot":
         headers["X-STT-Model"] = PILOT_NAME
@@ -429,8 +485,10 @@ async def transcribe_audio(
                 "kind": "stt", "backend": STT_BACKEND,
                 **STT_IDENTITY, "mode": effective_mode,
                 **({"runtime": pilot_result["model"], "segments": pilot_result["segments"]} if pilot_result is not None else {}),
-                "language_hint": language, "raw_text": raw_text, "final_text": final_text,
+                "language_hint": language, "raw_text": raw_text,
+                "accepted_stt_text": accepted_stt_text, "final_text": final_text,
                 "formatting_status": formatting_status, "formatting": formatting_meta,
+                "bonsai": bonsai_meta,
                 "pre_correction_dictionary": pre_correction_dictionary,
                 "pre_dictionary_text": pre_dictionary_text, "dictionary": dictionary_result,
                 "pre_cleanup_text": pre_cleanup_text, "cleanup": cleanup_result,
@@ -442,6 +500,7 @@ async def transcribe_audio(
                 "sample_rate": framerate, "channels": channels, "sample_width": sampwidth,
                 "timings_ms": {"stt": stt_latency_ms, "sage": sage_latency_ms,
                                "llm": llm_latency_ms, "dictionary": dictionary_latency_ms,
+                               "bonsai": bonsai_latency_ms,
                                "total_before_archive": total_latency_ms},
             })
             if sample_id:
