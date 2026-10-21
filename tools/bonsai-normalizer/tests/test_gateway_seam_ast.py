@@ -326,6 +326,29 @@ class TestExecutedGatewaySeam(unittest.TestCase):
             self.assertEqual(response.content, {'text': expected})
             self.assertEqual(response.headers['X-Bonsai-Status'], status)
 
+    @patch("urllib.request.OpenerDirector.open")
+    def test_paragraph_selection_preserves_accepted_source_in_real_gateway(self, opened):
+        from bonsai_paragraph_structurer import BonsaiParagraphStructurer
+        from bonsai_normalizer import DEFAULT_MODEL, DEFAULT_REVISION
+        source = 'Сохрани отчёт. Проверь копию. Позвони Анне.'
+        for selection, expected, status in (
+            ('{"break_after":[1]}', source.replace('Позвони', '\n\nПозвони'), 'applied'),
+            ('{"break_after":[999]}', source, 'fallback'),
+            ('{"break_after":[]}', source, 'unchanged'),
+        ):
+            body = {'model': DEFAULT_MODEL, 'revision': DEFAULT_REVISION,
+                    'choices': [{'finish_reason': 'stop', 'message': {'content': selection}}]}
+            mock_response = MagicMock()
+            mock_response.__enter__.return_value = mock_response
+            mock_response.read.return_value = json.dumps(body).encode()
+            opened.return_value = mock_response
+            response, record, _, _, _ = self._execute(
+                real_normalizer=BonsaiParagraphStructurer(), asr_text=source)
+            self.assertEqual(record['accepted_stt_text'], source)
+            self.assertEqual(record['final_text'], expected)
+            self.assertEqual(response.content, {'text': expected})
+            self.assertEqual(response.headers['X-Bonsai-Status'], status)
+
     def test_blocked_normalizer_yields_event_loop(self):
         # A deterministic callback, not a fragile wall-time threshold, releases the mock.
         class LoopProbe:
