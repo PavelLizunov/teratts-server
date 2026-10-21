@@ -1,0 +1,85 @@
+{
+  "scope": "Once-only paragraph collector correction; no inference or activation",
+  "tested_implementation_commit": "35dc8068a6a04a758ff9a9c07c0531aca9d25ecc",
+  "checkpoint_branch": "checkpoint/bonsai9-paragraph-collector-20261021",
+  "implementation_remote_sha_verified": true,
+  "source_sha256": {
+    "bonsai_paragraph_screen.py": "6b0a2224d85e579bdad23c4322b3f77bc2551011d48fe0ba96369eddf4742b7e",
+    "tests/test_paragraph_screen.py": "c236df2e96e54fbdf3305ff28ffcda2c66c7264624c1ff8ba4ea720cb26effd2",
+    "bonsai_normalizer.py": "809aac74b11e3a68aa635c945c0d128ac0c5d2b84122aa18f56fa1f58bb6a092",
+    "bonsai_literal_editor.py": "803dceef9d7ca68b2869106cc43014408b90aafa76405d6c9d5cb7fa839afe14",
+    "bonsai_paragraph_structurer.py": "5edd9e33524cba67e343157b4ba8edd31bb9087c94ab44760ee068f3a66266aa"
+  },
+  "frozen_manifest_sha256": "57fab275f08d3c505a09c2542f94dbe0baef089b704af4a20d8369027c0586f4",
+  "frozen_expected_selections": [[1], [2], [], [1]],
+  "corrections": [
+    "Reject JSON exponent overflow, including unused fields, before assigning parsed responses",
+    "Attempt known-outcome settlement despite primary bookkeeping or final-save errors; preserve the collector primary exception",
+    "Pin the frozen constant within callable input validation, not only CLI",
+    "Use the collector's own stopped_error_type instead of inherited sys.exc_info when deciding whether to propagate save errors"
+  ],
+  "red_green": [
+    {"before": "24 tests, 3 failures and 2 errors", "after": "24 passed", "scope": "overflow, callable replacement and settlement save failures"},
+    {"before": "26 tests, 1 failure", "after": "137-test full suite green with 3 explicit ASGI skips", "scope": "caller handled exception must not hide collector final-save failure"}
+  ],
+  "local_checks": {
+    "job_id": "bash-3bb33fc3cc524706",
+    "normalizer_command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/bonsai-normalizer/tests -q",
+    "normalizer_total": 137,
+    "normalizer_passed": 134,
+    "explicit_ASGI_skips": 3,
+    "normalizer_seconds": 6.701,
+    "formatting_passed": 7,
+    "mocked_Loqira_passed": 5,
+    "exit_code": 0,
+    "frozen_dry_run": "4 cases validated, zero calls, output absent",
+    "protected_source_diff": "No changes against 2d8292f76d2fa343a96aaaac8078839513df614d in runtime modules, gateway, dictionary, Loqira or formatting paths",
+    "whitespace_and_task_owned_links": "passed"
+  },
+  "focused_reviews": [
+    {
+      "id": "667fb7e2-3a03-4d38-b542-9110b3f0143e",
+      "verdict": "changes_required",
+      "findings": "Confirmed JSON exponent-overflow settlement skip and callable-only manifest replacement; both corrected before live use",
+      "collected": true
+    },
+    {
+      "id": "3b3d740d-7827-4f26-97d9-13810817bf34",
+      "verdict": "no concrete important defect in reviewed correction slice",
+      "passed": 25,
+      "seconds": 1.644,
+      "collector_sha256": "9bbf23e1804c2ac011181aeaaf49a1d5cb3803db8d8ddace55a1963abd440ffd",
+      "tests_sha256": "3286cb8bff3c9902381089de3726ef55e47a4419f333121191badbde0c9855d8",
+      "limits": "Fresh context, not model-family separation. Later one-line primary-error ownership correction and its additional regression were lead-verified, not independently reviewed.",
+      "collected": true
+    }
+  ],
+  "Deck_framework_checks": {
+    "job_id": "bash-33b38a814b0f43e9",
+    "source": "Fresh isolated checkout fetched from the existing GitHub remote and matched exact tested_implementation_commit",
+    "python": "3.13.5",
+    "dependencies": {"fastapi": "0.141.1", "starlette": "1.7.0", "httpx": "0.28.1", "python-multipart": "0.0.32", "numpy": "2.5.3", "Pillow": "12.3.0"},
+    "normalizer_command": "BONSAI_ASGI_TEST=1 PYTHONDONTWRITEBYTECODE=1 /home/deck/homelab/ocr/venv/bin/python -m unittest discover -s tools/bonsai-normalizer/tests -q",
+    "normalizer_total_and_passed": 137,
+    "ASGI_cases": 3,
+    "normalizer_seconds": 5.870,
+    "formatting_passed": 7,
+    "mocked_Loqira_passed": 5,
+    "exit_code": 0,
+    "isolated_checkout_clean_after_tests": true,
+    "limits": "Real framework boundaries with hardware/model initializers and inference stubbed; not actual speech, network, model semantics or Voxtype"
+  },
+  "Deck_preservation": {
+    "gateway_sha256": "0fee7132c77769bff880607a0f41afe4ab308230ed4c5cd3d229c11ecf05f6c1",
+    "gateway_Parakeet_Loqira_tunnel": "active/enabled, NRestarts=0 before and after isolated framework checks",
+    "normalizer_config_dropin_installed": false
+  },
+  "model_calls_this_correction": 0,
+  "recorded_model_calls_since_access_recheck": 37,
+  "telegram_calls": 0,
+  "frozen_cases_consumed": 0,
+  "production_changed": false,
+  "unknown_inference_outcome": false,
+  "Mac_resources_refreshed": false,
+  "limits": "No live grouping, caption quality, practical acceleration, filesystem/process-crash durability or real Voxtype acceptance. Native and paragraph admission thresholds remain 6.5 and 5.5 GiB respectively; no headroom polling, restart, dependency installation or shared-service stop."
+}
