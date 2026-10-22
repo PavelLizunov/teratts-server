@@ -43,6 +43,16 @@
     "lead_assertion_JSON_sha256": "2944bac310884000d11eb1aee85bc142befc3fd9f9f94bcbe936264057ae9ddb",
     "lead_saved_evidence_scope": "Offline raw hashes/parsed equality, exact payload reconstruction, original target remapping/copy, recomputation through the owning assessor and separate settlement. This reuses owning source functions, not an independent native engine. No native replay."
   },
+  "saved_evidence_review": {
+    "final_named_assertions": 232, "final_passed": 232, "final_failed": 0, "final_exit_code": 0,
+    "report_sha256": "557088c95db664ec4a14a1f42affb9294dd1b110d377ffb68ef10bd40847895e",
+    "checker_sha256": "bd256be0d6e610d4dab6437f03b092411d2ee907f13ae50fd6201b321e10fe8b",
+    "final_assertion_JSON_sha256": "c47a2822f66aed009438a371372dca9b54d107c77b561cda3c5d8fde52274863",
+    "verdict": "Saved evidence reconciles; frozen semantic gate fails. No correction to coordinator counts or metrics is required.",
+    "methods": "Stdlib-only duplicate/nonfinite/type-sensitive JSON and validated base64, independent expected-span alignment/source-slice outputs and decision/status/byte scoring, exact payload/schema/target remaps, source pins, timing/resource arithmetic and separate saved settlement; socket/DNS/urllib/http/process traps, zero transport attempts.",
+    "retained_reviewer_failures": "First launcher exit1: reviewer omitted its own output fd from the write audit, leaving an empty retained JSON; assertion count unavailable and not counted. Next pass:232 executed,231 pass/1 fail because reviewer selected the later undeployed image-cap source7a191a... rather than frozen installed baseline35472797.... Failed JSON retained. Only the reviewer-side reference was corrected; no evidence, criteria or implementation changed. Final232/232 is not464 distinct checks or extra model samples.",
+    "limits": "Fresh-context same-family verification, not model-family independence or native replay/live attestation. No native rendered-token equivalence, server-wide request ledger, cross-path consumption enforcement, continuous memory or production/Voxtype acceptance. Historical pre-submission absence checks were supplied task facts, not newly provable from final files."
+  },
   "rows": [
     {"id": "story_keep_A", "target": 0, "expected": [], "actual": [], "strict_selection_valid": true, "returned_status": "unchanged", "exact_expected_bytes": true, "useful": true, "client_seconds": 4.109921294264495, "cold": true, "load_seconds": 0.8678629160858691, "prompt_tokens": 314, "completion_tokens": 6},
     {"id": "irritation_delete_A", "target": 1, "expected": [0], "actual": [], "strict_selection_valid": true, "returned_status": "unchanged", "exact_expected_bytes": false, "useful": false, "client_seconds": 2.1154784532263875, "cold": false, "load_seconds": 0, "prompt_tokens": 315, "completion_tokens": 6},
