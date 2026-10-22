@@ -1,0 +1,90 @@
+{
+  "iteration": "round35-single-target-contextual-deletion-discriminator",
+  "decision": "Reject activation. Only 1/4 targeted decisions matched frozen selection, copied bytes and status: literal retention 1/2, emotional deletion 0/2. A single exposed target did not establish useful contextual deletion on these two new texts.",
+  "scope": "Four sequential text-only requests on two synthetic sources, one target per request, from an exact temporary Deck checkout through the existing tunnel to Mac. No ASR, owner Voxtype or Kodak media request.",
+  "model": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+  "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+  "Deck_source_commit": "a4ed273ab89474eacc0ef7e5b6dede3c49145d21",
+  "Mac_service_commit": "c05ebac2df0e03b6473b1242dcffdec01056e521",
+  "service_sha256": "35472797d745bfce5f5726122dd6361f49b17f21ee51ead8aa5df42933f858f0",
+  "module_sha256": {
+    "bonsai_normalizer.py": "809aac74b11e3a68aa635c945c0d128ac0c5d2b84122aa18f56fa1f58bb6a092",
+    "bonsai_literal_editor.py": "803dceef9d7ca68b2869106cc43014408b90aafa76405d6c9d5cb7fa839afe14",
+    "bonsai_paragraph_structurer.py": "5edd9e33524cba67e343157b4ba8edd31bb9087c94ab44760ee068f3a66266aa",
+    "bonsai_target_editor.py": "8ff796ba5e9de69e046a635c10df6d93894916a7275b3329268a28edd7bbea9e",
+    "bonsai_constrained_editor.py": "23d457b417f86e14ae6754b138e74ecd087c163388c28cc3166c8586fc43ba80",
+    "bonsai_paragraph_screen.py": "ab094ce85063e19b99586e7e03840cc2833a6d2b14a317d970a6d01c3a4b9669",
+    "bonsai_target_screen.py": "61b250a4d9fd3951d968e5034f72272c6990551fa0a619e4b5023a6360bc03a6"
+  },
+  "inputs_sha256": "459f6237dd9eff78932e5da056a443a06dbcee4ae5882ada76f005dcc5bc9b26",
+  "prompt_sha256": "2400d5b634dba36d2f7713818bdce6f423b01d55399d4e7df12121b24c880c4f",
+  "private_raw_result_sha256": "1b923a9cc4df6404f14bd4b95d2ae7f79f7b4bfbdd5acaef2054361b70132362",
+  "private_admission_sha256": "10fb50a2896da03812fd6d3ebecc8df7bb782578cf9ac4622cc0f6c826442449",
+  "private_final_Mac_sha256": "554e2b876534ad594ac254d20c088d25210e7b23fb7eba1b4eab3645a8b7b2ce",
+  "profile": {
+    "temperature": 0, "top_p": 0.8, "top_k": 20, "min_p": 0,
+    "presence_penalty": 0, "repetition_penalty": 1, "seed": 42,
+    "max_tokens": 1024, "stream": false, "thinking": false,
+    "decoding": "baseline", "response_format_name": "bonsai_literal_selection",
+    "canonical_schema_sha256": "775348948d189c38835d5b2b2ba67032e2a5b3bdf241273aa918022c609dc358",
+    "permitted_selection": [[], [0]]
+  },
+  "verification": {
+    "local_total_tests": 161, "local_passed": 158, "local_explicit_ASGI_skips": 3,
+    "local_seconds": 9.005,
+    "exact_Deck_passed_including_three_stubbed_ASGI_tests": 161,
+    "exact_Deck_seconds": 6.855,
+    "formatting_passed_local_and_Deck": 7, "mocked_Loqira_passed_local_and_Deck": 5,
+    "exact_Deck_frozen_dry_run": "Four cells validated; zero calls and no result file; exact checkout clean",
+    "source_review_report_sha256": "208ebd7cb0240d43d2743e9509ba384e8395f711dab1cd740b8605797d98a18e",
+    "source_review": "Fresh-context same-family source/API review: no confirmed blocker; network-blocked158pass3skips,36fixture checks,24collector scenarios,32target remaps and bounds. Not native or semantic acceptance.",
+    "lead_saved_evidence_checks": 53, "lead_saved_evidence_failures": 0,
+    "lead_checker_sha256": "ff4c988b5d3b8c05bd6dc037c18489781571222d6bfc5290ad93435cd7081c45",
+    "lead_assertion_JSON_sha256": "2944bac310884000d11eb1aee85bc142befc3fd9f9f94bcbe936264057ae9ddb",
+    "lead_saved_evidence_scope": "Offline raw hashes/parsed equality, exact payload reconstruction, original target remapping/copy, recomputation through the owning assessor and separate settlement. This reuses owning source functions, not an independent native engine. No native replay."
+  },
+  "rows": [
+    {"id": "story_keep_A", "target": 0, "expected": [], "actual": [], "strict_selection_valid": true, "returned_status": "unchanged", "exact_expected_bytes": true, "useful": true, "client_seconds": 4.109921294264495, "cold": true, "load_seconds": 0.8678629160858691, "prompt_tokens": 314, "completion_tokens": 6},
+    {"id": "irritation_delete_A", "target": 1, "expected": [0], "actual": [], "strict_selection_valid": true, "returned_status": "unchanged", "exact_expected_bytes": false, "useful": false, "client_seconds": 2.1154784532263875, "cold": false, "load_seconds": 0, "prompt_tokens": 315, "completion_tokens": 6},
+    {"id": "irritation_delete_B", "target": 0, "expected": [0], "actual": [], "strict_selection_valid": true, "returned_status": "unchanged", "exact_expected_bytes": false, "useful": false, "client_seconds": 2.1347232973203063, "cold": false, "load_seconds": 0, "prompt_tokens": 308, "completion_tokens": 6},
+    {"id": "story_keep_B", "target": 1, "expected": [], "actual": [0], "strict_selection_valid": true, "returned_status": "applied", "exact_expected_bytes": false, "useful": false, "client_seconds": 2.2410251568071544, "cold": false, "load_seconds": 0, "prompt_tokens": 308, "completion_tokens": 7}
+  ],
+  "result": {
+    "completed": true, "protocol_identity_finish_schema_ack": "4/4",
+    "strict_selection_valid": "4/4", "exact_local_copy_verified": "4/4",
+    "literal_retention": "1/2", "emotional_deletion": "0/2",
+    "exact_expected_bytes_and_status_and_decision": "1/4", "fallbacks": "0/4",
+    "literal_meaning_loss": "1/2 literal decisions,1/4 total decisions",
+    "production_acceptance": false
+  },
+  "timing": {
+    "screen_seconds": 10.646391184069216, "total_collection_seconds": 10.858160614967346,
+    "screen_bound_seconds": 600, "GPU_iteration_bound_seconds": 900,
+    "bound_source": "Existing agent/skill per-iteration limits, not owner total-task cap",
+    "speed_comparison": "Not supported: one cold cell, unequal prompt lengths, no repeated paired baseline. This is not a causal improvement estimate against consumed round8."
+  },
+  "resources_GiB": {
+    "physical_RAM": 16, "admission_available": 6.6927337646484375,
+    "minimum_saved_available": 5.3612060546875, "final_available": 8.734466552734375,
+    "admission_global_swap": 2.95013671875, "final_global_swap": 2.95013671875,
+    "maximum_saved_new_swap": 0,
+    "owner_process_lifetime_MLX_high_water": 4.6703599244356155,
+    "limits": "Host availability, global swap and process-lifetime MLX high-water have different, nonadditive scopes. No continuous minimum/peak, exclusive allocation or model consumption is measured."
+  },
+  "settlement": {
+    "HTTP_unload_acknowledged": true, "HTTP_health_loaded": false,
+    "Deck_gateway_and_four_services_unchanged": true,
+    "later_Deck_services_active_enabled_zero_restarts": true,
+    "remote_raw_result_hash_matches_local": true, "remote_result_mode": "0600", "remote_directory_mode": "0700",
+    "exact_Deck_checkout_still_clean": true,
+    "separate_Mac_observation_at": "2026-10-22T00:46:21.220856+00:00",
+    "vision_lock_free": true, "LFM_loaded_count": 0,
+    "five_preservation_hashes_unchanged": true, "matching_workers": [],
+    "Kodak_backend": "minicpm_q8", "unknown_outcome": false
+  },
+  "pre_submission_failure": "At00:44:13UTC the read-only admission observer exited1 because its bounded process matcher saw PID75360. Receipt/stderr retained. PID had exited before targeted ps (exit1); a subsequent bounded observation found no match. Local intent/result and remote result absence were checked before retaining the blocked receipt and reacquiring fresh admission. No inference had been submitted, no process stopped and no model replay occurred; the original process identity is not established.",
+  "model_calls_this_screen": 4, "ordinary_generation_total": 67,
+  "accounting": "63 previous ordinary generations plus4 round35; forced round27 diagnostic trajectories remain separate",
+  "telegram_calls": 0, "warmups_retries_repairs_tuning_or_production_changes": 0,
+  "limits": "Two independent source texts/four decisions, one seed, no general semantic claim. Valid copy/schema did not prevent literal deletion. No owner Voxtype, full transcript editing/structuring, caption quality or practical MTP acceptance. The single-target editor remains factory-unselected; consumed fixtures must not be replayed under another path."
+}
