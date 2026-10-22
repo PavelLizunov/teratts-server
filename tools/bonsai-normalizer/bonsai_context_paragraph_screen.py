@@ -16,7 +16,7 @@ ORDER = [('topic_offsets', 'offsets'), ('topic_context', 'context'),
 MODULE_HASHES = {
     **base.MODULE_HASHES,
     'bonsai_context_paragraph.py': 'e612df6d4efbd1e4359651ca5b6781bd2d3a5c1f39a316eca6a78c0a4daac281',
-    'bonsai_paragraph_screen.py': '18934ea25af8542e63cd1bd8fcb094627dbd051f93fb5237dc7e78b8a0922d8c',
+    'bonsai_paragraph_screen.py': 'ab094ce85063e19b99586e7e03840cc2833a6d2b14a317d970a6d01c3a4b9669',
 }
 
 

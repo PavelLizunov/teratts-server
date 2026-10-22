@@ -108,7 +108,7 @@ def observe_deck():
 def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
             clock=time.monotonic, wall_clock=time.time, deck_observer=observe_deck,
             manifest_validator=validate_inputs, runtime_validator=runtime_hashes,
-            cell_editor=None):
+            cell_editor=None, cell_assessor=None, prompt_text=PARAGRAPH_PROMPT):
     """No retry; unknown submission/body-read skips unload and further calls.
 
     Mac admission is a fresh coordinator observation, not an automated headroom
@@ -122,7 +122,7 @@ def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
     validate_admission(admission, wall_clock())
     result = {'inputs_sha256': inputs_hash, 'module_sha256': hashes,
               'collector_sha256': digest(Path(__file__).read_bytes()),
-              'prompt_sha256': digest(PARAGRAPH_PROMPT.encode()), 'admission': admission,
+              'prompt_sha256': digest(prompt_text.encode()), 'admission': admission,
               'model_calls': 0, 'telegram_calls': 0, 'completed': False,
               'unknown_outcome': False, 'rows': []}
     with output.open('x') as handle:
@@ -178,6 +178,9 @@ def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
                     'temperature': 0.0, 'top_p': 0.8, 'top_k': 20, 'min_p': 0.0,
                     'presence_penalty': 0.0, 'repetition_penalty': 1.0,
                     'seed': 42, 'max_tokens': 1024, 'stream': False}
+                response_format = editor._response_format_for_source(cell['source'])
+                if response_format is not None:
+                    expected['response_format'] = response_format
                 if (active['outcome'] != 'not_submitted' or request.full_url != BASE + '/v1/chat/completions'
                         or json.loads(request.data) != expected):
                     raise ValueError('Paragraph payload drift or duplicate submission')
@@ -232,20 +235,23 @@ def collect(inputs, inputs_hash, output, token, admission, *, opener=None,
                     or finite(bm['memory_end']['swap_GiB']) - admission['memory']['swap_GiB'] > 0.25):
                 raise MemoryError('Paragraph resource stop')
             active['protocol_validated'] = True
-            try:
-                content = choice['message']['content']
-                rendered = render_paragraphs(cell['source'], content)
-                active.update(strict_selection_valid=True, actual_selection=json.loads(content)['break_after'],
-                              insertion_plan_verified=(rendered == text))
-            except ValueError:
-                active.update(strict_selection_valid=False, insertion_plan_verified=(text == cell['source']))
-            active.update(exact_expected=(text.encode() == cell['expected'].encode()),
-                          expected_status=(meta['status'] == cell['status']))
-            active['useful_grouping'] = active['exact_expected'] and active['expected_status']
+            if cell_assessor is not None:
+                active.update(cell_assessor(cell, editor, data, text, meta))
+            else:
+                try:
+                    content = choice['message']['content']
+                    rendered = render_paragraphs(cell['source'], content)
+                    active.update(strict_selection_valid=True, actual_selection=json.loads(content)['break_after'],
+                                  insertion_plan_verified=(rendered == text))
+                except ValueError:
+                    active.update(strict_selection_valid=False, insertion_plan_verified=(text == cell['source']))
+                active.update(exact_expected=(text.encode() == cell['expected'].encode()),
+                              expected_status=(meta['status'] == cell['status']))
+                active['useful_grouping'] = active['exact_expected'] and active['expected_status']
+                if (not active['insertion_plan_verified']
+                        or meta['reason'] not in (None, 'empty_paragraph_selection', 'invalid_edit_selection')):
+                    raise ValueError('Unexpected paragraph client outcome')
             save()
-            if (not active['insertion_plan_verified']
-                    or meta['reason'] not in (None, 'empty_paragraph_selection', 'invalid_edit_selection')):
-                raise ValueError('Unexpected paragraph client outcome')
             if clock() - start >= 600:
                 raise TimeoutError('Screen budget exhausted after response')
         result['completed'] = True
