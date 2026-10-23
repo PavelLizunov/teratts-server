@@ -34,10 +34,17 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         import stt_dictionary
         import bonsai_normalizer
         self.normalizer_module = bonsai_normalizer
+        startup_env = getattr(self, 'editor_startup_env', {})
+        installed_dir = getattr(self, 'installed_gateway_dir', None)
+        if installed_dir:
+            spec = importlib.util.spec_from_file_location('installed_stt_dictionary', Path(installed_dir) / 'stt_dictionary.py')
+            stt_dictionary = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(stt_dictionary)
         self.env = patch.dict(os.environ, {
             "STT_BACKEND": "parakeet", "STT_CORRECTOR": "loqira",
             "STT_DICTIONARY_CONFIG": str(TOOLS / "stt-dictionary/deploy/stt-dictionary.json"),
             "BONSAI_GATEWAY_TEST_SOURCE": os.environ.get("BONSAI_GATEWAY_TEST_SOURCE", str(TOOLS / "ruen-support-pilot/gateway-server.py")),
+            **startup_env,
         }, clear=True)
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -62,7 +69,7 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
                 return True
 
         package = module("gateway")
-        package.__path__ = []
+        package.__path__ = [str(installed_dir)] if installed_dir else []
         stubs = {
             "gateway": package,
             "gateway.stt_dictionary": stt_dictionary,
@@ -93,8 +100,9 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         self.gateway.voice_corpus.save.return_value = "synthetic-sample"
         self.normalizer = MagicMock(model="stub-bonsai", revision="stub", enabled=True)
         self.normalizer.normalize.side_effect = lambda text: (text, {"status": "applied"})
-        self.gateway.bonsai_normalizer = self.normalizer
-        os.environ["BONSAI_NORMALIZER_CONFIG"] = "in-memory-test-only"
+        if not startup_env:
+            self.gateway.bonsai_normalizer = self.normalizer
+            os.environ["BONSAI_NORMALIZER_CONFIG"] = "in-memory-test-only"
         audio = io.BytesIO()
         with wave.open(audio, "wb") as wav:
             wav.setnchannels(1)
@@ -108,6 +116,13 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         return await client.post("/v1/audio/transcriptions" + query,
             files={"file": ("synthetic.wav", self.audio, "audio/wav")},
             data={"response_format": response_format})
+
+    def test_health_reports_actual_editor_identity_without_editor_call(self):
+        with patch.object(self.gateway.local_http, 'open') as opened:
+            opened.return_value.__enter__.return_value.read.return_value = b'{"ready": true}'
+            health = self.gateway.health()
+        self.assertEqual(health['text_editor'], {'status': 'configured', 'model': 'stub-bonsai', 'revision': 'stub'})
+        self.normalizer.normalize.assert_not_called()
 
     async def test_real_multipart_precedence_provenance_and_formats(self):
         cases = (("?mode=default&cleanup=true", "bypassed"),

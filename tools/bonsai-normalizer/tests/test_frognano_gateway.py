@@ -16,7 +16,7 @@ class FrogNanoGateway(unittest.TestCase):
     def test_startup_precedence_and_invalid_config_never_selects_bonsai(self):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())
         selected = next(n for n in tree.body if isinstance(n, ast.If)
-                        and 'FROGNANO_NORMALIZER_CONFIG' in ast.unparse(n.test))
+                        and 'BOLT_NORMALIZER_CONFIG' in ast.unparse(n.test))
         frog, bonsai = ModuleType('gateway.frognano_normalizer'), ModuleType('gateway.bonsai_normalizer')
         frog.get_frognano_normalizer = Mock(return_value='frog')
         bonsai.get_bonsai_normalizer = Mock(return_value='bonsai')

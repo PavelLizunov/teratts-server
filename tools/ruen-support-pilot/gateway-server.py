@@ -194,9 +194,15 @@ else:
     CORRECTOR_IDENTITY = {"model": "sage95m-onnx-cpu"}
     CORRECTOR_POLICY = "punctuation-case-only-v1"
 
-# Optional pinned text editor (historical Bonsai or experimental FrogNano).
+# Explicit pinned editor priority: Bolt, retained FrogNano, historical Bonsai.
 bonsai_normalizer = None
-if loqira_corrector is not None and os.environ.get("FROGNANO_NORMALIZER_CONFIG"):
+if loqira_corrector is not None and STT_CORRECTOR == "loqira" and "BOLT_NORMALIZER_CONFIG" in os.environ:
+    try:
+        from gateway.bolt_normalizer import get_bolt_normalizer
+        bonsai_normalizer = get_bolt_normalizer(os.environ["BOLT_NORMALIZER_CONFIG"])
+    except Exception as exc:
+        print(f"[Bolt] status=disabled reason=initialization error={type(exc).__name__}", flush=True)
+elif loqira_corrector is not None and os.environ.get("FROGNANO_NORMALIZER_CONFIG"):
     try:
         from gateway.frognano_normalizer import get_frognano_normalizer
         bonsai_normalizer = get_frognano_normalizer(os.environ["FROGNANO_NORMALIZER_CONFIG"])
@@ -300,6 +306,9 @@ def health():
             "corrector": {**CORRECTOR_IDENTITY, "status": ("ready" if loqira_corrector.ready() else "fallback_sage") if loqira_corrector else ("ready" if SAGE_READY else "bypassed")},
             "formatting_policy": CORRECTOR_POLICY if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else None,
             "smart_llm": "bypassed" if STT_BACKEND == "ruen_support_pilot" or loqira_corrector else "ready", "ocr": "ready",
+            "text_editor": {"status": "configured" if (bonsai_normalizer is not None and bonsai_normalizer.enabled) else "bypassed",
+                            "model": getattr(bonsai_normalizer, "model", None),
+                            "revision": getattr(bonsai_normalizer, "revision", None)},
             "bonsai": "configured" if (bonsai_normalizer is not None and bonsai_normalizer.enabled) else "bypassed"}
 
 @app.post("/v1/audio/transcriptions")
@@ -426,7 +435,8 @@ async def transcribe_audio(
         and effective_mode == "smart"
         and STT_CORRECTOR == "loqira"
         and loqira_corrector is not None
-        and (os.environ.get("FROGNANO_NORMALIZER_CONFIG") or os.environ.get("BONSAI_NORMALIZER_CONFIG"))
+        and (os.environ.get("BOLT_NORMALIZER_CONFIG") or os.environ.get("FROGNANO_NORMALIZER_CONFIG")
+             or os.environ.get("BONSAI_NORMALIZER_CONFIG"))
         and accepted_stt_text
     ):
         t_bonsai_0 = time.perf_counter()

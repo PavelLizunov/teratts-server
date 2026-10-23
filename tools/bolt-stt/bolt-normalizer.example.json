@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "endpoint_url": "http://100.116.97.112:8094",
+  "token_file": "/home/deck/homelab/config/frognano.token",
+  "model": "nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB",
+  "revision": "1db54d5b12533ff1bcaa8e42cf4c667988a1f1be",
+  "timeout_seconds": 20,
+  "max_timeout_seconds": 20,
+  "max_input_chars": 6000,
+  "max_tokens": 512
+}
