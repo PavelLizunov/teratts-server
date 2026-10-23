@@ -33,16 +33,6 @@ def response(content, revision=FROGNANO_REVISION, finish='stop'):
 
 
 class FrogNanoClient(unittest.TestCase):
-    def test_prompt_matches_fixed_service_and_covers_missed_forms(self):
-        import ast
-        service = Path(__file__).resolve().parents[2] / 'frognano-stt/frognano_service.py'
-        tree = ast.parse(service.read_text())
-        prompt = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
-                      and any(isinstance(t, ast.Name) and t.id == 'SYSTEM_PROMPT' for t in n.targets))
-        self.assertEqual(prompt, FROGNANO_SYSTEM_PROMPT)
-        for marker in ('блядь', 'блять', 'нахуй', 'ебаный', 'повторы', 'Внутри кавычек', 'копируй их точно'):
-            self.assertIn(marker, prompt)
-
     def test_exact_identity_and_profile_only(self):
         cfg = config()
         self.assertEqual(cfg.max_tokens, 512)

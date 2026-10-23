@@ -1,0 +1,37 @@
+{
+  "round": 74,
+  "iteration": 1,
+  "candidate_commit": "7a0b994a5c024818270981bc35287580f19db194",
+  "verdict": "rejected_and_restored_r73",
+  "reason": "Broader profanity removal also deleted quoted data and a substantive instruction; lexical guards did not reject that deletion.",
+  "new_native_requests": 2,
+  "normal_eos": 2,
+  "unknown_outcomes": 0,
+  "outside_quote_cleanup": "2/2",
+  "complete_meaning_preserving_edits": "1/2",
+  "protected_quote_preservation": "0/1",
+  "optional_stage_seconds": [6.421839385293424, 3.718569897580892],
+  "output_repair_or_replay": false,
+  "model_changed": false,
+  "guards_relaxed": false,
+  "default_raw_changed": false,
+  "rollback": {
+    "completed": true,
+    "service_sha256": "6dbee40bebf8051c4e2ecb230b198012625642be0fedd5344301492eff27830c",
+    "client_sha256": "4d28472b68381d8a9cf40abab9b3939adf80cde93478a207fe89ec589bde027b",
+    "gateway_sha256": "dfee7a72d2c4251f1fab46442aeccb95cc1036a6f1087aa573bf2e576bcb71a1",
+    "public_readyz": 200,
+    "full_mac_preservation_passed_at": "2026-10-23T12:03:18Z",
+    "protected_speech_pids_unchanged": true
+  },
+  "accounting": {
+    "ordinary_before": 99,
+    "new": 2,
+    "ordinary_total": 101,
+    "historical_native_decision_requests": 10,
+    "historical_native_decision_questions": 28,
+    "trial_telegram": 0,
+    "production_user_traffic_included": false
+  },
+  "limits": "Two synthetic texts, not universal profanity coverage or owner-field acceptance. Unit tests and HTTP success did not establish semantic correctness."
+}
