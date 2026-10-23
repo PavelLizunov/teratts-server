@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import time
 from types import SimpleNamespace
 import unittest
@@ -127,14 +128,16 @@ class TestExecutedGatewaySeam(unittest.TestCase):
     def _execute(self, mode="smart", smart=False, formatting=True, configured=True,
                  corrector="loqira", has_loqira=True, dictionary=True, cleanup=True,
                  result=None, error=None, response_format="json", real_normalizer=None,
-                 asr_text="Ну, смотри, открой гитхап"):
+                 asr_text="Ну, смотри, открой гитхап", loqira_text=None,
+                 dictionary_path=None):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())
         function = copy.deepcopy(next(n for n in tree.body
                                       if isinstance(n, ast.AsyncFunctionDef) and n.name == "transcribe_audio"))
         function.decorator_list = []
         function.args.defaults = []  # Pass all arguments explicitly; no FastAPI initialization.
         events = []
-        dictionary_path = Path(__file__).resolve().parents[2] / "stt-dictionary/deploy/stt-dictionary.json"
+        if dictionary_path is None:
+            dictionary_path = Path(__file__).resolve().parents[2] / "stt-dictionary/deploy/stt-dictionary.json"
 
         def dictionary_pass(text, path, enabled):
             events.append(("dictionary", text))
@@ -142,7 +145,8 @@ class TestExecutedGatewaySeam(unittest.TestCase):
 
         def loqira_pass(text):
             events.append(("loqira", text))
-            return text, {"status": "applied", "loqira_ms": 1.0, "sage_ms": 0.0}
+            return text if loqira_text is None else loqira_text, {
+                "status": "applied", "loqira_ms": 1.0, "sage_ms": 0.0}
 
         def cleanup_pass(text, enabled):
             events.append(("cleanup", text))
@@ -224,6 +228,86 @@ class TestExecutedGatewaySeam(unittest.TestCase):
         self.assertEqual(response.headers["X-Bonsai-Status"], "applied")
         self.assertIn("bonsai;dur=", response.headers["Server-Timing"])
         self.assertEqual(response.headers["X-Corpus-Sample-ID"], "sample-id")
+
+    def test_changed_loqira_provenance_and_exact_post_cleanup_fallback(self):
+        raw = "Ну, смотри, найди гитхап"
+        corrected = "Ну, смотри, открой омарчи.\r\n\tНе меняй порт 4713.  "
+        post_dictionary = "Ну, смотри, открой Omarchy.\r\n\tНе меняй порт 4713.  "
+        accepted = "открой Omarchy.\r\n\tНе меняй порт 4713.  "
+        outcomes = [
+            {"result": ("rejected candidate", {"status": status})}
+            for status in ("fallback", "unchanged", "bypassed", "unexpected_status")
+        ] + [
+            {"error": TimeoutError("private error payload")},
+            {"error": RuntimeError("private error payload")},
+            {"result": ("invalid metadata", None)},
+            {"result": (None, {"status": "applied"})},
+            {"result": (" \r\n\t", {"status": "applied"})},
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / "dictionary.json"
+            config.write_text(json.dumps({"github": True, "omarchy": True}))
+            original = config.read_bytes()
+            for fmt in ("text", "json"):
+                for index, outcome in enumerate(outcomes):
+                    with self.subTest(response_format=fmt, outcome=index):
+                        response, record, normalizer, events, namespace = self._execute(
+                            asr_text=raw, loqira_text=corrected, dictionary_path=config,
+                            response_format=fmt, **outcome)
+                        self.assertEqual(events, [
+                            ("dictionary", raw),
+                            ("loqira", "Ну, смотри, найди GitHub"),
+                            ("dictionary", corrected),
+                            ("cleanup", post_dictionary),
+                            ("bonsai", accepted),
+                        ])
+                        self.assertEqual(record["raw_text"], raw)
+                        self.assertEqual(record["pre_dictionary_text"], corrected)
+                        self.assertEqual(record["pre_cleanup_text"], post_dictionary)
+                        self.assertEqual(record["accepted_stt_text"], accepted)
+                        normalizer.normalize.assert_called_once_with(accepted)
+                        actual = response.content if fmt == "text" else response.content["text"]
+                        self.assertEqual(actual.encode("utf-8"), accepted.encode("utf-8"))
+                        self.assertEqual(record["final_text"], accepted)
+                        for wrong_stage in (raw, "Ну, смотри, найди GitHub", corrected, post_dictionary):
+                            self.assertNotEqual(actual, wrong_stage)
+                        self.assertNotIn("private error payload", str(record["bonsai"]))
+                        namespace["run_smart_structuring"].assert_not_called()
+            self.assertEqual(config.read_bytes(), original)
+
+    def test_routing_matrix_keeps_accepted_stage_and_optin_isolation(self):
+        raw = "Ну, смотри, найди гитхап"
+        corrected = "Ну, смотри, открой омарчи.\r\n\tСохрани 4713.  "
+        accepted_raw = "найди GitHub"
+        accepted_corrected = "открой Omarchy.\r\n\tСохрани 4713.  "
+        candidate = "Заменён только экспериментальный результат."
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / "dictionary.json"
+            config.write_text(json.dumps({"github": True, "omarchy": True}))
+            for mode in ("raw", "default", "smart"):
+                for smart in (False, True):
+                    for formatting in (False, True):
+                        with self.subTest(mode=mode, smart=smart, formatting=formatting):
+                            effective = "smart" if smart else "raw" if not formatting else mode
+                            response, record, normalizer, events, namespace = self._execute(
+                                asr_text=raw, loqira_text=corrected, dictionary_path=config,
+                                mode=mode, smart=smart, formatting=formatting,
+                                result=(candidate, {"status": "applied"}))
+                            accepted = accepted_raw if effective == "raw" else accepted_corrected
+                            self.assertEqual(response.headers["X-Mode"], effective)
+                            self.assertEqual(record["accepted_stt_text"], accepted)
+                            if effective == "smart":
+                                normalizer.normalize.assert_called_once_with(accepted)
+                                self.assertEqual(record["final_text"], candidate)
+                                self.assertEqual(response.headers["X-Bonsai-Status"], "applied")
+                            else:
+                                normalizer.normalize.assert_not_called()
+                                self.assertEqual(record["final_text"], accepted)
+                                self.assertEqual(response.headers["X-Bonsai-Status"], "bypassed")
+                                self.assertEqual(response.headers["X-Bonsai-Latency-Ms"], "0.0")
+                            self.assertEqual(response.content, {"text": record["final_text"]})
+                            namespace["run_smart_structuring"].assert_not_called()
+                            self.assertEqual("loqira" in [event[0] for event in events], effective != "raw")
 
     def test_smart_flag_keeps_existing_precedence_over_format_false(self):
         response, _, normalizer, _, _ = self._execute(mode="raw", smart=True, formatting=False)
