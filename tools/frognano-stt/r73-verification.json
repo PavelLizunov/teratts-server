@@ -1,0 +1,73 @@
+{
+  "round": 73,
+  "date_utc": "2026-10-23",
+  "model": "capyctl/FrogNano-4B-2609-MLX-4bit",
+  "revision": "7175ee2b94eae649dfd1e7605cd2dc3dcd1e3e2f",
+  "runtime_install_commit": "b0983f07df303ea97fb3046afef669d06d818356",
+  "acceptance_helper_commit": "126633e0a79b7a69605da22efc5524b8df11b721",
+  "gateway_sha256": "dfee7a72d2c4251f1fab46442aeccb95cc1036a6f1087aa573bf2e576bcb71a1",
+  "service_sha256": "6dbee40bebf8051c4e2ecb230b198012625642be0fedd5344301492eff27830c",
+  "historical_base_unchanged": true,
+  "model_free": {
+    "local_service_each_normal_optimized": {"tests": 43, "passed": 43},
+    "mac_service_each_normal_optimized": {"tests": 43, "passed": 43},
+    "local_client_each_normal_optimized": {"tests": 170, "passed": 167, "explicit_asgi_skips": 3},
+    "deck_installed_gateway_each_normal_optimized": {"asgi_tests": 3, "passed": 3},
+    "independent_review": "One overlay-origin binding defect reproduced and corrected; no remaining confirmed blocking source finding. Native effects were not independently reviewed."
+  },
+  "native_acceptance": {
+    "new_frozen_synthetic_requests": 2,
+    "actual_frognano_http": true,
+    "installed_gateway_source_asgi": true,
+    "asr_loqira": "deterministic stubs, no acoustic or Loqira model inference",
+    "normal_eos": 2,
+    "emotion": {
+      "requests": 1,
+      "complete_cleanup": 0,
+      "candidate": "Removed opening curse but retained emotional descriptor and substituted an erroneous word",
+      "gateway_status": "fallback",
+      "reason": "validation_word_order_changed",
+      "returned_exact_accepted_post_cleanup": true,
+      "optional_stage_seconds": 6.7821,
+      "service_reported_pre_cleanup_seconds": 6.5261
+    },
+    "neutral_quoted_control": {
+      "requests": 1,
+      "exact_unchanged": 1,
+      "gateway_status": "applied",
+      "optional_stage_seconds": 4.1290,
+      "service_reported_pre_cleanup_seconds": 3.7772
+    },
+    "default_raw": "No optional model calls; accepted-text provenance checked",
+    "unavailable_fallback": "Injected locally after each case; exact accepted text retained, no second real HTTP call",
+    "output_repair_or_replay": false,
+    "request_outcomes_unknown": 0,
+    "full_editor_quality_verdict": "not_established"
+  },
+  "accounting": {
+    "ordinary_generations_before": 97,
+    "new_r73_generations": 2,
+    "ordinary_generations_total": 99,
+    "historical_native_decision_requests": 10,
+    "historical_native_decision_questions": 28,
+    "trial_telegram": 0,
+    "scope": "Task-owned requests, not server-wide traffic"
+  },
+  "deployment": {
+    "gateway": "Installed and restarted only voice-gateway.service; public readyz200; Parakeet, Loqira, Clef and historical tunnel process identities unchanged",
+    "mac": "Separate authenticated Tailnet LaunchAgent; normal EOS response cleanup completed; final service PID48493 RSS0.312GiB, static health loaded=false and shared lock free. Full final preservation observation passed at2026-10-23T08:03:25Z; available7.812GiB, swap2.326GiB. No direct native allocator-zero attestation.",
+    "selection": "effective smart only; default/raw unchanged",
+    "rollback": "Dedicated drop-in can be disabled independently; exact pre-install gateway backup retained",
+    "automatic_default_switch": false
+  },
+  "limits": [
+    "No successful new emotional edit; neutral abstention is not cleanup success",
+    "Owner endpoint/mode, Insert behavior, field insertion, multiline handling and auto-submit unverified",
+    "No real audio recognition quality or actual Voxtype latency measurement",
+    "Cooperative deadline and socket timeout are not hard end-to-end cancellation",
+    "Resource checks are sampled; no transient-peak or numerical native-resource trace retained",
+    "Selected runtime source coverage, not complete dependency equality",
+    "Lexical checks do not prove semantic preservation",
+    "No TTS synthesis or cold reboot test"
+  ]
+}

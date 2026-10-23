@@ -15,6 +15,16 @@ the smoke request completed; meaning was retained on three task texts, but full
 emotional cleanup succeeded on only one of two emotional texts. The neutral
 control was unchanged. This is partial usefulness, not reliable editing.
 
+The R73 server trial is installed. Two new once-only synthetic requests through
+installed gateway source and real FrogNano HTTP completed at EOS. The emotional
+candidate retained an emotional descriptor and introduced a misspelling, so the
+word-order guard rejected it and the gateway returned exact accepted text (6.782 s
+optional-stage time). The neutral quoted control was returned exactly unchanged
+(4.129 s). Thus new full cleanup was 0/1 emotional inputs and neutral abstention
+1/1; a useful new emotional edit was not demonstrated. See the sanitized
+[verification receipt](<r73-verification.json>). The trial remains explicitly
+smart-only, not an automatic replacement for ordinary dictation.
+
 The [client](<../bonsai-normalizer/frognano_normalizer.py>) reuses the unchanged
 historical transport and lexical guards. It rejects protocol markers, incomplete
 responses, identity drift and selected lexical changes. Successful content is not
@@ -130,6 +140,6 @@ request.
 
 ### Documentation verification
 
-- Claims: source limits and prior screen denominators are explicit; deployment is not inferred from source.
-- Style: configuration and failure mechanisms are described directly.
-- Grounding: server checks are separated from owner-client acceptance.
+- PASS — Claims use recorded source limits, deployed hashes and separate emotional/control denominators.
+- PASS — Configuration and failure mechanisms are described directly.
+- PASS — Server checks are separated from owner-client acceptance; no owner-field success is claimed.

@@ -38,6 +38,9 @@ checkpoint branch and verify the exact remote SHA.
 This does not verify acoustic recognition quality, owner endpoint selection,
 Insert/field insertion, multiline handling, cancellation or auto-submit. Runtime
 manifest coverage is selected source files, not complete dependency equality.
-Deployment/native receipts are private operational evidence, not inferred from
-this source contract. The [component runbook](<../../tools/frognano-stt/README.md>)
+Detailed deployment/native receipts are private operational evidence, not inferred
+from this source contract. The sanitized [R73 receipt](<../../tools/frognano-stt/r73-verification.json>)
+records the observed installed trial: two EOS responses, emotional cleanup0/1
+(rejected candidate/exact fallback), neutral exact control1/1, ordinary bypass and
+unchanged protected services. No new useful emotional edit was demonstrated. The [component runbook](<../../tools/frognano-stt/README.md>)
 records commands, limits, selection and rollback.
