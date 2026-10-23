@@ -56,12 +56,18 @@ def _clause(source: str, start: int, end: int) -> tuple[str, str]:
     return source[left:right], source[left:start]
 
 
-def _inventory(source: str) -> list[tuple[int, int, tuple[str, ...], bool]]:
+def _protected_ranges(source: str) -> list[tuple[int, int]] | None:
     quotes = _quoted_ranges(source)
     if quotes is None:
+        return None
+    return (quotes + [m.span() for m in _TECH.finditer(source)]
+            + [m.span() for m in re.finditer(r'(?m)^[ \t]*>[^\r\n]*', source)])
+
+
+def _inventory(source: str) -> list[tuple[int, int, tuple[str, ...], bool]]:
+    shields = _protected_ranges(source)
+    if shields is None:
         return []
-    shields = quotes + [m.span() for m in _TECH.finditer(source)]
-    shields += [m.span() for m in re.finditer(r'(?m)^[ \t]*>[^\r\n]*', source)]
 
     def shielded(start, end):
         return any(start < right and end > left for left, right in shields)
@@ -125,23 +131,30 @@ def _inventory(source: str) -> list[tuple[int, int, tuple[str, ...], bool]]:
     return edits
 
 
-def _fixed_choices(text: str, at_cut: bool) -> tuple[str, ...]:
+def _fixed_choices(text: str, at_cut: bool, offset: int,
+                   shields: list[tuple[int, int]]) -> tuple[str, ...]:
     if at_cut:
         first = re.search(r'[^\W\d_]', text)
         if first:
             i = first.start()
-            return (text, text[:i] + text[i].swapcase() + text[i + 1:])
+            if not any(left <= offset + i < right for left, right in shields):
+                return (text, text[:i] + text[i].swapcase() + text[i + 1:])
     return (text,)
 
 
 def render_supported_bolt_cleanup(source: str, candidate: str) -> str:
     # Track actual candidate choices; keeping a span never enables capitalization edits.
+    shields = _protected_ranges(source)
+    if shields is None:
+        if candidate != source:
+            raise ValueError('unsupported_model_edit')
+        shields = []
     states = {(0, False)}
     cursor = 0
     for start, end, choices, opening in _inventory(source):
         fixed = source[cursor:start]
         positions = {pos + len(value) for pos, cut in states
-                     for value in _fixed_choices(fixed, cut) if candidate.startswith(value, pos)}
+                     for value in _fixed_choices(fixed, cut, cursor, shields) if candidate.startswith(value, pos)}
         states = set()
         for pos in positions:
             original = source[start:end]
@@ -154,7 +167,7 @@ def render_supported_bolt_cleanup(source: str, candidate: str) -> str:
             raise ValueError('unsupported_model_edit')
         cursor = end
     if not any(candidate[pos:] == value for pos, cut in states
-               for value in _fixed_choices(source[cursor:], cut)):
+               for value in _fixed_choices(source[cursor:], cut, cursor, shields)):
         raise ValueError('unsupported_model_edit')
     if not re.search(r'\w', candidate):
         raise ValueError('empty_supported_edit')

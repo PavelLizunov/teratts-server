@@ -381,6 +381,31 @@ class BoltCleanupRegression(unittest.TestCase):
         source = 'блядь, открой GitHub.'
         self.assertEqual(self.edit(source, 'Открой GitHub.')[0], 'Открой GitHub.')
 
+    def test_cut_capitalization_cannot_change_protected_bytes(self):
+        for prefix in ('Блять! ', 'Блять, ', 'Ёб твою мать! '):
+            for protected, changed in (
+                ('«не трогай»', '«Не трогай»'),
+                ('`не трогай`', '`Не трогай`'),
+                ('/tmp/foo', '/Tmp/foo'),
+                ('https://example.org/a', 'Https://example.org/a'),
+                ('worker.py', 'Worker.py'),
+            ):
+                source = prefix + protected
+                with self.subTest(source=source):
+                    text, meta = self.edit(source, changed)
+                    self.assertEqual(text, source)
+                    self.assertEqual(meta['status'], 'fallback')
+                    text, meta = self.edit(source, protected)
+                    self.assertEqual(text, protected)
+                    self.assertEqual(meta['status'], 'applied')
+
+    def test_cut_capitalization_cannot_change_blockquote_bytes(self):
+        source = 'Блять!\n> не трогай'
+        text, meta = self.edit(source, '> Не трогай')
+        self.assertEqual(text, source)
+        self.assertEqual(meta['status'], 'fallback')
+        self.assertEqual(self.edit(source, '> не трогай')[0], '> не трогай')
+
     def test_neutral_unchanged_status_is_not_applied(self):
         source = 'Не меняй срок и endpoint.  '
         text, meta = self.edit(source)

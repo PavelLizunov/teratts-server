@@ -55,13 +55,13 @@ MAX_BODY = 64 * 1024
 MAX_DEADLINE = 20
 NATIVE_BUDGET = 18
 SOCKET_TIMEOUT = 5
-CLEANUP_MARGIN = 5  # seconds reserved for cleanup within NATIVE_BUDGET
-WORK_DEADLINE = NATIVE_BUDGET - CLEANUP_MARGIN  # stop work at 13s
+CLEANUP_MARGIN = 9  # reap <=4s, monitor join <=3s, final counters <=2s
+WORK_DEADLINE = NATIVE_BUDGET - CLEANUP_MARGIN
 MAX_JSON_RESPONSE = 512 * 1024  # 512 KiB bound for llama_api reads
 
 # Shutdown flag — BaseException-based, prevents further serving.
 _shutdown = False
-_shutdown_lock = threading.Lock()
+_shutdown_lock = threading.RLock()
 # Guard against reentrant signal handler cleanup.
 _in_signal_handler = False
 
@@ -176,19 +176,50 @@ def llama_api(port, endpoint, body=None, timeout=8):
     """Minimal HTTP client for the loopback llama-server.
 
     No proxy, no redirect following, bounded JSON response (512 KiB),
-    finite socket deadline via timeout. Response JSON is strictly parsed:
-    duplicate keys and non-finite numbers are rejected.
+    absolute total read deadline via monotonic clock (urllib socket timeout
+    alone is per-operation and insufficient for trickle attacks).
+    Response JSON is strictly parsed: duplicate keys and non-finite numbers
+    are rejected.
     """
     url = 'http://127.0.0.1:' + str(port) + endpoint
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode()
     headers = {'Content-Type': 'application/json'} if data is not None else {}
     request = urllib.request.Request(url, data=data, headers=headers)
-    with _opener.open(request, timeout=timeout) as response:
-        raw = response.read(MAX_JSON_RESPONSE + 1)
-        if len(raw) > MAX_JSON_RESPONSE:
-            raise RuntimeError('Response exceeds 512 KiB bound')
-        return json.loads(raw, object_pairs_hook=_json_object_strict,
-                          parse_constant=_json_invalid_constant)
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError('Native HTTP requires the serial main thread')
+    if timeout <= 0:
+        raise TimeoutError('Absolute HTTP read deadline exceeded')
+    deadline = time.monotonic() + timeout
+
+    def expired(signum, frame):
+        raise TimeoutError('Absolute HTTP read deadline exceeded')
+
+    previous_handler = signal.signal(signal.SIGALRM, expired)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, timeout)
+    try:
+        with _opener.open(request, timeout=timeout) as response:
+            chunks = []
+            total = 0
+            while True:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Absolute HTTP read deadline exceeded')
+                chunk = response.read(65536)
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Absolute HTTP read deadline exceeded')
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_JSON_RESPONSE:
+                    raise RuntimeError('Response exceeds 512 KiB bound')
+                chunks.append(chunk)
+            raw = b''.join(chunks)
+            return json.loads(raw, object_pairs_hook=_json_object_strict,
+                              parse_constant=_json_invalid_constant)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
 
 
 def validate_template(prompt, system_prompt, text, tokens):
@@ -243,7 +274,7 @@ class Engine:
     def __init__(self, binary_path, model_path, runtime_manifest,
                  runtime_manifest_sha256, deadline_seconds=NATIVE_BUDGET):
         if (type(deadline_seconds) not in (int, float) or not math.isfinite(deadline_seconds)
-                or not 0 < deadline_seconds <= NATIVE_BUDGET):
+                or deadline_seconds != NATIVE_BUDGET):
             raise ValueError('Invalid deadline')
         if not re.fullmatch(r'[0-9a-f]{64}', runtime_manifest_sha256):
             raise ValueError('Invalid runtime manifest pin')
@@ -252,7 +283,7 @@ class Engine:
         self.runtime = Path(runtime_manifest)
         self.runtime_sha256 = runtime_manifest_sha256
         self.deadline_seconds = deadline_seconds
-        self.cleanup_margin = min(CLEANUP_MARGIN, deadline_seconds / 3)
+        self.cleanup_margin = min(CLEANUP_MARGIN, deadline_seconds / 2)
         self.work_deadline = deadline_seconds - self.cleanup_margin
         # Set at startup after full hash verification.
         self.gguf_sha256 = None
@@ -300,9 +331,12 @@ class Engine:
         the binary itself plus all dylib paths as a map of relative:{sha256,bytes}.
         Extra dylibs on disk not covered by the manifest are rejected.
         """
-        if digest_file(self.runtime, check) != self.runtime_sha256:
+        raw_manifest = self.runtime.read_bytes()
+        check()
+        if hashlib.sha256(raw_manifest).hexdigest() != self.runtime_sha256:
             raise RuntimeError('Runtime manifest drift')
-        manifest = json.loads(self.runtime.read_bytes())
+        manifest = json.loads(raw_manifest, object_pairs_hook=_json_object_strict,
+                              parse_constant=_json_invalid_constant)
         files = manifest.get('files')
         if not isinstance(files, dict) or not files:
             raise RuntimeError('Runtime manifest empty')
@@ -372,6 +406,7 @@ class Engine:
         term_lock = threading.Lock()  # serialize terminate_child calls
         watcher = None
         before = None
+        _keep_lock = False  # True only when unreapable child / live watcher
 
         try:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -445,18 +480,16 @@ class Engine:
                             reason = 'Native operation budget exceeded'
                         if reason:
                             monitor_errors.append(reason)
-                            terminate_child(proc, term_lock)
                             return
                     except Exception as error:
                         monitor_errors.append('Monitor failure: ' + str(error))
-                        terminate_child(proc, term_lock)
                         return
 
             watcher = threading.Thread(target=monitor, daemon=True)
             watcher.start()
 
             # Wait for llama-server health.
-            deadline = time.monotonic() + 60
+            health_deadline = time.monotonic() + 60
             while True:
                 check()
                 if monitor_errors:
@@ -464,13 +497,13 @@ class Engine:
                 if proc.poll() is not None:
                     raise RuntimeError('Candidate stopped during startup')
                 try:
-                    api_timeout = max(1, min(remaining(), 5))
+                    api_timeout = min(remaining(), 5)
                     health = llama_api(port, '/health', timeout=api_timeout)
                     if health.get('status') == 'ok':
                         break
                 except Exception:
                     pass
-                if time.monotonic() >= deadline:
+                if time.monotonic() >= health_deadline:
                     raise TimeoutError('Candidate startup exceeded 60 seconds')
                 time.sleep(0.3)
 
@@ -479,7 +512,7 @@ class Engine:
                 raise RuntimeError('Resource monitor: ' + monitor_errors[0])
 
             # Verify props identity.
-            api_timeout = max(1, min(remaining(), 5))
+            api_timeout = min(remaining(), 5)
             props = llama_api(port, '/props', timeout=api_timeout)
             dgs = props.get('default_generation_settings', {})
             if dgs.get('n_ctx') != 4096:
@@ -520,11 +553,11 @@ class Engine:
                     'conversational_mode': False,
                 },
             }
-            api_timeout = max(1, min(remaining(), 5))
+            api_timeout = min(remaining(), 5)
             rendered = llama_api(port, '/apply-template', chat_payload, timeout=api_timeout)
             prompt = rendered['prompt']
 
-            api_timeout = max(1, min(remaining(), 5))
+            api_timeout = min(remaining(), 5)
             tokens = llama_api(port, '/tokenize', {
                 'content': prompt,
                 'add_special': True,
@@ -539,17 +572,23 @@ class Engine:
                 raise RuntimeError('Resource monitor: ' + monitor_errors[0])
 
             # Submit inference (single, no retry), bounded by remaining work deadline.
-            api_timeout = max(1, min(remaining(), NATIVE_BUDGET))
+            api_timeout = min(remaining(), NATIVE_BUDGET)
             response = llama_api(port, '/v1/chat/completions', chat_payload, timeout=api_timeout)
 
             # Validate response structure.
-            if not isinstance(response.get('model'), str) or response['model'] != MODEL_ID:
+            if (response.get('model') != MODEL_ID
+                    or response.get('object') != 'chat.completion'
+                    or response.get('system_fingerprint') != BUILD_INFO):
                 raise RuntimeError('Invalid model identity in response')
             choices = response.get('choices')
             if not isinstance(choices, list) or len(choices) != 1:
                 raise RuntimeError('Expected exactly one choice')
             choice = choices[0]
             message = choice.get('message', {})
+            if (type(choice.get('index')) is not int or choice['index'] != 0
+                    or not isinstance(message, dict) or message.get('role') != 'assistant'
+                    or any(message.get(k) for k in ('tool_calls', 'function_call', 'reasoning', 'reasoning_content'))):
+                raise RuntimeError('Invalid response channel')
             output = message.get('content')
             if not isinstance(output, str) or not output:
                 raise RuntimeError('Invalid or empty output')
@@ -560,7 +599,8 @@ class Engine:
 
             # Verbose raw checks.
             raw = response.get('__verbose')
-            if not isinstance(raw, dict) or not isinstance(raw.get('content'), str):
+            if (not isinstance(raw, dict) or not isinstance(raw.get('content'), str)
+                    or raw.get('content') != output or raw.get('model') != MODEL_ID):
                 raise RuntimeError('Missing raw completion evidence')
 
             # Validate raw.prompt == '<bos>' + rendered template.
@@ -570,6 +610,19 @@ class Engine:
                 raise RuntimeError('raw.prompt does not match expected <bos> + rendered template')
 
             settings = raw.get('generation_settings', {})
+            expected_sampler = {**SAMPLER, 'repeat_penalty': SAMPLER['repetition_penalty']}
+            expected_sampler.pop('repetition_penalty')
+            for key, expected in expected_sampler.items():
+                observed = settings.get(key)
+                if (type(observed) not in (int, float) or not math.isfinite(observed)
+                        or not math.isclose(observed, expected, rel_tol=0, abs_tol=1e-7)):
+                    raise RuntimeError('Effective sampler drift')
+            if (settings.get('max_tokens') != maximum or settings.get('n_predict') != maximum
+                    or settings.get('stream') is not False or settings.get('ignore_eos') is not False
+                    or settings.get('speculative.types') != 'none'
+                    or settings.get('reasoning_in_content') is not False
+                    or raw.get('reasoning_content') or raw.get('reasoning')):
+                raise RuntimeError('Effective generation budget drift')
             if (settings.get('chat_format') != 'peg-gemma4'
                     or settings.get('generation_prompt') != '<|turn>model\n'
                     or raw.get('truncated') is not False
@@ -587,10 +640,11 @@ class Engine:
             # Finite token usage validation.
             usage = response.get('usage', {})
             completion_tokens = usage.get('completion_tokens', 0)
-            if not isinstance(completion_tokens, int) or not 1 <= completion_tokens <= maximum:
+            if type(completion_tokens) is not int or not 1 <= completion_tokens <= maximum:
                 raise RuntimeError('Output token count outside valid range')
             total_tokens = usage.get('total_tokens', 0)
-            if not isinstance(total_tokens, int) or total_tokens != usage.get('prompt_tokens', 0) + completion_tokens:
+            if (type(total_tokens) is not int or type(usage.get('prompt_tokens')) is not int
+                    or total_tokens != usage.get('prompt_tokens', 0) + completion_tokens):
                 raise RuntimeError('Token accounting mismatch')
 
             check()
@@ -599,46 +653,76 @@ class Engine:
             error.__context__ = error.__cause__ = None
             raise error.with_traceback(None)
         finally:
-            # Stop the monitor first.
-            stop_monitor.set()
-            # Join the watcher thread and verify it actually stopped.
-            if watcher is not None:
-                watcher.join(timeout=3)
-                if watcher.is_alive():
-                    # Monitor still alive — fatal: cannot guarantee resource safety.
-                    monitor_errors.append('Monitor thread did not join within timeout')
-            # Always stop/reap child before response — main thread reaps.
-            reaped = True
-            if proc is not None:
-                reaped = terminate_child(proc, term_lock)
-            if not reaped:
-                # Unreapable child: keep lock held, do not release, stop serving.
-                # Strong reference _held_lock_ref preserves the file object from GC.
-                self._unreap_lock_ref = _held_lock_ref
-                _set_shutdown()
-                raise RuntimeError('Failed to reap child process; lock retained, serving stopped')
-            # Release lock only after successful cleanup.
+            # Cleanup phase: suppress signal raises to prevent interrupting
+            # termination/reap/lock release. Repeated signals just set the flag.
+            global _in_signal_handler
+            _prev_in_signal = _in_signal_handler
+            _in_signal_handler = True
+            try:
+                stop_monitor.set()
+                # Only this thread terminates/reaps; a slow monitor cannot skip cleanup.
+                reaped = True
+                cleanup_error = None
+                if proc is not None:
+                    try:
+                        reaped = terminate_child(proc, term_lock)
+                    except BaseException as error:
+                        cleanup_error = type(error).__name__
+                        reaped = False
+                if watcher is not None:
+                    try:
+                        watcher.join(timeout=3)
+                        watcher_live = watcher.is_alive()
+                    except BaseException:
+                        watcher_live = True
+                    if watcher_live:
+                        _keep_lock = True
+                        self._unreap_lock_ref = _held_lock_ref
+                        self._unreaped_proc_ref = proc
+                        self._unjoined_watcher_ref = watcher
+                        _set_shutdown()
+                        raise RuntimeError('Monitor thread did not join; lock retained, serving stopped')
+                if not reaped:
+                    # Unreapable child: keep lock held, do not release, stop serving.
+                    # Strong reference _held_lock_ref preserves the file object from GC.
+                    _keep_lock = True
+                    self._unreap_lock_ref = _held_lock_ref
+                    self._unreaped_proc_ref = proc
+                    _set_shutdown()
+                    raise RuntimeError('Failed to reap child process; lock retained, serving stopped')
+            finally:
+                _in_signal_handler = _prev_in_signal
+                # Release lock on error paths (exceptions from try block).
+                # On success path, lock is released after final measurement below.
+                # On fatal paths (_keep_lock), lock stays held intentionally.
+                if not _keep_lock and sys.exc_info()[1] is not None:
+                    lock_file.close()
+
+        # Final post-cleanup checks — lock still held, mandatory even after successful response.
+        try:
+            if _shutdown:
+                raise ServiceShutdown('Service interrupted during cleanup')
+            # Monitor errors discovered during or after inference are fatal.
+            if monitor_errors:
+                raise RuntimeError('Resource monitor: ' + monitor_errors[0])
+
+            # Final deadline check BEFORE memory measurement.
+            elapsed = time.monotonic() - started
+            if elapsed >= self.deadline_seconds:
+                raise TimeoutError('Native operation budget exceeded after cleanup')
+
+            # Final memory check under lock. memory() can take up to 2s, so recheck deadline after.
+            after = memory()
+
+            # Recheck deadline AFTER memory measurement to prevent past-deadline success.
+            total_seconds = time.monotonic() - started
+            if total_seconds >= self.deadline_seconds:
+                raise TimeoutError('Native operation budget exceeded after final measurement')
+
+            resource_check(after, before['swap_GiB'])
+        finally:
+            # Release lock after final measurement (or on any error in post-cleanup checks).
             lock_file.close()
-
-        # Final post-cleanup checks — mandatory even after successful response.
-        # Monitor errors discovered during or after inference are fatal.
-        if monitor_errors:
-            raise RuntimeError('Resource monitor: ' + monitor_errors[0])
-
-        # Final deadline check BEFORE memory measurement.
-        elapsed = time.monotonic() - started
-        if elapsed >= self.deadline_seconds:
-            raise TimeoutError('Native operation budget exceeded after cleanup')
-
-        # Final memory check. memory() can take up to 2s, so recheck deadline after.
-        after = memory()
-
-        # Recheck deadline AFTER memory measurement to prevent past-deadline success.
-        total_seconds = time.monotonic() - started
-        if total_seconds >= self.deadline_seconds:
-            raise TimeoutError('Native operation budget exceeded after final measurement')
-
-        resource_check(after, before['swap_GiB'])
 
         # Build result with resource telemetry.
         result = {
@@ -689,6 +773,18 @@ class Server(HTTPServer):
         connection, address = super().get_request()
         connection.settimeout(SOCKET_TIMEOUT)
         return connection, address
+
+    def finish_request(self, request, client_address):
+        # Bound request line/headers/body before inference, even under slow trickle.
+        def expired(signum, frame):
+            raise TimeoutError('Inbound HTTP deadline exceeded')
+        previous = signal.signal(signal.SIGALRM, expired)
+        signal.setitimer(signal.ITIMER_REAL, SOCKET_TIMEOUT)
+        try:
+            super().finish_request(request, client_address)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
 
 
 def json_object(pairs):
@@ -757,6 +853,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Incomplete body')
                 payload = json.loads(raw.decode('utf-8'), parse_constant=invalid_constant,
                                      object_pairs_hook=json_object)
+                # Framing is complete; Engine owns the independent 18-second budget.
+                signal.setitimer(signal.ITIMER_REAL, 0)
                 result = self.server.engine.infer(payload)
             except (ValueError, TypeError, KeyError, UnicodeError):
                 self.send_json(400, {'error': 'Invalid request'})
@@ -796,36 +894,29 @@ def main():
     engine = Engine(args.binary_path, args.model_path, args.runtime_manifest,
                     args.runtime_manifest_sha256, args.deadline_seconds)
 
-    # Install signal handlers BEFORE verify_startup so SIGTERM during hashing terminates.
-    # Robust to reentrancy: repeated SIGTERM/HUP during cleanup won't deadlock on
-    # _shutdown_lock (it's a non-reentrant Lock, but _set_shutdown uses with-statement
-    # which acquires once). The handler sets the flag and raises; if already in a handler,
-    # the flag is still set and the raise propagates without deadlock.
+    # Flag-only signals cannot interrupt child publication or cleanup ownership.
+    # Blocking HTTP has its own absolute alarm; main-thread checks settle the request.
     def on_signal(signum, frame):
-        global _in_signal_handler
-        if _in_signal_handler:
-            # Reentrant signal during cleanup — just ensure flag is set, don't deadlock.
-            global _shutdown
-            _shutdown = True
-            return
-        _in_signal_handler = True
-        try:
-            _set_shutdown()
-        finally:
-            _in_signal_handler = False
-        raise ServiceShutdown('Service interrupted by signal ' + str(signum))
+        global _shutdown
+        _shutdown = True
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGHUP, on_signal)
 
     # Full hash verification at startup — expensive, once.
     engine.verify_startup()
+    if _shutdown:
+        return
 
     server = Server((args.host, args.port), Handler)
     server.token, server.engine = token, engine
     try:
         while not _shutdown:
             server.handle_request()
+        if '_unreap_lock_ref' in vars(engine):
+            # Keep process/lock ownership alive instead of exiting into KeepAlive restart.
+            while True:
+                time.sleep(1)
     finally:
         server.server_close()
 

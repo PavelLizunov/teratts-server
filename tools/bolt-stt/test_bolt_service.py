@@ -9,6 +9,7 @@ delegation.
 from http.client import HTTPMessage
 import importlib.util
 import io
+import hashlib
 import json
 from pathlib import Path
 import signal
@@ -37,6 +38,8 @@ def make_response(content='Точный текст.', finish_reason='stop', mode
     """Build a mock llama-server /v1/chat/completions response."""
     resp = {
         'model': model or s.MODEL_ID,
+        'object': 'chat.completion',
+        'system_fingerprint': s.BUILD_INFO,
         'choices': [{
             'index': 0,
             'message': {'role': 'assistant', 'content': content},
@@ -50,10 +53,16 @@ def make_response(content='Точный текст.', finish_reason='stop', mode
     }
     if verbose:
         resp['__verbose'] = {
+            'model': model or s.MODEL_ID,
             'content': content,
             'prompt': '<bos>' + '<|turn>system\n' + s.SYSTEM_PROMPT.strip() + '<turn|>\n'
                       '<|turn>user\nНовый синтетический текст, срок 24 дня.<turn|>\n<|turn>model\n',
             'generation_settings': {
+                **s.SAMPLER,
+                'repeat_penalty': 1,
+                'max_tokens': 512, 'n_predict': 512,
+                'stream': False, 'ignore_eos': False,
+                'speculative.types': 'none', 'reasoning_in_content': False,
                 'chat_format': 'peg-gemma4',
                 'generation_prompt': '<|turn>model\n',
             },
@@ -64,15 +73,19 @@ def make_response(content='Точный текст.', finish_reason='stop', mode
 
 
 def make_props(model_alias=None, model_path='/path/to/model.gguf'):
-    """Build mock /props response with model_alias and model_path."""
+    """Build mock /props response with model_alias at top level and model_path.
+
+    Actual schema verified from retained evidence (nemotron-bolt-screen-2/props.json):
+    model_alias is a top-level field, not nested in default_generation_settings.
+    """
     return {
         'default_generation_settings': {
             'n_ctx': 4096,
-            'model': model_alias or s.MODEL_ID,
         },
         'build_info': s.BUILD_INFO,
         'total_slots': 1,
         'chat_template': 'x',
+        'model_alias': model_alias or s.MODEL_ID,
         'model_path': model_path,
     }
 
@@ -308,7 +321,7 @@ class EngineInferTests(unittest.TestCase):
         self.p_killpg = self._patch(s.os, 'killpg')
         self.p_resource = self._patch(s, 'resource_check')
 
-        self.props_resp = make_props()
+        self.props_resp = make_props(model_path='/model.gguf')
         self.inference_resp = make_response(prompt_tokens=len(self.tokens))
 
         def mock_api(port, endpoint, body=None, timeout=8):
@@ -360,6 +373,53 @@ class EngineInferTests(unittest.TestCase):
         self.assertIn('before_GiB', result['bolt']['resources'])
         self.assertIn('after_GiB', result['bolt']['resources'])
         self.lock.close.assert_called()
+
+    def test_native_protocol_and_effective_profile_mutations_fail_closed(self):
+        changes = [
+            lambda r: r.update(object='wrong'),
+            lambda r: r.update(system_fingerprint='wrong'),
+            lambda r: r['choices'][0].update(index=True),
+            lambda r: r['choices'][0]['message'].update(role='user'),
+            lambda r: r['choices'][0]['message'].update(tool_calls=[{}]),
+            lambda r: r['choices'][0]['message'].update(function_call={'name': 'x'}),
+            lambda r: r['choices'][0]['message'].update(reasoning='hidden'),
+            lambda r: r['__verbose'].update(content='different'),
+            lambda r: r['__verbose'].update(model='wrong'),
+            lambda r: r['__verbose'].update(reasoning_content='hidden'),
+            lambda r: r['__verbose']['generation_settings'].update(temperature=.9),
+            lambda r: r['__verbose']['generation_settings'].update({'speculative.types': 'draft'}),
+            lambda r: r['__verbose']['generation_settings'].update(reasoning_in_content=True),
+            lambda r: r['usage'].update(completion_tokens=True, total_tokens=11),
+        ]
+        for change in changes:
+            with self.subTest(change=changes.index(change)):
+                self.inference_resp = make_response(prompt_tokens=len(self.tokens))
+                change(self.inference_resp)
+                values = iter([None, 0, 0])
+                self.proc.poll.side_effect = lambda: next(values, 0)
+                with self.assertRaises(RuntimeError):
+                    self.engine.infer(request())
+
+    def test_cleanup_exception_retains_lock_and_stops_serving(self):
+        self.proc.poll.return_value = None
+        with patch.object(s, 'terminate_child', side_effect=OSError('synthetic reap failure')):
+            with self.assertRaisesRegex(RuntimeError, 'Failed to reap'):
+                self.engine.infer(request())
+        self.lock.close.assert_not_called()
+        self.assertIs(self.engine._unreap_lock_ref, self.lock)
+        self.assertTrue(s._shutdown)
+
+    def test_live_monitor_cannot_skip_child_reap(self):
+        self.proc.poll.return_value = None
+        watcher = MagicMock()
+        watcher.is_alive.return_value = True
+        with patch.object(s.threading, 'Thread', return_value=watcher), \
+                patch.object(s, 'terminate_child', return_value=True) as reaped:
+            with self.assertRaisesRegex(RuntimeError, 'Monitor thread did not join'):
+                self.engine.infer(request())
+        reaped.assert_called_once()
+        self.lock.close.assert_not_called()
+        self.assertTrue(s._shutdown)
 
     def test_validation_before_stat_check(self):
         with self.assertRaises(ValueError):
@@ -647,7 +707,7 @@ class MonitorFailureTests(unittest.TestCase):
             '<|turn>user\n' + text.strip() + '<turn|>\n<|turn>model\n'
         )
         tokens = [2, 100, 200, 300, 400, 500, 600, 700, 800, 900]
-        props_resp = make_props()
+        props_resp = make_props(model_path='/model.gguf')
         inference_resp = make_response(prompt_tokens=len(tokens))
 
         def mock_api(port, endpoint, body=None, timeout=8):
@@ -722,7 +782,7 @@ class CleanupFalseHoldsLockTests(unittest.TestCase):
             '<|turn>user\n' + text.strip() + '<turn|>\n<|turn>model\n'
         )
         tokens = [2, 100, 200, 300, 400, 500, 600, 700, 800, 900]
-        props_resp = make_props()
+        props_resp = make_props(model_path='/model.gguf')
         inference_resp = make_response(prompt_tokens=len(tokens))
 
         def mock_api(port, endpoint, body=None, timeout=8):
@@ -831,8 +891,8 @@ class ManifestTests(unittest.TestCase):
 
     def test_runtime_manifest_drift(self):
         engine = s.Engine('/b', '/m', '/r', 'a' * 64)
-        with patch.object(s, 'digest_file', return_value='bad'):
-            with self.assertRaises(RuntimeError):
+        with patch.object(Path, 'read_bytes', return_value=b'{}'):
+            with self.assertRaisesRegex(RuntimeError, 'Runtime manifest drift'):
                 engine.verify_runtime_manifest(lambda: None)
 
     def test_runtime_manifest_requires_binary_coverage(self):
@@ -842,7 +902,8 @@ class ManifestTests(unittest.TestCase):
         manifest = {'files': {
             'libfoo.dylib': {'sha256': 'c' * 64, 'bytes': 1000},
         }}
-        with (patch.object(s, 'digest_file', side_effect=['a' * 64, 'c' * 64]),
+        engine.runtime_sha256 = hashlib.sha256(json.dumps(manifest).encode()).hexdigest()
+        with (patch.object(s, 'digest_file', return_value='c' * 64),
               patch.object(Path, 'read_bytes', return_value=json.dumps(manifest).encode()),
               patch.object(s, 'checked_path', side_effect=lambda r, n: r / n),
               patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=1000))):
@@ -857,6 +918,7 @@ class ManifestTests(unittest.TestCase):
         engine = s.Engine('/b', '/m', '/r', 'a' * 64)
         for bad_entry in ('just_a_hash', {'sha256': 'c' * 64}, {'bytes': 100}):
             manifest = {'files': {'llama-b11459': bad_entry}}
+            engine.runtime_sha256 = hashlib.sha256(json.dumps(manifest).encode()).hexdigest()
             with (patch.object(s, 'digest_file', return_value='a' * 64),
                   patch.object(Path, 'read_bytes', return_value=json.dumps(manifest).encode())):
                 with self.assertRaises(RuntimeError):
@@ -866,7 +928,8 @@ class ManifestTests(unittest.TestCase):
         """Manifest entry byte count must match actual file size."""
         engine = s.Engine('/b', '/m', '/r', 'a' * 64)
         manifest = {'files': {'llama-b11459': {'sha256': 'c' * 64, 'bytes': 999}}}
-        with (patch.object(s, 'digest_file', side_effect=['a' * 64, 'c' * 64]),
+        engine.runtime_sha256 = hashlib.sha256(json.dumps(manifest).encode()).hexdigest()
+        with (patch.object(s, 'digest_file', return_value='c' * 64),
               patch.object(Path, 'read_bytes', return_value=json.dumps(manifest).encode()),
               patch.object(s, 'checked_path', side_effect=lambda r, n: r / n),
               patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=1000))):
@@ -876,10 +939,19 @@ class ManifestTests(unittest.TestCase):
     def test_runtime_manifest_empty_files(self):
         engine = s.Engine('/b', '/m', '/r', 'a' * 64)
         manifest = {'files': {}}
+        engine.runtime_sha256 = hashlib.sha256(json.dumps(manifest).encode()).hexdigest()
         with patch.object(s, 'digest_file', return_value='a' * 64):
             with patch.object(Path, 'read_bytes', return_value=json.dumps(manifest).encode()):
                 with self.assertRaises(RuntimeError):
                     engine.verify_runtime_manifest(lambda: None)
+
+    def test_manifest_hash_and_parser_use_same_read(self):
+        raw = b'{"files": {}}'
+        engine = s.Engine('/b', '/m', '/r', hashlib.sha256(raw).hexdigest())
+        with patch.object(Path, 'read_bytes', side_effect=[raw, b'changed']) as reads:
+            with self.assertRaisesRegex(RuntimeError, 'Runtime manifest empty'):
+                engine.verify_runtime_manifest(lambda: None)
+        reads.assert_called_once()
 
     def test_runtime_manifest_root_is_binary_parent_not_home(self):
         """Root for manifest resolution must be binary.parent, not Path.home()."""
@@ -908,20 +980,26 @@ class LlamaApiTests(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
-        mock_response.read.return_value = b'x' * (s.MAX_JSON_RESPONSE + 1)
+        # Return chunks that exceed 512 KiB total.
+        chunk = b'x' * 65536
+        num_chunks = (s.MAX_JSON_RESPONSE // 65536) + 2  # enough to exceed limit
+        mock_response.read.side_effect = [chunk] * num_chunks + [b'']
         with patch.object(s._opener, 'open', return_value=mock_response):
-            with self.assertRaisesRegex(RuntimeError, '512 KiB'):
-                s.llama_api(54321, '/health')
+            with patch.object(s.time, 'monotonic', return_value=0):
+                with self.assertRaisesRegex(RuntimeError, '512 KiB'):
+                    s.llama_api(54321, '/health')
 
     def test_bounded_read_accepts_normal_response(self):
         """Normal-sized response must be accepted."""
         mock_response = MagicMock()
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
-        mock_response.read.return_value = json.dumps({'status': 'ok'}).encode()
+        data = json.dumps({'status': 'ok'}).encode()
+        mock_response.read.side_effect = [data, b'']
         with patch.object(s._opener, 'open', return_value=mock_response):
-            result = s.llama_api(54321, '/health')
-            self.assertEqual(result, {'status': 'ok'})
+            with patch.object(s.time, 'monotonic', return_value=0):
+                result = s.llama_api(54321, '/health')
+                self.assertEqual(result, {'status': 'ok'})
 
     def test_max_json_response_constant(self):
         self.assertEqual(s.MAX_JSON_RESPONSE, 512 * 1024)
@@ -1096,7 +1174,7 @@ class CLITests(unittest.TestCase):
               patch.object(s, 'Server') as server,
               patch.object(s.signal, 'signal')):
             engine.return_value.verify_startup = MagicMock()
-            s._shutdown = True  # exit serve loop immediately
+            server.return_value.handle_request.side_effect = lambda: setattr(s, '_shutdown', True)
             s.main()
             server.assert_called_once_with(('100.100.100.100', 8094), s.Handler)
             engine.assert_called_once_with(Path('/binary'), Path('/model.gguf'),
@@ -1128,7 +1206,7 @@ class CLITests(unittest.TestCase):
               patch.object(s, 'Server') as server,
               patch.object(s.signal, 'signal')):
             engine.return_value.verify_startup = MagicMock()
-            s._shutdown = True
+            server.return_value.handle_request.side_effect = lambda: setattr(s, '_shutdown', True)
             s.main()
             self.assertEqual(server.call_args[0][0][1], 8094)
 
@@ -1326,26 +1404,390 @@ class DeadlineCleanupTests(unittest.TestCase):
         self.assertEqual(engine.work_deadline, 18 - s.CLEANUP_MARGIN)
 
     def test_cleanup_margin_constant(self):
-        self.assertEqual(s.CLEANUP_MARGIN, 5)
-        self.assertEqual(s.WORK_DEADLINE, 13)
+        self.assertEqual(s.CLEANUP_MARGIN, 9)
+        self.assertEqual(s.WORK_DEADLINE, 9)
 
     def test_total_seconds_includes_cleanup(self):
-        """total_seconds in result must be measured after cleanup, not before."""
+        """total_seconds in result must be measured after cleanup, not before.
+
+        Lock must cover final resource measurement: the last lock_file.close()
+        in the success path must come AFTER the total_seconds measurement line.
+        """
         import inspect
         source = inspect.getsource(s.Engine.infer)
-        # Find the line that sets total_seconds.
+        # Find the line that sets total_seconds and the LAST lock_file.close().
         lines = source.split('\n')
         total_seconds_line = None
-        lock_close_line = None
+        lock_close_lines = []
         for i, line in enumerate(lines):
             if 'total_seconds' in line and 'monotonic' in line:
                 total_seconds_line = i
-            if 'lock.close()' in line and lock_close_line is None:
-                lock_close_line = i
-        self.assertIsNotNone(total_seconds_line)
-        self.assertIsNotNone(lock_close_line)
-        # total_seconds must be measured AFTER lock.close() (cleanup).
-        self.assertGreater(total_seconds_line, lock_close_line)
+            if 'lock_file.close()' in line:
+                lock_close_lines.append(i)
+        self.assertIsNotNone(total_seconds_line, 'total_seconds measurement not found')
+        self.assertTrue(len(lock_close_lines) >= 1, 'lock_file.close() not found')
+        # The final lock release (last occurrence) must be AFTER total_seconds measurement.
+        last_lock_close = max(lock_close_lines)
+        self.assertLess(total_seconds_line, last_lock_close,
+                        'total_seconds must be measured before final lock release')
+
+
+class LifecycleRegressionTests(unittest.TestCase):
+    """Causal regression tests for lifecycle/protocol fixes."""
+
+    def setUp(self):
+        s._shutdown = False
+        s._in_signal_handler = False
+
+    def tearDown(self):
+        s._shutdown = False
+        s._in_signal_handler = False
+
+    def test_lock_covers_final_measurement(self):
+        """Lock must be held during final resource measurement (not released before).
+
+        Regression: lock was previously released in the cleanup finally block,
+        before the post-cleanup memory measurement and resource_check.
+        """
+        engine = s.Engine('/binary', '/model.gguf', '/runtime', 'a' * 64)
+        engine.gguf_sha256 = s.GGUF_SHA256
+        engine.gguf_stat = (s.GGUF_BYTES, 1, 2, 3, 4)
+
+        lock = MagicMock()
+        close_order = []
+        original_close = lock.close
+        lock.close.side_effect = lambda: close_order.append('lock_close')
+
+        proc = MagicMock()
+        proc.pid = 12345
+        poll_values = iter([None, 0, 0])
+        proc.poll.side_effect = lambda: next(poll_values, 0)
+        proc.wait.return_value = 0
+
+        text = request()['messages'][1]['content']
+        rendered_prompt = (
+            '<|turn>system\n' + s.SYSTEM_PROMPT.strip() + '<turn|>\n'
+            '<|turn>user\n' + text.strip() + '<turn|>\n<|turn>model\n'
+        )
+        tokens = [2, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        props_resp = make_props(model_path='/model.gguf')
+        inference_resp = make_response(prompt_tokens=len(tokens))
+
+        def mock_api(port, endpoint, body=None, timeout=8):
+            if endpoint == '/health':
+                return {'status': 'ok'}
+            elif endpoint == '/props':
+                return props_resp
+            elif endpoint == '/apply-template':
+                return {'prompt': rendered_prompt}
+            elif endpoint == '/tokenize':
+                return {'tokens': tokens}
+            elif endpoint == '/v1/chat/completions':
+                return inference_resp
+            raise RuntimeError(f'Unexpected: {endpoint}')
+
+        mem_calls = [0]
+
+        def mock_memory():
+            mem_calls[0] += 1
+            # If lock has been closed before post-cleanup memory call, fail the test.
+            if mem_calls[0] > 1 and close_order:
+                # Post-cleanup memory call: lock should NOT have been closed yet.
+                raise AssertionError('Lock released before final measurement')
+            return {'available_GiB': 8, 'swap_GiB': 1}
+
+        with (patch.object(s.Engine, 'verify_stat_identity'),
+              patch.object(s.Engine, 'verify_runtime_manifest'),
+              patch.object(Path, 'open', return_value=lock),
+              patch.object(s.fcntl, 'flock'),
+              patch.object(s, 'memory', side_effect=mock_memory),
+              patch.object(s.time, 'monotonic', return_value=0),
+              patch.object(s.time, 'time_ns', return_value=123456789),
+              patch.object(s.socket, 'socket') as mock_sock,
+              patch.object(s.subprocess, 'Popen', return_value=proc),
+              patch.object(s.os, 'killpg'),
+              patch.object(s, 'llama_api', side_effect=mock_api),
+              patch.object(s.hashlib, 'sha256') as mock_sha,
+              patch.object(s, 'resource_check')):
+            mock_sock.return_value.__enter__ = MagicMock(return_value=mock_sock.return_value)
+            mock_sock.return_value.__exit__ = MagicMock(return_value=False)
+            mock_sock.return_value.getsockname.return_value = ('127.0.0.1', 54321)
+            mock_sha.return_value.hexdigest.return_value = s.TEMPLATE_SHA256
+
+            result = engine.infer(request())
+            self.assertEqual(result['model'], s.MODEL_ID)
+            # Lock MUST have been closed exactly once after final measurement.
+            self.assertEqual(len(close_order), 1)
+
+    def test_absolute_http_read_deadline(self):
+        """llama_api must enforce absolute total read deadline, not just socket timeout.
+
+        Regression: urllib socket timeout is per-operation, insufficient against
+        slow-trickle responses that send data just often enough to avoid socket timeout.
+        """
+        mock_response = MagicMock()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        time_values = iter([0, 0, 100])  # start=0, first check=0, second check=100 (past deadline)
+
+        def trickle_read(size):
+            return b'x'  # always returns data, never empty
+
+        mock_response.read.side_effect = trickle_read
+
+        with (patch.object(s._opener, 'open', return_value=mock_response),
+              patch.object(s.time, 'monotonic', side_effect=time_values)):
+            with self.assertRaisesRegex(TimeoutError, 'Absolute HTTP read deadline'):
+                s.llama_api(54321, '/health', timeout=5)
+
+    def test_repeated_signal_during_cleanup_no_raise(self):
+        """Repeated signal during cleanup must not raise ServiceShutdown in cleanup.
+
+        Regression: signal during infer()'s finally block could interrupt
+        terminate_child or lock_file.close() by raising ServiceShutdown.
+        """
+        # Verify the mechanism: _in_signal_handler suppresses raises.
+        s._in_signal_handler = True
+        s._shutdown = False
+
+        # Simulate signal handler being called during cleanup.
+        handler = None
+        with patch.object(s.signal, 'signal') as mock_signal:
+            # Capture the on_signal handler.
+            original_argv = s.sys.argv
+            argv = ['bolt_service.py', '--host', '100.100.100.100',
+                    '--binary-path', '/binary', '--model-path', '/model.gguf',
+                    '--runtime-manifest', '/runtime',
+                    '--runtime-manifest-sha256', 'a' * 64,
+                    '--token-file', '/token']
+            with (patch.object(s.sys, 'argv', argv),
+                  patch.object(Path, 'read_text', return_value='a' * 32),
+                  patch.object(s, 'Engine') as engine_cls,
+                  patch.object(s, 'Server') as server_cls):
+                engine_cls.return_value.verify_startup = MagicMock()
+                s._shutdown = True
+                try:
+                    s.main()
+                finally:
+                    s._shutdown = False
+
+                # Find the on_signal handler from signal.signal calls.
+                for call_args in mock_signal.call_args_list:
+                    if call_args[0][0] == s.signal.SIGTERM:
+                        handler = call_args[0][1]
+                        break
+
+        self.assertIsNotNone(handler, 'SIGTERM handler not found')
+
+        # Now test: when _in_signal_handler is True, handler must not raise.
+        s._in_signal_handler = True
+        s._shutdown = False
+        handler(s.signal.SIGTERM, None)  # should NOT raise
+        self.assertTrue(s._shutdown)  # flag must be set
+        s._in_signal_handler = False
+
+    def test_live_watcher_stops_serving_holds_lock(self):
+        """If watcher thread does not join, serving must stop and lock must be held.
+
+        Regression: live watcher only appended to monitor_errors but didn't
+        stop serving or hold the lock.
+        """
+        engine = s.Engine('/binary', '/model.gguf', '/runtime', 'a' * 64)
+        engine.gguf_sha256 = s.GGUF_SHA256
+        engine.gguf_stat = (s.GGUF_BYTES, 1, 2, 3, 4)
+
+        lock = MagicMock()
+        proc = MagicMock()
+        proc.pid = 12345
+        poll_values = iter([None, 0, 0])
+        proc.poll.side_effect = lambda: next(poll_values, 0)
+        proc.wait.return_value = 0
+
+        text = request()['messages'][1]['content']
+        rendered_prompt = (
+            '<|turn>system\n' + s.SYSTEM_PROMPT.strip() + '<turn|>\n'
+            '<|turn>user\n' + text.strip() + '<turn|>\n<|turn>model\n'
+        )
+        tokens = [2, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        props_resp = make_props(model_path='/model.gguf')
+        inference_resp = make_response(prompt_tokens=len(tokens))
+
+        def mock_api(port, endpoint, body=None, timeout=8):
+            if endpoint == '/health':
+                return {'status': 'ok'}
+            elif endpoint == '/props':
+                return props_resp
+            elif endpoint == '/apply-template':
+                return {'prompt': rendered_prompt}
+            elif endpoint == '/tokenize':
+                return {'tokens': tokens}
+            elif endpoint == '/v1/chat/completions':
+                return inference_resp
+            raise RuntimeError(f'Unexpected: {endpoint}')
+
+        # Create a mock watcher that is_alive returns True (won't join).
+        mock_watcher = MagicMock()
+        mock_watcher.is_alive.return_value = True
+
+        with (patch.object(s.Engine, 'verify_stat_identity'),
+              patch.object(s.Engine, 'verify_runtime_manifest'),
+              patch.object(Path, 'open', return_value=lock),
+              patch.object(s.fcntl, 'flock'),
+              patch.object(s, 'memory', return_value={'available_GiB': 8, 'swap_GiB': 1}),
+              patch.object(s.time, 'monotonic', return_value=0),
+              patch.object(s.time, 'time_ns', return_value=123456789),
+              patch.object(s.socket, 'socket') as mock_sock,
+              patch.object(s.subprocess, 'Popen', return_value=proc),
+              patch.object(s.os, 'killpg'),
+              patch.object(s, 'llama_api', side_effect=mock_api),
+              patch.object(s.hashlib, 'sha256') as mock_sha,
+              patch.object(s, 'resource_check'),
+              patch.object(s.threading, 'Thread', return_value=mock_watcher)):
+            mock_sock.return_value.__enter__ = MagicMock(return_value=mock_sock.return_value)
+            mock_sock.return_value.__exit__ = MagicMock(return_value=False)
+            mock_sock.return_value.getsockname.return_value = ('127.0.0.1', 54321)
+            mock_sha.return_value.hexdigest.return_value = s.TEMPLATE_SHA256
+
+            with self.assertRaisesRegex(RuntimeError, 'Monitor thread did not join.*lock retained'):
+                engine.infer(request())
+            # Lock must NOT have been closed.
+            lock.close.assert_not_called()
+            # Shutdown flag must be set.
+            self.assertTrue(s._shutdown)
+
+    def test_exactly_at_deadline_fails(self):
+        """>= deadline check: request completing at exactly the deadline must fail.
+
+        Regression: using > instead of >= would allow a request that finishes
+        exactly at the deadline to succeed.
+        """
+        engine = s.Engine('/binary', '/model.gguf', '/runtime', 'a' * 64, deadline_seconds=18)
+        engine.gguf_sha256 = s.GGUF_SHA256
+        engine.gguf_stat = (s.GGUF_BYTES, 1, 2, 3, 4)
+
+        lock = MagicMock()
+        proc = MagicMock()
+        proc.pid = 12345
+        poll_values = iter([None, 0, 0])
+        proc.poll.side_effect = lambda: next(poll_values, 0)
+        proc.wait.return_value = 0
+
+        text = request()['messages'][1]['content']
+        rendered_prompt = (
+            '<|turn>system\n' + s.SYSTEM_PROMPT.strip() + '<turn|>\n'
+            '<|turn>user\n' + text.strip() + '<turn|>\n<|turn>model\n'
+        )
+        tokens = [2, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+        props_resp = make_props(model_path='/model.gguf')
+        inference_resp = make_response(prompt_tokens=len(tokens))
+
+        # Time returns 0 during work, then exactly 18 at post-cleanup deadline.
+        # A successful run uses ~17 monotonic() calls; return 18 from call 15+
+        # to trigger the post-cleanup deadline check (>= 18 must fail).
+        time_calls = [0]
+        def mock_time():
+            time_calls[0] += 1
+            if time_calls[0] >= 15:
+                return 18
+            return 0
+
+        def mock_api(port, endpoint, body=None, timeout=8):
+            if endpoint == '/health':
+                return {'status': 'ok'}
+            elif endpoint == '/props':
+                return props_resp
+            elif endpoint == '/apply-template':
+                return {'prompt': rendered_prompt}
+            elif endpoint == '/tokenize':
+                return {'tokens': tokens}
+            elif endpoint == '/v1/chat/completions':
+                return inference_resp
+            raise RuntimeError(f'Unexpected: {endpoint}')
+
+        with (patch.object(s.Engine, 'verify_stat_identity'),
+              patch.object(s.Engine, 'verify_runtime_manifest'),
+              patch.object(Path, 'open', return_value=lock),
+              patch.object(s.fcntl, 'flock'),
+              patch.object(s, 'memory', return_value={'available_GiB': 8, 'swap_GiB': 1}),
+              patch.object(s.time, 'monotonic', side_effect=mock_time),
+              patch.object(s.time, 'time_ns', return_value=123456789),
+              patch.object(s.socket, 'socket') as mock_sock,
+              patch.object(s.subprocess, 'Popen', return_value=proc),
+              patch.object(s.os, 'killpg'),
+              patch.object(s, 'llama_api', side_effect=mock_api),
+              patch.object(s.hashlib, 'sha256') as mock_sha,
+              patch.object(s, 'resource_check')):
+            mock_sock.return_value.__enter__ = MagicMock(return_value=mock_sock.return_value)
+            mock_sock.return_value.__exit__ = MagicMock(return_value=False)
+            mock_sock.return_value.getsockname.return_value = ('127.0.0.1', 54321)
+            mock_sha.return_value.hexdigest.return_value = s.TEMPLATE_SHA256
+
+            with self.assertRaises(TimeoutError):
+                engine.infer(request())
+            # Lock must still be released (not held) on timeout.
+            lock.close.assert_called()
+
+    def test_props_model_alias_top_level_not_nested(self):
+        """model_alias must be checked at top level of /props, not inside default_generation_settings.
+
+        Regression: make_props had model_alias inside default_generation_settings.model
+        but actual llama-server schema has it top-level. Verified from retained evidence
+        (nemotron-bolt-screen-2/props.json line 60).
+        """
+        import inspect
+        source = inspect.getsource(s.Engine.infer)
+        # Find the props.get('model_alias') check — must NOT use dgs.get('model_alias').
+        self.assertIn("props.get('model_alias')", source)
+        self.assertNotIn("dgs.get('model_alias')", source)
+
+    def test_lock_released_on_error_path(self):
+        """Lock must be released even when inference raises an error (not unreap).
+
+        Regression: lock was released only in the success path; error paths
+        could leak the lock.
+        """
+        engine = s.Engine('/binary', '/model.gguf', '/runtime', 'a' * 64)
+        engine.gguf_sha256 = s.GGUF_SHA256
+        engine.gguf_stat = (s.GGUF_BYTES, 1, 2, 3, 4)
+
+        lock = MagicMock()
+        proc = MagicMock()
+        proc.pid = 12345
+        poll_values = iter([None, 0, 0])
+        proc.poll.side_effect = lambda: next(poll_values, 0)
+        proc.wait.return_value = 0
+
+        def mock_api(port, endpoint, body=None, timeout=8):
+            if endpoint == '/health':
+                return {'status': 'ok'}
+            elif endpoint == '/props':
+                # Return props with wrong model_alias to trigger an error.
+                return make_props(model_alias='wrong', model_path='/model.gguf')
+            raise RuntimeError(f'Unexpected: {endpoint}')
+
+        with (patch.object(s.Engine, 'verify_stat_identity'),
+              patch.object(s.Engine, 'verify_runtime_manifest'),
+              patch.object(Path, 'open', return_value=lock),
+              patch.object(s.fcntl, 'flock'),
+              patch.object(s, 'memory', return_value={'available_GiB': 8, 'swap_GiB': 1}),
+              patch.object(s.time, 'monotonic', return_value=0),
+              patch.object(s.time, 'time_ns', return_value=123456789),
+              patch.object(s.socket, 'socket') as mock_sock,
+              patch.object(s.subprocess, 'Popen', return_value=proc),
+              patch.object(s.os, 'killpg'),
+              patch.object(s, 'llama_api', side_effect=mock_api),
+              patch.object(s.hashlib, 'sha256') as mock_sha,
+              patch.object(s, 'resource_check')):
+            mock_sock.return_value.__enter__ = MagicMock(return_value=mock_sock.return_value)
+            mock_sock.return_value.__exit__ = MagicMock(return_value=False)
+            mock_sock.return_value.getsockname.return_value = ('127.0.0.1', 54321)
+            mock_sha.return_value.hexdigest.return_value = s.TEMPLATE_SHA256
+
+            with self.assertRaisesRegex(RuntimeError, 'model_alias'):
+                engine.infer(request())
+            # Lock MUST have been closed (not leaked) on error path.
+            lock.close.assert_called_once()
 
 
 if __name__ == '__main__':
