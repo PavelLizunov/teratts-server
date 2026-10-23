@@ -194,9 +194,15 @@ else:
     CORRECTOR_IDENTITY = {"model": "sage95m-onnx-cpu"}
     CORRECTOR_POLICY = "punctuation-case-only-v1"
 
-# Bonsai neutral normalizer is an optional post-STT stage when Loqira is corrector
+# Optional pinned text editor (historical Bonsai or experimental FrogNano).
 bonsai_normalizer = None
-if loqira_corrector is not None and STT_CORRECTOR == "loqira" and os.environ.get("BONSAI_NORMALIZER_CONFIG"):
+if loqira_corrector is not None and os.environ.get("FROGNANO_NORMALIZER_CONFIG"):
+    try:
+        from gateway.frognano_normalizer import get_frognano_normalizer
+        bonsai_normalizer = get_frognano_normalizer(os.environ["FROGNANO_NORMALIZER_CONFIG"])
+    except Exception as exc:
+        print(f"[FrogNano] status=disabled reason=initialization error={type(exc).__name__}", flush=True)
+elif loqira_corrector is not None and STT_CORRECTOR == "loqira" and os.environ.get("BONSAI_NORMALIZER_CONFIG"):
     try:
         from gateway.bonsai_normalizer import get_bonsai_normalizer
         bonsai_normalizer = get_bonsai_normalizer()
@@ -420,7 +426,7 @@ async def transcribe_audio(
         and effective_mode == "smart"
         and STT_CORRECTOR == "loqira"
         and loqira_corrector is not None
-        and os.environ.get("BONSAI_NORMALIZER_CONFIG")
+        and (os.environ.get("FROGNANO_NORMALIZER_CONFIG") or os.environ.get("BONSAI_NORMALIZER_CONFIG"))
         and accepted_stt_text
     ):
         t_bonsai_0 = time.perf_counter()
@@ -461,8 +467,14 @@ async def transcribe_audio(
         "X-Total-Latency-Ms": f"{total_latency_ms:.1f}",
         "Server-Timing": f"stt;dur={stt_latency_ms:.1f}, sage;dur={sage_latency_ms:.1f}, llm;dur={llm_latency_ms:.1f}, bonsai;dur={bonsai_latency_ms:.1f}"
     }
+    # Keep legacy headers and expose the actual optional editor without renaming it Bonsai.
+    headers["X-Text-Editor-Status"] = bonsai_meta.get("status", "bypassed")
+    headers["X-Text-Editor-Experimental"] = "true" if bonsai_meta.get("model") else "false"
     if bonsai_meta.get("model"):
         headers["X-Bonsai-Model"] = str(bonsai_meta["model"])
+        headers["X-Text-Editor-Model"] = str(bonsai_meta["model"])
+    if bonsai_meta.get("revision"):
+        headers["X-Text-Editor-Revision"] = str(bonsai_meta["revision"])
 
     if STT_BACKEND == "ruen_support_pilot":
         headers["X-STT-Model"] = PILOT_NAME

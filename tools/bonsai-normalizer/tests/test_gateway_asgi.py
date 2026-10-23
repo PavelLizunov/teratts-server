@@ -37,6 +37,7 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         self.env = patch.dict(os.environ, {
             "STT_BACKEND": "parakeet", "STT_CORRECTOR": "loqira",
             "STT_DICTIONARY_CONFIG": str(TOOLS / "stt-dictionary/deploy/stt-dictionary.json"),
+            "BONSAI_GATEWAY_TEST_SOURCE": os.environ.get("BONSAI_GATEWAY_TEST_SOURCE", str(TOOLS / "ruen-support-pilot/gateway-server.py")),
         }, clear=True)
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -83,7 +84,7 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         self.network = patch("urllib.request.OpenerDirector.open", side_effect=AssertionError("network forbidden"))
         self.network.start()
         self.addCleanup(self.network.stop)
-        path = TOOLS / "ruen-support-pilot/gateway-server.py"
+        path = Path(os.environ.get("BONSAI_GATEWAY_TEST_SOURCE", str(TOOLS / "ruen-support-pilot/gateway-server.py")))
         spec = importlib.util.spec_from_file_location("gateway_asgi_snapshot", path)
         self.gateway = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.gateway)

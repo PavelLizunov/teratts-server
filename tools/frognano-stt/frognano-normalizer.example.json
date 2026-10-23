@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "endpoint_url": "http://100.116.97.112:8093",
+  "token_file": "/home/deck/homelab/config/frognano.token",
+  "model": "capyctl/FrogNano-4B-2609-MLX-4bit",
+  "revision": "7175ee2b94eae649dfd1e7605cd2dc3dcd1e3e2f",
+  "timeout_seconds": 20,
+  "max_timeout_seconds": 20,
+  "max_input_chars": 6000,
+  "max_tokens": 512
+}
