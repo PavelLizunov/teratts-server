@@ -1,0 +1,108 @@
+{
+  "kind": "sanitized_installed_optional_editor_verification",
+  "runtime_source_commit": "d5174ee40e6ef05a4427c0d6683db4b1d3c576b3",
+  "model": "nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB",
+  "revision": "1db54d5b12533ff1bcaa8e42cf4c667988a1f1be",
+  "gguf_sha256": "c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612",
+  "runtime": {
+    "engine": "llama.cpp b11459, Apple M4 Metal",
+    "engine_commit": "f498f864fbc0472004ee1c3616c1188c68eb157f",
+    "manifest_sha256": "0e2f2ddb0d8c038a0e2340ebfa1d7aa24e6f4d0727aa8b8065f602ead9fedf00",
+    "deployed_service_python": "3.14",
+    "profile": "Q4_K_M, greedy seed42, f16/f16 KV, context4096, prompt<=3072, output<=512, reasoning/speculation off, nonstreaming, one call/no retry"
+  },
+  "deployment": {
+    "mac_service_installed_and_authenticated": true,
+    "deck_selector_installed_and_live_ready": true,
+    "retained_failed_install_receipts": true,
+    "recovery": "Stopped only the task agent after Python3.9 external-SSD access failure; selected existing service Python3.14 and ExitTimeOut30. No package installation.",
+    "operational_rollback_executed": false
+  },
+  "acceptance_path": "Installed Deck handler, dictionary and opening cleanup; stubbed ASR/Loqira; real authenticated Bolt transport/service",
+  "fixture_sha256": "cd319d3a74f8583bf99ab07188844cebe13c3e568cecba1e6e80a9f8a06b226b",
+  "scoring": "Exact frozen text AND expected editor status AND native EOS; fallback is not a quality pass",
+  "accounting": {
+    "canonical_claims": 12,
+    "native_http_calls": 12,
+    "http_200_eos": 12,
+    "quality_passes": 10,
+    "quality_failures": 2,
+    "unknown": 0,
+    "unsubmitted": 0,
+    "replayed": 0,
+    "previous_isolated_calls_contextual_only": 4,
+    "prompt_fixture_scorer_profile_changed_during_screen": false
+  },
+  "cases": [
+    {"id":"bolt-primary-smoke-01","quality":"passed","editor_status":"unchanged"},
+    {"id":"bolt-primary-interjection-02","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-maternal-03","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-quote-04","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-criticism-05","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-literal-06","quality":"failed","editor_status":"fallback","reason":"validation_negation_lost","exact_accepted_source_returned":true},
+    {"id":"bolt-primary-conditions-07","quality":"passed","editor_status":"unchanged"},
+    {"id":"bolt-primary-technical-08","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-substantive-09","quality":"passed","editor_status":"unchanged"},
+    {"id":"bolt-primary-provenance-10","quality":"failed","editor_status":"applied","reason":"Initial lowercase after deletion differs from frozen expected capitalization"},
+    {"id":"bolt-primary-nested-11","quality":"passed","editor_status":"applied"},
+    {"id":"bolt-primary-multiple-12","quality":"passed","editor_status":"applied"}
+  ],
+  "model_free_checks": {
+    "raw_default_bypass_checks_passed": 24,
+    "injected_unavailable_exact_source_checks_passed": 12,
+    "installed_smart_format_false_bypass": "passed",
+    "installed_injected_timeout_exact_source_no_retry": "passed",
+    "installed_injected_rejected_edit_exact_source": "passed",
+    "additional_native_calls": 0
+  },
+  "editor_latency_seconds": {"minimum":2.510748823173344,"median":2.952011353801936,"maximum":6.221614606678486},
+  "native_operation_seconds": {"sum":36.47731249919161,"maximum":5.8145060003735125,"configured_budget_per_request":18,"work_budget":9,"cleanup_reserve":9},
+  "iteration": {
+    "clock_basis": "Controller receipt file creation times against original controller start/deadline",
+    "elapsed_through_final_saved_receipt_seconds": 621.3805689811707,
+    "budget_seconds": 900,
+    "post_smoke_screen_seconds": 207.26320123672485,
+    "post_smoke_screen_budget_seconds": 600,
+    "deadline_reset": false,
+    "all_calls_finished_in_original_window": true,
+    "limit_origin": "Agent method, not a user total-task cap"
+  },
+  "resource_GiB": {
+    "admission_available_page_proxy_required": 6.5,
+    "sampled_reserve_required": 2.0,
+    "minimum_sampled_available_page_proxy": 3.0010986328125,
+    "maximum_sampled_child_rss": 3.2818603515625,
+    "maximum_observed_new_swap": 0.0,
+    "new_swap_limit": 0.25,
+    "final_available_page_proxy": 7.7359161376953125,
+    "final_occupied_swap": 2.242001953125,
+    "limitation": "Sampled proxy and RSS, not instantaneous peaks or total machine memory accounting"
+  },
+  "final_non_generating_observation": {
+    "bolt_authenticated_health_ok": true,
+    "bolt_loaded": false,
+    "native_executable_children": 0,
+    "shared_vision_lock_available": true,
+    "protected_mac_hashes_and_process_identities_unchanged": true,
+    "protected_deck_hashes_pids_and_restart_counts_unchanged": true,
+    "gateway_active_and_no_automatic_restarts": true
+  },
+  "retained_tests": {
+    "service_methods_each_normal_optimized": 109,
+    "client_methods_each_normal_optimized": 273,
+    "client_asgi_opt_in_skips_each": 4,
+    "deck_asgi_methods_each_normal_optimized_passed": 4,
+    "deployment_helper_checks_each_normal_optimized_passed": 6,
+    "runtime_sources_unchanged_since_test_freeze": true
+  },
+  "independent_review": {
+    "route": "ninitux/gpt-sol-latest, high",
+    "snapshot": "d5174ee40e6ef05a4427c0d6683db4b1d3c576b3",
+    "scope": "Service lifecycle/protocol and once-only acceptance/scoring",
+    "verdict": "No new material reachable source defect found",
+    "not_a_universal_or_release_acceptance_claim": true
+  },
+  "decision": "Deployed as requested; complete quality acceptance not achieved. Retain both failures without output/scorer repair. FrogNano remains recoverable.",
+  "not_verified": ["Real acoustic quality", "Owner-PC/Voxtype field insertion", "Superiority over FrogNano", "Concurrency", "Soak", "Operational rollback", "Universal semantic safety", "Hard real-time18s behavior under filesystem/spawn/scheduling stalls"],
+  "prose_delivery_gate": {"grounded_claims":"PASS","mechanism_over_adjectives":"PASS","scope_and_limits_explicit":"PASS"}
+}
