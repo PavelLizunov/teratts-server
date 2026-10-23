@@ -25,6 +25,13 @@ optional-stage time). The neutral quoted control was returned exactly unchanged
 [verification receipt](<r73-verification.json>). The trial remains explicitly
 smart-only, not an automatic replacement for ordinary dictation.
 
+The R74 prompt correction explicitly names common missed profanity forms,
+requires removal of every author's occurrence at any position, and emphasizes
+exact copying of retained words. Quoted profanity remains protected. Only the
+fixed prompt changes; model, sampling, resource gates and lexical guards do not.
+This prompt is not a guarantee of complete cleanup; deployment and quality results
+must be recorded separately from the R73 receipt.
+
 The [client](<../bonsai-normalizer/frognano_normalizer.py>) reuses the unchanged
 historical transport and lexical guards. It rejects protocol markers, incomplete
 responses, identity drift and selected lexical changes. Successful content is not
