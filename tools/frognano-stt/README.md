@@ -68,6 +68,10 @@ Every transport/protocol/identity/validation error returns the exact accepted
 post-cleanup text without local cleanup, never raw ASR. Owner-field insertion and
 actual Voxtype routing have not been verified by these server checks.
 
+## Isolated Bolt candidate
+
+The separate [Nemotron 3.5 Bolt E4B assessment](<../../docs/specs/nemotron-bolt-isolated-assessment.md>) passed four frozen synthetic text-editing cases through pinned llama.cpp on Apple M4 Metal. This is not a paired comparison or gateway acceptance. R76 remains installed; no model/service replacement occurred. Usable vision is not established for the tested published GGUF.
+
 ## Mac service
 
 [Service source](<frognano_service.py>) uses the existing interpreter and MLX overlay,
