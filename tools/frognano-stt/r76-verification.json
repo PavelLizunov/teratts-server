@@ -1,0 +1,47 @@
+{
+  "round": 76,
+  "runtime_commit": "84218719ce728c472d82defb777c77bfef08905d",
+  "branch": "checkpoint/frognano-cleanup-r76-20261023",
+  "status": "deployed_supported_cleanup_fix",
+  "model": "capyctl/FrogNano-4B-2609-MLX-4bit",
+  "revision": "7175ee2b94eae649dfd1e7605cd2dc3dcd1e3e2f",
+  "mac_prompt_service_model_changed": false,
+  "installed_sha256": {
+    "frognano_normalizer.py": "05444718b48310175caa7fdc253ce63c6413429760dca2b33ea8e8b86028c1b8",
+    "frognano_cleanup.py": "e023764cf917685b65f7c17eaca05ef7185c646ce1962d9292355fc95a217dcc"
+  },
+  "checks": {
+    "red_regressions_reproduced": true,
+    "committed_focused_tests_normal_and_optimized": {"total": 23, "passed": 23},
+    "deck_full_suite_normal_and_optimized": {"total": 186, "passed": 183, "skipped": 3},
+    "deck_explicit_installed_gateway_asgi": {"total": 3, "passed": 3},
+    "native_fresh_requests": 2,
+    "normal_eos": 2,
+    "unknown_outcomes": 0,
+    "native_emotional_cleanup": {"passed": 1, "total": 1},
+    "native_quote_and_instruction_preservation": {"passed": 1, "total": 1},
+    "native_final_exact_expected": {"passed": 2, "total": 2},
+    "neutral_control_status": "unchanged",
+    "default_raw_optional_calls": 0,
+    "injected_unavailable_exact_accepted_fallback": true,
+    "installed_offline_real_saved_response_cases": 4,
+    "offline_additional_native_requests": 0
+  },
+  "privacy": "Private dictation and exact retained results are not published. Real source case with corrupted ASR fragments remains uncertain; it is not counted as complete semantic cleanup.",
+  "accounting": {
+    "ordinary_before": 105,
+    "new_native": 2,
+    "ordinary_total": 107,
+    "production_user_traffic_included": false,
+    "historical_native_decision_requests": 10,
+    "historical_native_decision_questions": 28,
+    "trial_telegram": 0
+  },
+  "limits": [
+    "Finite contextual profanity coverage, not a guarantee for all Russian slang or emotional language.",
+    "Unsupported model deletions and punctuation changes conservatively return exact accepted source.",
+    "No acoustic ASR rerun or owner field/Voxtype acceptance.",
+    "Model admission sampling is not transient peak protection or hard cancellation.",
+    "Same model family, independent review contexts; source review is not native acceptance."
+  ]
+}

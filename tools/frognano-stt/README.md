@@ -30,8 +30,8 @@ restored. It removed outside-quote profanity in both fresh texts, but changed a
 protected quote and deleted a substantive instruction in one text; the lexical
 guards accepted that unsafe deletion. Complete useful edits were therefore 1/2,
 not 2/2. The [R74 receipt](<r74-verification.json>) records the failed attempt and
-verified rollback. The original missed-profanity defect remains unresolved; do not
-activate the rejected prompt from its retained candidate commit.
+verified rollback. R76 fixes supported missed profanity in the client without
+reactivating that rejected prompt; unsupported wording can still remain.
 
 The [client](<../bonsai-normalizer/frognano_normalizer.py>) reuses the unchanged
 historical transport and lexical guards, then validates the successful native reply
@@ -51,6 +51,17 @@ negated/conditional exhaustion and malformed quotation scopes abstain. Corrupted
 ASR fragments are not guessed or repaired; unsupported slang can remain. This is
 not a general semantic classifier or a promise to remove every Russian expletive.
 Arbitrary emotional adjectives and paragraph changes are no longer accepted.
+
+R76 is installed from `84218719ce728c472d82defb777c77bfef08905d`. On Deck,
+183/186 client tests passed in normal and optimized Python (three explicit ASGI
+skips); those three ASGI tests passed separately against the installed gateway.
+Two fresh once-only native requests through installed gateway source and real
+FrogNano HTTP passed: one complete supported emotional cleanup and one exact
+protected-quote/instruction control. Default/raw made zero optional calls and an
+injected unavailable transport returned exact accepted text. Four retained private
+response bodies were also checked offline with the installed client, without
+native replay. Corrupted ASR fragments remain uncertain, not a successful complete
+cleanup. See the sanitized [R76 receipt](<r76-verification.json>).
 
 `applied` means a supported source edit was made; an exact no-op is `unchanged`.
 Every transport/protocol/identity/validation error returns the exact accepted
@@ -160,6 +171,11 @@ configuration, models and evidence. Do not touch Parakeet, Loqira, Clef, TTS,
 Kodak or the existing Bonsai tunnel. A client timeout alone is not evidence that
 the remote model has unloaded; observe service settlement before another native
 request.
+
+For the R76 client-only rollback, restore `frognano_normalizer.py` from the
+private Deck deployment's `rollback/` directory and restart only the gateway.
+The retained cleanup helper is unused by the restored R73 client; do not delete
+models or evidence. The Mac service was not changed by R76.
 
 ### Documentation verification
 
