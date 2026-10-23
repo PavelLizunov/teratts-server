@@ -34,13 +34,28 @@ verified rollback. The original missed-profanity defect remains unresolved; do n
 activate the rejected prompt from its retained candidate commit.
 
 The [client](<../bonsai-normalizer/frognano_normalizer.py>) reuses the unchanged
-historical transport and lexical guards. It rejects protocol markers, incomplete
-responses, identity drift and selected lexical changes. Successful content is not
-trimmed or repaired. Deletions and punctuation can still change meaning despite
-passing these checks. Paragraphs are optional and not established as useful.
-Every error, rejection or non-applied result returns the exact accepted
-post-cleanup text, never raw ASR. Owner-field insertion and actual Voxtype routing
-have not been verified by these server checks.
+historical transport and lexical guards, then validates the successful native reply
+against a [finite source-span inventory](<../bonsai-normalizer/frognano_cleanup.py>).
+Only inventoried interjection deletions and their adjacent separators are allowed;
+other characters, instructions, punctuation scope and quoted text must match.
+Output is reconstructed from the accepted source rather than generated prose.
+A valid unchanged native reply can therefore still yield a supported local edit.
+The explicit first-person exhaustion forms are neutralized to retain the predicate,
+not deleted. No second model request is made, and the Mac prompt/model are unchanged.
+
+Coverage is finite: isolated `блять`, `блядь`, `нахуй`, `нахер`, trailing expressive
+`сука`, opening `ох`/`ах`, and the explicitly listed first-person exhaustion forms.
+The contextual insult noun is removed only in that exhaustion construction while
+retaining its demonstrative object. Quotes/code, technical tokens, literal mentions,
+negated/conditional exhaustion and malformed quotation scopes abstain. Corrupted
+ASR fragments are not guessed or repaired; unsupported slang can remain. This is
+not a general semantic classifier or a promise to remove every Russian expletive.
+Arbitrary emotional adjectives and paragraph changes are no longer accepted.
+
+`applied` means a supported source edit was made; an exact no-op is `unchanged`.
+Every transport/protocol/identity/validation error returns the exact accepted
+post-cleanup text without local cleanup, never raw ASR. Owner-field insertion and
+actual Voxtype routing have not been verified by these server checks.
 
 ## Mac service
 
@@ -84,8 +99,8 @@ Example launch with the retained host layout:
 
 ## Gateway configuration
 
-Install both the historical base client and the separate FrogNano client in the
-`gateway` package. Set only the new optional selector in a dedicated gateway
+Install the historical base client, the separate FrogNano client and its
+`frognano_cleanup.py` helper in the `gateway` package. Set only the optional selector in a dedicated gateway
 systemd drop-in:
 
 ```ini

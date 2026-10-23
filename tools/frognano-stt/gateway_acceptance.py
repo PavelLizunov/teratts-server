@@ -60,6 +60,9 @@ async def execute(args, case, root):
         config = homelab / 'config/frognano-normalizer.json'
         os.environ['FROGNANO_NORMALIZER_CONFIG'] = str(config)
         module('gateway.bonsai_normalizer', homelab / 'gateway/bonsai_normalizer.py')
+        cleanup = homelab / 'gateway/frognano_cleanup.py'
+        if cleanup.is_file():
+            module('gateway.frognano_cleanup', cleanup)
         client = module('gateway.frognano_normalizer', homelab / 'gateway/frognano_normalizer.py')
         normalizer = client.get_frognano_normalizer(str(config))
         need(normalizer is not None, 'Installed FrogNano configuration disabled')

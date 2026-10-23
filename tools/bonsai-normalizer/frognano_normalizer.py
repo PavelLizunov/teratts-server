@@ -2,6 +2,12 @@
 from dataclasses import asdict, dataclass
 import json
 import re
+import time
+
+try:
+    from .frognano_cleanup import render_supported_cleanup
+except ImportError:
+    from frognano_cleanup import render_supported_cleanup
 
 try:
     from .bonsai_normalizer import (
@@ -60,7 +66,23 @@ class FrogNanoNormalizer(BonsaiNormalizer):
         preamble = r'(?imu)^\s*(?:вот\b[^\n]*(?:текст|вариант)|(?:отредактированный|исправленный|нейтральный|готовый)\s+(?:текст|вариант)|результат|ответ)\s*:'
         if re.search(controls, response_text) or re.search(preamble, response_text):
             raise ValueError('invalid_editor_protocol')
-        return response_text  # No repair, trimming or generated-content replacement.
+        return response_text  # Validate the native response before source-owned cleanup.
+
+    def normalize(self, source_text):
+        started = time.perf_counter()
+        candidate, meta = super().normalize(source_text)
+        if meta['status'] != 'applied':
+            return candidate, meta  # Never clean an error, rejected or bypassed response.
+        try:
+            result = render_supported_cleanup(source_text, candidate)
+        except ValueError:
+            meta.update(status='fallback', reason='validation_unsupported_edit')
+            result = source_text
+        else:
+            meta.update(status='applied' if result != source_text else 'unchanged',
+                        reason=None if result != source_text else 'no_supported_edit')
+        meta['latency_ms'] = (time.perf_counter() - started) * 1000.0
+        return result, meta
 
 
 def get_frognano_normalizer(path):
