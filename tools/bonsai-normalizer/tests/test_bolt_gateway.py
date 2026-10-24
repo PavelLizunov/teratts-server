@@ -102,6 +102,20 @@ class BoltGateway(unittest.TestCase):
                             normalizer.normalize.assert_not_called()
                             self.assertEqual(response.content['text'], record['accepted_stt_text'])
 
+    def test_bolt_default_preserves_changed_loqira_bytes_without_editor(self):
+        helper = contract.TestExecutedGatewaySeam()
+        expected = 'Исправленный текст.\r\n\tНе меняй порт 4628.  '
+        response, record, normalizer, events, _ = helper._execute(
+            mode='default', editor_selector='BOLT_NORMALIZER_CONFIG', edit_default_mode=True,
+            asr_text='Сырой текст распознавания.', loqira_text=expected,
+            dictionary=False, cleanup=False, error=AssertionError('Default must not call Bolt'))
+        normalizer.normalize.assert_not_called()
+        self.assertIn('loqira', [event[0] for event in events])
+        self.assertNotEqual(record['raw_text'], expected)
+        self.assertEqual(response.content['text'].encode(), expected.encode())
+        self.assertEqual(record['accepted_stt_text'].encode(), expected.encode())
+        self.assertEqual(response.headers['X-Text-Editor-Status'], 'bypassed')
+
     def test_historical_editors_remain_smart_only(self):
         helper = contract.TestExecutedGatewaySeam()
         for selector in ('FROGNANO_NORMALIZER_CONFIG', 'BONSAI_NORMALIZER_CONFIG'):
