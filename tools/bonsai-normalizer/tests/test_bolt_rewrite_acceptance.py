@@ -22,6 +22,30 @@ class RewriteAcceptance(unittest.TestCase):
         self.assertFalse(a.score('Перезапусти сервер.\n\nГотово.', case)['rubric_passed'])
         self.assertTrue(a.score('Проверь журнал.\n\nДалее.', case)['manual_semantic_review_required'])
 
+    def test_manual_fixture_cleanup_restores_patches_without_async_runner(self):
+        import os
+        fixture = unittest.IsolatedAsyncioTestCase()
+        before = dict(os.environ)
+        changed = patch.dict(os.environ, {'BOLT_CLEANUP_SYNTHETIC': '1'})
+        changed.start()
+        fixture.addCleanup(changed.stop)
+        calls = []
+        fixture.addCleanup(lambda: calls.append('last_in_first_out'))
+        self.assertEqual(a.cleanup_fixture(fixture), [])
+        self.assertEqual(dict(os.environ), before)
+        self.assertEqual(calls, ['last_in_first_out'])
+        self.assertEqual(fixture._cleanups, [])
+
+    def test_cleanup_continues_after_error(self):
+        fixture = unittest.IsolatedAsyncioTestCase()
+        calls = []
+        fixture.addCleanup(lambda: calls.append('restored'))
+        def fail():
+            raise RuntimeError('synthetic')
+        fixture.addCleanup(fail)
+        self.assertEqual(a.cleanup_fixture(fixture), ['RuntimeError'])
+        self.assertEqual(calls, ['restored'])
+
     def test_rewrite_claim_uses_shared_exclusive_ledger(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(a.receipts, 'LEDGER_ROOT', Path(temp) / 'ledger'):
             args = SimpleNamespace(fixtures_sha256=hashlib.sha256(b'frozen').hexdigest(),

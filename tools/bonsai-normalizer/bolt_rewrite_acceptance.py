@@ -33,6 +33,23 @@ def score(text, case):
             'manual_semantic_review_required': True}
 
 
+def cleanup_fixture(fixture):
+    """Run registered synchronous patch stops without a unittest async runner.
+
+    This fixture is imported manually, not executed as a TestCase. Its inherited
+    doCleanups needs an initialized IsolatedAsyncioTestCase runner even for sync
+    callbacks. Drain the same LIFO cleanup registrations and retain all errors.
+    """
+    errors = []
+    while fixture._cleanups:
+        function, args, kwargs = fixture._cleanups.pop()
+        try:
+            function(*args, **kwargs)
+        except BaseException as error:
+            errors.append(type(error).__name__)
+    return errors
+
+
 async def execute(args, case, root):
     import uvicorn
     homelab = Path.home() / 'homelab'
@@ -165,8 +182,10 @@ async def execute(args, case, root):
             if listener is not None:
                 listener.close()
                 cleanup_receipt['listener_closed'] = listener.fileno() == -1
-            cleanup_receipt['fixture_cleanups_passed'] = fixture.doCleanups()
+            cleanup_receipt['fixture_cleanup_errors'] = cleanup_fixture(fixture)
+            cleanup_receipt['fixture_cleanups_passed'] = not cleanup_receipt['fixture_cleanup_errors']
             receipts.save(root / 'harness-cleanup.json', cleanup_receipt)
+            receipts.need(cleanup_receipt['fixture_cleanups_passed'], 'Fixture patch cleanup failed')
 
 
 def main():
