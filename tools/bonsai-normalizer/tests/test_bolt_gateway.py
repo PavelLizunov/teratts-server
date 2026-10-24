@@ -69,31 +69,51 @@ class BoltGateway(unittest.TestCase):
                 factories['frognano'].assert_not_called()
                 factories['bonsai'].assert_not_called()
 
-    def test_only_bolt_env_smart_selection_and_exact_accepted_fallback(self):
+    def test_bolt_default_smart_optouts_and_exact_accepted_fallback(self):
         helper = contract.TestExecutedGatewaySeam()
-        original = os.environ.get
-        def only_bolt(key, default=None):
-            if key == 'BOLT_NORMALIZER_CONFIG':
-                return 'explicit-bolt'
-            if key in ('FROGNANO_NORMALIZER_CONFIG', 'BONSAI_NORMALIZER_CONFIG'):
-                return None
-            return original(key, default)
-        with patch.object(os.environ, 'get', side_effect=only_bolt):
+        bolt = {'editor_selector': 'BOLT_NORMALIZER_CONFIG', 'edit_default_mode': True}
+        for mode in ('default', 'smart'):
             for status in ('fallback', 'unchanged', 'bypassed', 'unexpected'):
                 response, record, normalizer, events, _ = helper._execute(
-                    result=('must not escape', {'status': status}),
+                    **bolt, mode=mode, result=('must not escape', {'status': status}),
                     loqira_text='Ну, смотри, открой гитхап.\r\n\tНе меняй порт 4628.  ')
                 accepted = normalizer.normalize.call_args.args[0]
                 self.assertEqual(response.content['text'].encode(), accepted.encode())
                 self.assertEqual(record['accepted_stt_text'], accepted)
                 self.assertNotEqual(record['raw_text'], accepted)
-            for options in ({'mode': 'default'}, {'mode': 'raw'}, {'mode': 'smart', 'formatting': False}):
-                response, record, normalizer, events, _ = helper._execute(**options)
-                normalizer.normalize.assert_not_called()
-                self.assertEqual(response.headers['X-Text-Editor-Status'], 'bypassed')
-            response, record, normalizer, events, _ = helper._execute(result=('Accepted edit.', {'status': 'applied'}))
-            normalizer.normalize.assert_called_once()
-            self.assertEqual(response.content['text'], 'Accepted edit.')
+        for mode in ('default', 'smart', 'raw'):
+            for smart in (False, True):
+                for formatting in (False, True):
+                    response, record, normalizer, events, _ = helper._execute(
+                        **bolt, mode=mode, smart=smart, formatting=formatting,
+                        result=('Accepted edit.', {'status': 'applied'}))
+                    bypass = mode == 'raw' or not formatting
+                    if bypass:
+                        normalizer.normalize.assert_not_called()
+                        self.assertEqual(response.headers['X-Mode'], 'raw')
+                        self.assertEqual(response.headers['X-Text-Editor-Status'], 'bypassed')
+                        self.assertNotIn('loqira', [event[0] for event in events])
+                        self.assertEqual(response.content['text'], record['accepted_stt_text'])
+                    else:
+                        normalizer.normalize.assert_called_once_with(record['accepted_stt_text'])
+                        self.assertEqual(response.content['text'], 'Accepted edit.')
+
+    def test_historical_editors_remain_smart_only(self):
+        helper = contract.TestExecutedGatewaySeam()
+        for selector in ('FROGNANO_NORMALIZER_CONFIG', 'BONSAI_NORMALIZER_CONFIG'):
+            response, _, normalizer, _, _ = helper._execute(
+                mode='default', editor_selector=selector, edit_default_mode=True)
+            normalizer.normalize.assert_not_called()
+            self.assertEqual(response.headers['X-Text-Editor-Status'], 'bypassed')
+
+    def test_service_prompt_matches_client_without_model_imports(self):
+        tools = Path(__file__).resolve().parents[2]
+        def constant(path, name):
+            tree = ast.parse(path.read_text())
+            return next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == name for t in n.targets))
+        self.assertEqual(constant(tools / 'bolt-stt/bolt_service.py', 'SYSTEM_PROMPT'),
+                         constant(tools / 'bonsai-normalizer/bolt_normalizer.py', 'BOLT_SYSTEM_PROMPT'))
 
 
 if __name__ == '__main__':

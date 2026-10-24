@@ -152,6 +152,37 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
                         if "cleanup=true" in query:
                             self.assertEqual(text, "открой GitHub")
 
+    async def test_bolt_real_multipart_default_smart_and_explicit_optouts(self):
+        from bolt_normalizer import BoltNormalizer, BOLT_MODEL, BOLT_REVISION
+        normalizer = BoltNormalizer()
+        self.gateway.bonsai_normalizer = normalizer
+        os.environ['BOLT_NORMALIZER_CONFIG'] = 'in-memory-test-only'
+        candidate = 'Открой GitHub.\n\nПроверь настройки сервера.'
+        body = {'model': BOLT_MODEL, 'revision': BOLT_REVISION,
+                'choices': [{'finish_reason': 'stop', 'message': {
+                    'role': 'assistant', 'content': candidate}}]}
+        mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.read.return_value = json.dumps(body).encode()
+        cases = (('', True), ('?mode=default', True), ('?mode=smart', True),
+                 ('?smart=true', True), ('?mode=raw', False),
+                 ('?mode=raw&smart=true', False), ('?format=false', False),
+                 ('?mode=smart&format=false&smart=true', False))
+        async with self.httpx.AsyncClient(transport=self.transport, base_url='http://asgi.test') as client:
+            for query, edited in cases:
+                for fmt in ('json', 'text'):
+                    with self.subTest(query=query, fmt=fmt), patch.object(
+                            normalizer._opener, 'open', return_value=mock_response) as opened:
+                        response = await self.post(client, query, fmt)
+                        self.assertEqual(response.status_code, 200)
+                        record = self.gateway.voice_corpus.save.call_args.args[1]
+                        text = response.text if fmt == 'text' else response.json()['text']
+                        self.assertEqual(text, candidate if edited else record['accepted_stt_text'])
+                        self.assertEqual(record['final_text'], text)
+                        self.assertEqual(response.headers['x-text-editor-status'],
+                                         'applied' if edited else 'bypassed')
+                        self.assertEqual(opened.call_count, int(edited))
+
     async def test_real_serialization_and_exact_fallback(self):
         source = "Проверь сервер."
         self.gateway.run_parakeet = lambda _: source

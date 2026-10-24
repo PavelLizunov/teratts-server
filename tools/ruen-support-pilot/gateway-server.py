@@ -364,9 +364,12 @@ async def transcribe_audio(
     t_stt = time.perf_counter()
     stt_latency_ms = (t_stt - t0) * 1000.0
 
-    # Routing logic
+    # Bolt honors explicit opt-outs even when smart=true; historical editors keep precedence.
+    bolt_selected = "BOLT_NORMALIZER_CONFIG" in os.environ
     effective_mode = mode
-    if smart:
+    if bolt_selected and (mode == "raw" or format is False):
+        effective_mode = "raw"
+    elif smart:
         effective_mode = "smart"
     elif format is False:
         effective_mode = "raw"
@@ -432,7 +435,9 @@ async def transcribe_audio(
     bonsai_latency_ms = 0.0
     if (
         bonsai_normalizer is not None
-        and effective_mode == "smart"
+        and (effective_mode == "smart" or (
+            effective_mode == "default" and bolt_selected
+            and getattr(bonsai_normalizer, "edit_default_mode", False) is True))
         and STT_CORRECTOR == "loqira"
         and loqira_corrector is not None
         and (os.environ.get("BOLT_NORMALIZER_CONFIG") or os.environ.get("FROGNANO_NORMALIZER_CONFIG")

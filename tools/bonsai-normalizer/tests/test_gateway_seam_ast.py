@@ -129,7 +129,8 @@ class TestExecutedGatewaySeam(unittest.TestCase):
                  corrector="loqira", has_loqira=True, dictionary=True, cleanup=True,
                  result=None, error=None, response_format="json", real_normalizer=None,
                  asr_text="Ну, смотри, открой гитхап", loqira_text=None,
-                 dictionary_path=None):
+                 dictionary_path=None, editor_selector="BONSAI_NORMALIZER_CONFIG",
+                 edit_default_mode=False):
         tree = ast.parse(GATEWAY_SERVER_PATH.read_text())
         function = copy.deepcopy(next(n for n in tree.body
                                       if isinstance(n, ast.AsyncFunctionDef) and n.name == "transcribe_audio"))
@@ -152,7 +153,8 @@ class TestExecutedGatewaySeam(unittest.TestCase):
             events.append(("cleanup", text))
             return clean_opening(text, enabled)
 
-        normalizer = Mock(model="bonsai", revision="revision", enabled=True)
+        normalizer = Mock(model="bonsai", revision="revision", enabled=True,
+                          edit_default_mode=edit_default_mode)
 
         def normalize(text):
             events.append(("bonsai", text))
@@ -193,7 +195,7 @@ class TestExecutedGatewaySeam(unittest.TestCase):
             wav.writeframes(b"\0\0" * 16)
         env = {"STT_DICTIONARY_CONFIG": str(dictionary_path)}
         if configured:
-            env["BONSAI_NORMALIZER_CONFIG"] = "configured.json"
+            env[editor_selector] = "configured.json"
         with patch.dict(os.environ, env, clear=True):
             response = asyncio.run(namespace["transcribe_audio"](
                 request=None, file=SimpleNamespace(read=AsyncMock(return_value=audio.getvalue())),

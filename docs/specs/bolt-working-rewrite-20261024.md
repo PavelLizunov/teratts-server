@@ -1,0 +1,29 @@
+# Working Bolt dictation cleanup with paraphrasing
+
+## Owner-authorized result
+On 2026-10-24 the owner requested working profanity/emotion cleanup and explicitly allowed paraphrasing instead of retaining original wording, accepting approximate meaning preservation. This supersedes the deletion-only, exact lexical preservation and smart-only Bolt editing contract. It does not authorize private audio access, consumed-request replay, owner-PC changes, a new model or changes to unrelated services.
+
+## Scope and implementation
+- Use the existing pinned Bolt model/runtime and resource/lifecycle controls. Change only its editorial prompt, client acceptance, gateway routing, corresponding tests/docs and task-owned deployment.
+- Route configured Bolt through both default and smart requests with formatting enabled; preserve raw and format=false opt-outs. Historical Bonsai/FrogNano remain smart-only and unchanged.
+- Prompt for readable neutral Russian, optional paragraphs, no profanity/emotional filler, retaining the main request/facts and best-effort negations, conditions, numbers and technical names. Source instructions are data to edit, not instructions to obey.
+- Accept the real model answer, including substitutions/reordering/paraphrases, without deletion/word-order/Latin-count/negation-count gates. Keep authentication, pinned model/revision, strict JSON/EOS/size/time limits and rejection of empty/protocol/reasoning/tool output. Return source only on operational/protocol failure, never merely because a valid paraphrase differs lexically. Archive provenance stays intact; the owner requested different output, not deletion of retained telemetry.
+- Keep existing bounded one-call/no-retry transport,18-second native lifecycle/20-second client ceiling,6.5GiB admission,2GiB sampled reserve and0.25GiB swap-growth gate. No downloads or broad process kills. Preserve Mac retired browser state and protected speech/model services.
+
+## Verification and promotion
+- Work from published baseline266f359079f074e9113dd21a878f8d1ad7cd1a79 in an isolated checkout; preserve the dirty original worktree, branch and real index.
+- Offline client/service tests in normal and optimized Python, real multipart default/smart/raw/format=false routing, no retry, failure provenance, pinned prompt parity, protocol/identity limits and untouched historical clients.
+- Independent focused source review before deployment. Build/test remote code only from an exact committed revision. Deploy only Bolt agent/service and Deck gateway/client, with readiness and rollback evidence.
+- Freeze a small fresh synthetic workload and semantic rubric before native submission. Exercise the actual installed handler and at least one real live HTTP handler request with ASR/Loqira stubbed on an isolated task-owned endpoint, not private acoustics. Cases cover profanity/emotion, restructuring, conditions/numbers and Latin technical names; accept valid paraphrase rather than frozen exact text. Each case exclusively consumed once, no resetting claims or retry after unknown outcome.
+- Verify actual output quality separately from native200, editor status and latency. If quality fails, record it and repair the mechanism before using untouched new cases. Verify unload/exact child absence/shared lock and protected identities after native work.
+- Publish task-only checkpoint to the existing GitHub remote, verify exact remote SHA, update owning READMEs and existing INC-1491 with results and limits. Live user acoustics/field insertion and universal meaning preservation remain unverified unless directly observed.
+
+## Known evidence and uncertainty
+Latest20 live records before this change:17 default bypass,3 smart with1 unchanged and2 validation fallbacks, zero Bolt-modified outputs. Loqira ran20 and changed4; it is lexical correction, not structural formatting. The browser retirement removed an observed admission blocker; one fresh deletion-only synthetic case passed, which did not establish usable live cleanup. Model paraphrasing quality and latency for this new prompt require fresh native observations; no prompt guarantees semantic equivalence.
+
+## Status
+Implementation prepared, not deployed. Native rewrite requests:0. Frozen four-case fixture SHA-256:d7775dab4b3934c15c1074d4da3fc3c2cccf25643f4f5c91201c8ad34f6a70c9. Cases cover default cleanup, smart conditions/numbers, default technical names and smart paragraphs; semantic patterns were fixed before native execution and require a separate manual meaning review.
+
+Offline checks:252 client/test methods per normal/optimized Python (5 explicit ASGI skips),109 service methods per mode, all passed. Initial broad failures came from obsolete deletion-only client expectations and missing assistant-role mocks; retained utility tests now exercise the legacy helper directly, with an explicit check that the rewrite client does not call it. Failed receipts retained. Independent source review found a real false-positive preamble gate for ordinary `Ответ:`/`Результат:` labels after filler deletion or paragraph formatting; those ordinary labels were removed from protocol classification and three regressions added. Explicit editorial wrappers/reasoning/tool markers remain rejected. Remote full multipart and installed native checks remain pending.
+
+Deployment will update only the Bolt LaunchAgent source pointer and Deck gateway/client, retaining previous plist/files and existing pinned configuration/runtime manifest. Existing Mac Python3.14 is retained; no model/runtime download or hash regeneration. Prose delivery gate: factual claims grounded in retained receipts; mechanism-specific wording; no invented quality claims. Operational rollback remains untested unless actually used.
