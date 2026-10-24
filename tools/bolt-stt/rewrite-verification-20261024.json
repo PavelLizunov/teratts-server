@@ -1,0 +1,222 @@
+{
+  "at": 1792840096.4490023,
+  "runtime_source_commit": "e07f66e10ec5f693959c4c39c02c3abd3456c0d8",
+  "initial_harness_commit": "e07f66e10ec5f693959c4c39c02c3abd3456c0d8",
+  "corrected_harness_commit": "1682c152927eec054dc0581aec128ff36f062c5e",
+  "fixture_sha256": "d7775dab4b3934c15c1074d4da3fc3c2cccf25643f4f5c91201c8ad34f6a70c9",
+  "accounting": {
+    "new_native_requests": 4,
+    "http200_eos_applied": 4,
+    "frozen_quality_passes": 3,
+    "frozen_quality_failures": 1,
+    "successful_fixture_patch_cleanups": 3,
+    "failed_fixture_patch_cleanups": 1,
+    "replays": 0
+  },
+  "latency_seconds": {
+    "median_editor": 3.359066236531362,
+    "min_editor": 2.80481415707618,
+    "max_editor": 3.8749272688291967
+  },
+  "resource_GiB": {
+    "minimum_sampled_available_proxy": 3.40185546875,
+    "maximum_sampled_child_rss": 3.27996826171875,
+    "maximum_new_swap": 0.0
+  },
+  "cases": [
+    {
+      "id": "rewrite-01-default-cleanup",
+      "mode": "default",
+      "input": "Блядь, я уже заебался с этой формой, ну сколько можно. Проверь, почему после сохранения пропадает адрес доставки. И убери повторяющиеся поля, они там два раза, два раза одни и те же.",
+      "output": "Проверьте, почему после сохранения пропадает адрес доставки. Уберите повторяющиеся поля, они указаны дважды.",
+      "native_calls": 1,
+      "native_http_status": 200,
+      "eos": "stop",
+      "editor_status": "applied",
+      "frozen_rubric": {
+        "checks": {
+          "investigate_delivery_address_loss": true,
+          "remove_duplicate_fields": true,
+          "no_profanity": true
+        },
+        "rubric_passed": true,
+        "manual_semantic_review_required": true,
+        "editor_status": "applied",
+        "native_eos": true,
+        "passed": true
+      },
+      "manual_meaning_review": "Main tasks preserved: investigate delivery-address loss after save and remove duplicate fields. Profanity/emotional filler/repetition removed.",
+      "editor_seconds": 2.80481415707618,
+      "native_seconds": 2.6881507919169962,
+      "telemetry": {
+        "min_available_GiB": 3.4080352783203125,
+        "max_swap_growth_GiB": 0.0,
+        "peak_rss_bytes": 3521642496,
+        "samples": 3
+      },
+      "resources": {
+        "before_GiB": 9.48272705078125,
+        "after_GiB": 8.080841064453125
+      },
+      "harness_cleanup": {
+        "at_ns": 1792839579870015932,
+        "server_started": true,
+        "thread_stopped": true,
+        "listener_closed": true,
+        "fixture_cleanups_passed": false
+      },
+      "response_sha256": "030537c086479bba1e19c7616c81fbb4ddceb0906dd85982857273400f6a9f68",
+      "injected_fallback_exact_source": true
+    },
+    {
+      "id": "rewrite-02-smart-conditions",
+      "mode": "smart",
+      "input": "Да блять, не запускай миграцию, пока не сделана резервная копия. Если проверка пройдёт, оставь 28 записей и поставь тайм-аут 16 секунд, а журнал не удаляй. Это же невыносимо каждый раз повторять.",
+      "output": "Не запускай миграцию, пока не сделана резервная копия.\n\nЕсли проверка пройдёт, оставь 28 записей и установи тайм-аут 16 секунд. Журнал не удаляй.",
+      "native_calls": 1,
+      "native_http_status": 200,
+      "eos": "stop",
+      "editor_status": "applied",
+      "frozen_rubric": {
+        "checks": {
+          "backup_precedes_migration": true,
+          "conditional_check": true,
+          "28_records": true,
+          "16_seconds": true,
+          "retain_journal": true,
+          "no_profanity": true
+        },
+        "rubric_passed": true,
+        "manual_semantic_review_required": true,
+        "editor_status": "applied",
+        "native_eos": true,
+        "passed": true
+      },
+      "manual_meaning_review": "Backup-before-migration prohibition, successful-check condition, 28 records, 16 seconds and journal retention preserved. Paragraph formatting added.",
+      "editor_seconds": 3.8749272688291967,
+      "native_seconds": 3.7056056251749396,
+      "telemetry": {
+        "min_available_GiB": 3.40185546875,
+        "max_swap_growth_GiB": 0.0,
+        "peak_rss_bytes": 3521839104,
+        "samples": 5
+      },
+      "resources": {
+        "before_GiB": 8.057769775390625,
+        "after_GiB": 4.8899383544921875
+      },
+      "harness_cleanup": {
+        "at_ns": 1792839811626661208,
+        "server_started": true,
+        "thread_stopped": true,
+        "listener_closed": true,
+        "fixture_cleanup_errors": [],
+        "fixture_cleanups_passed": true
+      },
+      "response_sha256": "01f04d31d29549c2447b80a3973f88639c7652d5a469dd37d06ec49fc3205cfe",
+      "injected_fallback_exact_source": true
+    },
+    {
+      "id": "rewrite-03-default-technical",
+      "mode": "default",
+      "input": "Ну это пиздец, опять всё сломалось. Проверь HTTP 502 у api-gateway и перезапусти только worker-b7. PostgreSQL не трогай, а результат отправь в GitHub issue 73. Я уже устал от этой хрени.",
+      "output": "Проверь HTTP 502 у api-gateway и перезапусти worker-b7. PostgreSQL не трогай. Результат отправь в GitHub issue 73.",
+      "native_calls": 1,
+      "native_http_status": 200,
+      "eos": "stop",
+      "editor_status": "applied",
+      "frozen_rubric": {
+        "checks": {
+          "http_error": true,
+          "gateway": true,
+          "restart_only_worker": false,
+          "postgres_preserved": true,
+          "issue_target": true,
+          "no_profanity": true
+        },
+        "rubric_passed": false,
+        "manual_semantic_review_required": true,
+        "editor_status": "applied",
+        "native_eos": true,
+        "passed": false
+      },
+      "manual_meaning_review": "Main diagnosis/restart/report tasks and names retained, but explicit exclusive scope word only was dropped. Retain frozen quality failure; approximate main meaning is present, strict scope fidelity is not.",
+      "editor_seconds": 3.204060364048928,
+      "native_seconds": 3.1161196660250425,
+      "telemetry": {
+        "min_available_GiB": 3.409423828125,
+        "max_swap_growth_GiB": 0.0,
+        "peak_rss_bytes": 3519660032,
+        "samples": 4
+      },
+      "resources": {
+        "before_GiB": 8.017410278320312,
+        "after_GiB": 3.69732666015625
+      },
+      "harness_cleanup": {
+        "at_ns": 1792839849426855022,
+        "server_started": true,
+        "thread_stopped": true,
+        "listener_closed": true,
+        "fixture_cleanup_errors": [],
+        "fixture_cleanups_passed": true
+      },
+      "response_sha256": "a2cba4ff72bd5d5c1a7b176f70213f3a509fa0e5140d814cefd905b772b8a366",
+      "injected_fallback_exact_source": true
+    },
+    {
+      "id": "rewrite-04-smart-paragraphs",
+      "mode": "smart",
+      "input": "Блядь, ну короче по сайту сначала исправь поиск, он не находит товары по артикулу, по артикулу не находит. А ещё отдельно по бухгалтерии: подготовь счета за сентябрь и отправь их Марине до пятницы. Всё, меня уже достал этот бардак.",
+      "output": "Сначала исправьте поиск на сайте: он не находит товары по артикулу.\n\nПо бухгалтерии: подготовьте счета за сентябрь и отправьте их Марине до пятницы.",
+      "native_calls": 1,
+      "native_http_status": 200,
+      "eos": "stop",
+      "editor_status": "applied",
+      "frozen_rubric": {
+        "checks": {
+          "repair_article_search": true,
+          "prepare_invoices": true,
+          "send_to_marina": true,
+          "no_profanity": true,
+          "paragraphs": true
+        },
+        "rubric_passed": true,
+        "manual_semantic_review_required": true,
+        "editor_status": "applied",
+        "native_eos": true,
+        "passed": true
+      },
+      "manual_meaning_review": "Website search/article problem and accounting invoices/September/Marina/Friday tasks preserved in separate paragraphs. Profanity/filler/repetition removed.",
+      "editor_seconds": 3.514072109013796,
+      "native_seconds": 3.462192291393876,
+      "telemetry": {
+        "min_available_GiB": 3.4159393310546875,
+        "max_swap_growth_GiB": 0.0,
+        "peak_rss_bytes": 3521413120,
+        "samples": 5
+      },
+      "resources": {
+        "before_GiB": 8.232391357421875,
+        "after_GiB": 8.20458984375
+      },
+      "harness_cleanup": {
+        "at_ns": 1792839914219932366,
+        "server_started": true,
+        "thread_stopped": true,
+        "listener_closed": true,
+        "fixture_cleanup_errors": [],
+        "fixture_cleanups_passed": true
+      },
+      "response_sha256": "571a7f1e11edcecda9825a739a074c8e323c56e69a6b0374d624d39543d6b3b4",
+      "injected_fallback_exact_source": true
+    }
+  ],
+  "limits": [
+    "ASR/Loqira stubbed, no private acoustics or owner field insertion",
+    "quality3 failed only/exclusive scope; no prompt or rubric repair",
+    "first harness patches did not restore before process exit; later3 and separate model-free actual-fixture cleanup passed",
+    "runtime resource samples do not prove instantaneous peaks",
+    "no concurrency/soak/full operational rollback acceptance"
+  ]
+}
