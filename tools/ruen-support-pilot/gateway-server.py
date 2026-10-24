@@ -435,9 +435,7 @@ async def transcribe_audio(
     bonsai_latency_ms = 0.0
     if (
         bonsai_normalizer is not None
-        and (effective_mode == "smart" or (
-            effective_mode == "default" and bolt_selected
-            and getattr(bonsai_normalizer, "edit_default_mode", False) is True))
+        and effective_mode == "smart"
         and STT_CORRECTOR == "loqira"
         and loqira_corrector is not None
         and (os.environ.get("BOLT_NORMALIZER_CONFIG") or os.environ.get("FROGNANO_NORMALIZER_CONFIG")

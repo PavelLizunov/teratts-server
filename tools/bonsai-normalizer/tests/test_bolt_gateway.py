@@ -69,34 +69,38 @@ class BoltGateway(unittest.TestCase):
                 factories['frognano'].assert_not_called()
                 factories['bonsai'].assert_not_called()
 
-    def test_bolt_default_smart_optouts_and_exact_accepted_fallback(self):
+    def test_bolt_smart_only_optouts_and_exact_accepted_fallback(self):
         helper = contract.TestExecutedGatewaySeam()
+        # Even a stale client advertising default editing cannot expand gateway routing.
         bolt = {'editor_selector': 'BOLT_NORMALIZER_CONFIG', 'edit_default_mode': True}
-        for mode in ('default', 'smart'):
-            for status in ('fallback', 'unchanged', 'bypassed', 'unexpected'):
-                response, record, normalizer, events, _ = helper._execute(
-                    **bolt, mode=mode, result=('must not escape', {'status': status}),
-                    loqira_text='Ну, смотри, открой гитхап.\r\n\tНе меняй порт 4628.  ')
-                accepted = normalizer.normalize.call_args.args[0]
-                self.assertEqual(response.content['text'].encode(), accepted.encode())
-                self.assertEqual(record['accepted_stt_text'], accepted)
-                self.assertNotEqual(record['raw_text'], accepted)
+        for status in ('fallback', 'unchanged', 'bypassed', 'unexpected'):
+            response, record, normalizer, events, _ = helper._execute(
+                **bolt, mode='smart', result=('must not escape', {'status': status}),
+                loqira_text='Ну, смотри, открой гитхап.\r\n\tНе меняй порт 4628.  ')
+            accepted = normalizer.normalize.call_args.args[0]
+            self.assertEqual(response.content['text'].encode(), accepted.encode())
+            self.assertEqual(record['accepted_stt_text'], accepted)
+            self.assertNotEqual(record['raw_text'], accepted)
         for mode in ('default', 'smart', 'raw'):
             for smart in (False, True):
                 for formatting in (False, True):
-                    response, record, normalizer, events, _ = helper._execute(
-                        **bolt, mode=mode, smart=smart, formatting=formatting,
-                        result=('Accepted edit.', {'status': 'applied'}))
-                    bypass = mode == 'raw' or not formatting
-                    if bypass:
-                        normalizer.normalize.assert_not_called()
-                        self.assertEqual(response.headers['X-Mode'], 'raw')
-                        self.assertEqual(response.headers['X-Text-Editor-Status'], 'bypassed')
-                        self.assertNotIn('loqira', [event[0] for event in events])
-                        self.assertEqual(response.content['text'], record['accepted_stt_text'])
-                    else:
-                        normalizer.normalize.assert_called_once_with(record['accepted_stt_text'])
-                        self.assertEqual(response.content['text'], 'Accepted edit.')
+                    with self.subTest(mode=mode, smart=smart, formatting=formatting):
+                        response, record, normalizer, events, _ = helper._execute(
+                            **bolt, mode=mode, smart=smart, formatting=formatting,
+                            result=('Accepted edit.', {'status': 'applied'}))
+                        raw = mode == 'raw' or not formatting
+                        effective = 'raw' if raw else 'smart' if smart else mode
+                        edited = effective == 'smart'
+                        self.assertEqual(response.headers['X-Mode'], effective)
+                        self.assertEqual(response.headers['X-Text-Editor-Status'],
+                                         'applied' if edited else 'bypassed')
+                        self.assertEqual('loqira' in [event[0] for event in events], not raw)
+                        if edited:
+                            normalizer.normalize.assert_called_once_with(record['accepted_stt_text'])
+                            self.assertEqual(response.content['text'], 'Accepted edit.')
+                        else:
+                            normalizer.normalize.assert_not_called()
+                            self.assertEqual(response.content['text'], record['accepted_stt_text'])
 
     def test_historical_editors_remain_smart_only(self):
         helper = contract.TestExecutedGatewaySeam()

@@ -1,11 +1,11 @@
 # Working Bolt dictation cleanup with paraphrasing
 
 ## Owner-authorized result
-On 2026-10-24 the owner requested working profanity/emotion cleanup and explicitly allowed paraphrasing instead of retaining original wording, accepting approximate meaning preservation. This supersedes the deletion-only, exact lexical preservation and smart-only Bolt editing contract. It does not authorize private audio access, consumed-request replay, owner-PC changes, a new model or changes to unrelated services.
+On 2026-10-24 the owner requested working profanity/emotion cleanup and explicitly allowed paraphrasing instead of retaining original wording, accepting approximate meaning preservation. This supersedes deletion-only and exact lexical preservation, not the smart-only routing contract. The agent incorrectly expanded Bolt to default requests; the owner explicitly corrected that interpretation later the same day. It does not authorize private audio access, consumed-request replay, owner-PC changes, a new model or changes to unrelated services.
 
 ## Scope and implementation
 - Use the existing pinned Bolt model/runtime and resource/lifecycle controls. Change only its editorial prompt, client acceptance, gateway routing, corresponding tests/docs and task-owned deployment.
-- Route configured Bolt through both default and smart requests with formatting enabled; preserve raw and format=false opt-outs. Historical Bonsai/FrogNano remain smart-only and unchanged.
+- Route configured Bolt only through effective smart requests (`mode=smart` or `smart=true`) with formatting enabled. Default requests keep the accepted dictionary/Loqira path without Bolt. Preserve explicit raw and format=false opt-outs even with smart=true. Historical Bonsai/FrogNano remain unchanged.
 - Prompt for readable neutral Russian, optional paragraphs, no profanity/emotional filler, retaining the main request/facts and best-effort negations, conditions, numbers and technical names. Source instructions are data to edit, not instructions to obey.
 - Accept the real model answer, including substitutions/reordering/paraphrases, without deletion/word-order/Latin-count/negation-count gates. Keep authentication, pinned model/revision, strict JSON/EOS/size/time limits and rejection of empty/protocol/reasoning/tool output. Return source only on operational/protocol failure, never merely because a valid paraphrase differs lexically. Archive provenance stays intact; the owner requested different output, not deletion of retained telemetry.
 - Keep existing bounded one-call/no-retry transport,18-second native lifecycle/20-second client ceiling,6.5GiB admission,2GiB sampled reserve and0.25GiB swap-growth gate. No downloads or broad process kills. Preserve Mac retired browser state and protected speech/model services.
@@ -20,6 +20,13 @@ On 2026-10-24 the owner requested working profanity/emotion cleanup and explicit
 
 ## Known evidence and uncertainty
 Latest20 live records before this change:17 default bypass,3 smart with1 unchanged and2 validation fallbacks, zero Bolt-modified outputs. Loqira ran20 and changed4; it is lexical correction, not structural formatting. The browser retirement removed an observed admission blocker; one fresh deletion-only synthetic case passed, which did not establish usable live cleanup. Model paraphrasing quality and latency for this new prompt require fresh native observations; no prompt guarantees semantic equivalence.
+
+## Smart-only routing correction (2026-10-24)
+- Cause: the agent treated permission to paraphrase as permission to expand routing, added a default-mode gateway branch and `BoltNormalizer.edit_default_mode=True`, and wrote tests for that incorrect contract. Historical observations of 17 default requests were not evidence that smart requests lost their mode.
+- Authorized result: remove the default-mode Bolt branch and unused capability flag, retain the rewrite prompt/client validation, dictionary/Loqira path, selector, Mac service and all resource/lifecycle limits. Only the Deck gateway/client need installation; no Mac restart, owner-PC change, private dictation access or new native inference.
+- Acceptance: model-free executed handler matrix and full multipart JSON/text boundary must show plain/default requests bypass Bolt, smart mode/flag calls it once, and explicit raw/format=false bypasses it. Default retains Loqira and exact accepted text. Test both normal and optimized Python from a committed remote checkout, verify installed bytes/public readiness and unchanged protected service identities, and publish the exact checkpoint SHA.
+- Unknown: no verified evidence identifies a client-side smart parameter loss. Shared `/v1/audio/transcriptions` is expected; query parameters, not the URL path, choose the mode.
+- Status: correction in progress; prior deployment and native quality receipts below remain historical and unchanged.
 
 ## Status and observed acceptance
 Runtime source e07f66e10ec5f693959c4c39c02c3abd3456c0d8 is deployed on Mac and Deck. The existing Bolt selector/config remains pinned; only its LaunchAgent source pointer and Deck gateway/client changed. Existing Mac Python3.14 and runtime manifest SHA-2560e2f2ddb0d8c038a0e2340ebfa1d7aa24e6f4d0727aa8b8065f602ead9fedf00 were retained without downloads or re-pinning. Public gateway readiness returned200 with actual Bolt identity; protected Mac and Deck service PIDs/restart counts/source hashes remained unchanged. The retired browser VM remains absent.

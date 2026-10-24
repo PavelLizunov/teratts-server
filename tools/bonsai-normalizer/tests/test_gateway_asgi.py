@@ -152,7 +152,7 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
                         if "cleanup=true" in query:
                             self.assertEqual(text, "открой GitHub")
 
-    async def test_bolt_real_multipart_default_smart_and_explicit_optouts(self):
+    async def test_bolt_real_multipart_smart_only_and_explicit_optouts(self):
         from bolt_normalizer import BoltNormalizer, BOLT_MODEL, BOLT_REVISION
         normalizer = BoltNormalizer()
         self.gateway.bonsai_normalizer = normalizer
@@ -164,9 +164,11 @@ class TestFullGatewayASGI(unittest.IsolatedAsyncioTestCase):
         mock_response = MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.read.return_value = json.dumps(body).encode()
-        cases = (('', True), ('?mode=default', True), ('?mode=smart', True),
-                 ('?smart=true', True), ('?mode=raw', False),
-                 ('?mode=raw&smart=true', False), ('?format=false', False),
+        cases = (('', False), ('?mode=default', False), ('?smart=false', False),
+                 ('?mode=smart', True), ('?smart=true', True),
+                 ('?mode=default&smart=true', True), ('?mode=smart&smart=false', True),
+                 ('?mode=raw', False), ('?mode=raw&smart=true', False),
+                 ('?format=false', False), ('?smart=true&format=false', False),
                  ('?mode=smart&format=false&smart=true', False))
         async with self.httpx.AsyncClient(transport=self.transport, base_url='http://asgi.test') as client:
             for query, edited in cases:

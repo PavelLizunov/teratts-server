@@ -54,9 +54,6 @@ class BoltNormalizerConfig(BonsaiNormalizerConfig):
 
 
 class BoltNormalizer(BonsaiNormalizer):
-    # The gateway owns routing; historical clients do not advertise default editing.
-    edit_default_mode = True
-
     def __init__(self, config: Optional[BoltNormalizerConfig] = None) -> None:
         super().__init__(config or BoltNormalizerConfig())
 
