@@ -59,6 +59,7 @@ struct AppState {
     lexicon: LexiconReload,
     text_config: russian_only::Config,
     primary: Option<RemotePrimary>,
+    translator: Option<crate::translation::Translator>,
 }
 
 fn ort_threads() -> usize {
@@ -296,6 +297,7 @@ struct HealthResponse {
     ruaccent_mode: String,
     ruaccent_ready: bool,
     primary_configured: bool,
+    translation_configured: bool,
     sample_rate: u32,
     voices: Vec<String>,
     queue: QueueView,
@@ -328,6 +330,7 @@ struct ErrorResponse {
 
 pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
     let primary = RemotePrimary::from_env(port)?;
+    let translator = crate::translation::Translator::from_env()?;
     // Validate the installed converter and dictionary before any model access.
     let text_config = russian_only::Config::from_env()?;
     // Fail closed on an invalid explicit lexicon before touching model assets.
@@ -383,10 +386,12 @@ pub async fn serve(model_root: &Path, host: &str, port: u16) -> Result<()> {
         lexicon,
         text_config,
         primary,
+        translator,
     });
     let app = Router::new()
         .route("/health", get(health))
         .route("/tts", post(tts))
+        .route("/translate/tts", post(translate_tts))
         .route("/prepare", post(prepare))
         .layer(DefaultBodyLimit::max(BODY_LIMIT_BYTES))
         .with_state(state);
@@ -423,6 +428,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Response {
             ruaccent_mode: state.ruaccent_mode.clone(),
             ruaccent_ready: state.ruaccent_ready,
             primary_configured: state.primary.is_some(),
+            translation_configured: state.translator.is_some(),
             sample_rate: SAMPLE_RATE,
             voices: state.voices.clone(),
             queue: state.admission.view(),
@@ -503,6 +509,63 @@ async fn prepare(
         .headers_mut()
         .insert("x-teratts-synthesis-revision", header_val);
     Ok(response)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TranslateTtsRequest {
+    text: String,
+    voice: Option<String>,
+    duration_scale: Option<f32>,
+    russian_stress: Option<bool>,
+    speech_front: Option<bool>,
+}
+
+async fn translate_tts(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    request: Result<Json<TranslateTtsRequest>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    authorize(&headers, state.bearer_token.as_deref())?;
+    let Json(request) = request.map_err(ApiError::from_json_rejection)?;
+    if request.text.trim().is_empty()
+        || request.text.chars().count() > MAX_TEXT_CHARS
+        || request.text.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+    {
+        return Err(ApiError::bad_request("source text must contain 1..=2400 characters without unsupported controls"));
+    }
+    if request.voice.as_deref().is_some_and(|voice| !voice.starts_with("ru_")) {
+        return Err(ApiError::bad_request("translation requires a Russian voice"));
+    }
+    // Validate options without interpreting foreign source as Russian speech.
+    let mut speech = TtsRequest {
+        text: "Проверка".into(),
+        voice: request.voice,
+        language: Some(Language::Ru),
+        duration_scale: request.duration_scale,
+        russian_stress: request.russian_stress,
+        speech_front: request.speech_front,
+        text_mode: None,
+        input_format: InputFormat::Plain,
+    };
+    prepare_request_with_mode(
+        TtsRequest { text: speech.text.clone(), voice: speech.voice.clone(), ..speech },
+        &state.voices, state.ruaccent_ready, state.speech_front_default,
+        state.text_config.default_mode, state.text_config.converter.is_some(),
+    )?;
+    let translator = state.translator.as_ref().ok_or(ApiError {
+        status: StatusCode::SERVICE_UNAVAILABLE,
+        code: "translation_unavailable",
+        message: "translation backend is not configured".into(),
+        retry_after_ms: None,
+    })?;
+    // Fits the existing ingress's 60-second upstream waiting bound.
+    tokio::time::timeout(Duration::from_secs(55), async {
+        speech.text = translator.translate(&request.text).await.map_err(ApiError::translation)?;
+        let mut response = tts(State(Arc::clone(&state)), headers, Ok(Json(speech))).await?;
+        response.headers_mut().insert(header::CONTENT_LANGUAGE, HeaderValue::from_static("ru"));
+        Ok(response)
+    }).await.map_err(|_| ApiError::deadline())?
 }
 
 async fn tts(
@@ -1172,6 +1235,17 @@ struct ApiError {
 }
 
 impl ApiError {
+    fn translation(error: crate::translation::Error) -> Self {
+        use crate::translation::Error;
+        let (status, code) = match error {
+            Error::Busy => (StatusCode::TOO_MANY_REQUESTS, "translation_busy"),
+            Error::Timeout => (StatusCode::GATEWAY_TIMEOUT, "translation_timeout"),
+            Error::Failed => (StatusCode::BAD_GATEWAY, "translation_failed"),
+            Error::InvalidOutput => (StatusCode::BAD_GATEWAY, "translation_invalid_output"),
+        };
+        Self { status, code, message: "translation did not produce complete usable Russian text".into(), retry_after_ms: None }
+    }
+
     fn conversion(error: ConversionError) -> Self {
         let (status, code) = match error {
             ConversionError::InvalidText => (StatusCode::BAD_REQUEST, "invalid_request"),
@@ -2349,6 +2423,7 @@ mod tests {
                 converter: None,
             },
             primary,
+            translator: None,
         })
     }
 
@@ -2419,6 +2494,59 @@ mod tests {
         assert_eq!(error.status, StatusCode::UNAUTHORIZED);
     }
 
+    #[tokio::test]
+    async fn translation_endpoint_passes_only_russian_final_to_tts() {
+        use crate::remote_primary::tests::{mock, response};
+        let audio = wav::encode_mono_i16(&[vec![0.0, 0.25]]).unwrap();
+        let (primary, synthesis) = mock(response(200, "audio/wav", "compatible", &audio), Duration::ZERO, 1000).await;
+        let (translator, upstream, mut requests) = crate::translation::tests::mock(
+            crate::translation::tests::completion("Не выключайте сервер.")
+        ).await;
+        let mut state = markdown_test_state(Some(primary));
+        Arc::get_mut(&mut state).unwrap().translator = Some(translator);
+        let input = serde_json::from_value(serde_json::json!({"text":"Do not turn off the server."})).unwrap();
+        let result = translate_tts(State(state), markdown_test_headers(), Ok(Json(input))).await.unwrap();
+        assert_eq!(result.status(), StatusCode::OK);
+        assert_eq!(result.headers()[header::CONTENT_LANGUAGE], "ru");
+        assert_eq!(axum::body::to_bytes(result.into_body(), 1024).await.unwrap().as_ref(), audio.as_slice());
+        assert_eq!(requests.recv().await.unwrap()["messages"][1]["content"], "Do not turn off the server.");
+        let received = synthesis.await.unwrap();
+        let split = received.windows(4).position(|v| v == b"\r\n\r\n").unwrap() + 4;
+        let forwarded: serde_json::Value = serde_json::from_slice(&received[split..]).unwrap();
+        assert_eq!(forwarded["text"], "Не выключайте сервер.");
+        assert_eq!(forwarded["language"], "ru");
+        assert_eq!(forwarded["voice"], "ru_f1");
+        assert_eq!(forwarded["input_format"], "plain");
+        upstream.abort(); let _ = upstream.await;
+    }
+
+    #[tokio::test]
+    async fn translation_auth_configuration_and_validation_fail_before_inference() {
+        let state = markdown_test_state(None);
+        for (body, headers, status) in [
+            (serde_json::json!({"text":"Hello"}), HeaderMap::new(), StatusCode::UNAUTHORIZED),
+            (serde_json::json!({"text":"Hello"}), markdown_test_headers(), StatusCode::SERVICE_UNAVAILABLE),
+            (serde_json::json!({"text":" "}), markdown_test_headers(), StatusCode::BAD_REQUEST),
+            (serde_json::json!({"text":"x".repeat(2401)}), markdown_test_headers(), StatusCode::BAD_REQUEST),
+            (serde_json::json!({"text":"Hello", "voice":"eng_f3"}), markdown_test_headers(), StatusCode::BAD_REQUEST),
+            (serde_json::json!({"text":"Hello", "duration_scale":0}), markdown_test_headers(), StatusCode::BAD_REQUEST),
+        ] {
+            let input = serde_json::from_value(body).unwrap();
+            let error = translate_tts(State(Arc::clone(&state)), headers, Ok(Json(input))).await.unwrap_err();
+            assert_eq!(error.status, status);
+        }
+        assert!(serde_json::from_value::<TranslateTtsRequest>(serde_json::json!({"text":"Hello", "language":"en"})).is_err());
+        let (translator, upstream, mut requests) = crate::translation::tests::mock(crate::translation::tests::completion("Original untranslated text")).await;
+        let mut state = markdown_test_state(None);
+        Arc::get_mut(&mut state).unwrap().translator = Some(translator);
+        let input = serde_json::from_value(serde_json::json!({"text":"Original untranslated text"})).unwrap();
+        let error = translate_tts(State(state), markdown_test_headers(), Ok(Json(input))).await.unwrap_err();
+        assert_eq!(error.code, "translation_invalid_output");
+        assert!(requests.recv().await.is_some());
+        assert!(requests.try_recv().is_err());
+        upstream.abort(); let _ = upstream.await;
+    }
+
     #[test]
     fn synthesis_revision_binds_preparation_revision() {
         let manifest = Manifest::pinned().unwrap();
@@ -2437,6 +2565,7 @@ mod tests {
             lexicon: LexiconReload::new(None).unwrap(),
             text_config: russian_only::Config::from_env().unwrap(),
             primary: None,
+            translator: None,
         };
         let rev = current_synthesis_revision(&state);
         assert!(!rev.is_empty());

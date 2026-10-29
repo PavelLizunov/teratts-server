@@ -14,6 +14,7 @@ mod server;
 mod speechfront;
 mod tera;
 mod textnorm;
+mod translation;
 mod wav;
 
 use std::path::{Path, PathBuf};

@@ -79,6 +79,78 @@ curl -o hello.wav http://127.0.0.1:8088/tts \
 `POST /tts` returns mono 16-bit PCM WAV at 44.1 kHz. The server serializes
 inference because one engine owns the four mutable ONNX Runtime sessions.
 
+### Translate selected text and speak Russian
+
+`POST /translate/tts` accepts plain text in the source language and returns a
+Russian mono 16-bit PCM WAV at 44.1 kHz, with `Content-Language: ru`. It uses the
+same bearer authentication and installed voices as `/tts`. Existing `/tts` does
+not translate, and the STT/editor endpoints are unchanged.
+
+```sh
+curl --fail-with-body --max-time 60 \
+  https://teratts.tail9fd337.ts.net/translate/tts \
+  -H "Authorization: Bearer $TERATTS_BEARER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Do not turn off the server.","voice":"ru_f1"}' \
+  -o russian.wav
+```
+
+The request fields are `text` and optional `voice`, `duration_scale`,
+`russian_stress`, `speech_front`. Unknown fields are rejected. Only Russian voices
+are accepted; language detection belongs to the translator, not a caller-supplied
+`language`. Source and translated text are each limited to 2,400 Unicode
+characters. A translation that expands beyond that limit fails rather than being
+cut off. Split longer selections at sentence boundaries in the client. This
+endpoint does not add a hotkey or change an existing plugin's destination.
+
+Before startup, configure all three translation settings:
+
+```sh
+export TERATTS_TRANSLATION_URL=https://translator.example.com/v1/chat/completions
+export TERATTS_TRANSLATION_MODEL=your-installed-model
+# Set TERATTS_TRANSLATION_TOKEN securely; it is independent of the TTS bearer.
+export TERATTS_TRANSLATION_TIMEOUT_MS=30000
+```
+
+The backend must implement nonstreaming OpenAI-compatible chat completions and
+honor the fixed translation instruction. A fixed-purpose text editor is not a
+substitute. URLs require HTTPS, except literal loopback HTTP for managed tunnels;
+credentials, query strings and fragments in URLs are rejected. Redirects, proxies
+and automatic HTTP retries are disabled. No new dependencies or model downloads
+are required by the Rust adapter. With no configuration, this route returns
+`503/translation_unavailable`; partial configuration fails startup. `/health`
+reports `translation_configured`, not model readiness or translation quality.
+
+One translation runs at a time; overlapping requests receive
+`429/translation_busy`. The optional backend timeout is 1–120,000 milliseconds,
+default 60,000. The entire translation-plus-synthesis response has a **55-second**
+waiting bound, including the TTS queue, so a larger backend timeout cannot extend
+it. Upstream JSON is capped at 128 KiB. Rejection, transport failure, incomplete,
+empty or unusable output never falls back to speaking the foreign source. Only
+final content is spoken, not separate reasoning fields. Output checks reject
+markup/tags and require Cyrillic, but cannot prove semantic fidelity or Russian
+language; supported source languages and quality depend on the model.
+
+Successful translation enters the existing TTS queue and text preprocessing,
+including the configured text mode and optional primary. A total timeout cancels
+waiting and cooperatively cancels synthesis; it cannot forcibly interrupt an
+already-running native inference. The existing ingress/telemetry policy applies
+to this route as well.
+
+A separate Mac adapter is provided in `tools/mac_translation_service.py`. It
+reuses an installed QAD runtime's exclusive shared lock, pinned weights, resource
+gates and exact-child cleanup without editing its dictation service. Its retained
+six-second native completion deadline may reject longer selections; this is not
+a claim of unrestricted language coverage or length performance. See the
+[task and verification record](docs/specs/translate-tts.md) for deployment status.
+
+Model-free checks:
+
+```sh
+cargo test --offline --locked --bin teratts-server translation
+python3 -B -m unittest discover -s tools -p test_mac_translation_service.py -v
+```
+
 ### Markdown input
 
 `POST /tts` treats omitted `input_format` as `"markdown"`. Cleanup happens on the
