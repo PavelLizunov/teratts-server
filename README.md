@@ -99,8 +99,9 @@ The request fields are `text` and optional `voice`, `duration_scale`,
 `russian_stress`, `speech_front`. Unknown fields are rejected. Only Russian voices
 are accepted; language detection belongs to the translator, not a caller-supplied
 `language`. Source and translated text are each limited to 2,400 Unicode
-characters. A translation that expands beyond that limit fails rather than being
-cut off. Split longer selections at sentence boundaries in the client. This
+characters. Unknown fields or wrong JSON types return422; invalid values such as
+an English voice or empty text return400. A translation that expands beyond the
+length limit fails rather than being cut off. Split longer selections at sentence boundaries in the client. This
 endpoint does not add a hotkey or change an existing plugin's destination.
 
 Before startup, configure all three translation settings:
@@ -111,6 +112,12 @@ export TERATTS_TRANSLATION_MODEL=your-installed-model
 # Set TERATTS_TRANSLATION_TOKEN securely; it is independent of the TTS bearer.
 export TERATTS_TRANSLATION_TIMEOUT_MS=30000
 ```
+
+The deployed instance uses `lfm3-qad-translate-ru-v1` on Mac, backed by the
+existing LFM3-1.7B QAD-Q4_0 weights. CT221 reaches its loopback8096 listener through
+`teratts-translation-tunnel.service` on local18096; there is no public Mac API.
+The existing Omarchy provider still uses `/tts` until its caller is configured
+to send the separate translation request.
 
 The backend must implement nonstreaming OpenAI-compatible chat completions and
 honor the fixed translation instruction. A fixed-purpose text editor is not a

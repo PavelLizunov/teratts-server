@@ -1,0 +1,68 @@
+[
+  {
+    "route": "/health",
+    "status": 200,
+    "body": {
+      "status": "ready",
+      "app_git_sha": "372b7ef3b555c536a2551b6d84ea4e3e674b202d",
+      "app_sha_verified": true,
+      "model_revision": "f05ea799094571a3553904a555df3834fb0b963b",
+      "synthesis_revision": "a39a1d1f18010dbc758135de73674fe2fde7c11a8308685edd3a5c0452f5828e",
+      "verification": "verified",
+      "ruaccent_mode": "full",
+      "ruaccent_ready": true,
+      "primary_configured": false,
+      "translation_configured": true,
+      "sample_rate": 44100,
+      "voices": [
+        "eng_f3",
+        "eng_f4_whisper",
+        "eng_f5",
+        "eng_m2_whisper",
+        "eng_m3",
+        "eng_m4",
+        "ru_f1",
+        "ru_f2",
+        "ru_m1",
+        "ru_m5"
+      ],
+      "queue": {
+        "active": 0,
+        "waiting": 0,
+        "capacity": 15
+      }
+    }
+  },
+  {
+    "case": "unauthorized",
+    "status": 401,
+    "body": {
+      "code": "unauthorized",
+      "message": "valid bearer token required"
+    }
+  },
+  {
+    "case": "empty",
+    "status": 400,
+    "body": {
+      "code": "invalid_request",
+      "message": "source text must contain 1..=2400 characters without unsupported controls"
+    }
+  },
+  {
+    "case": "english-voice",
+    "status": 400,
+    "body": {
+      "code": "invalid_request",
+      "message": "translation requires a Russian voice"
+    }
+  },
+  {
+    "case": "unknown-option",
+    "status": 422,
+    "body": {
+      "code": "invalid_json",
+      "message": "request body is not valid TTS JSON"
+    }
+  }
+]

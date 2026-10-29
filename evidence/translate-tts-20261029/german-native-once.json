@@ -1,0 +1,19 @@
+{
+  "source": "Bitte speichern Sie die Datei. Starten Sie den Computer nicht neu.",
+  "status": 200,
+  "body": {
+    "object": "chat.completion",
+    "model": "lfm3-qad-translate-ru-v1",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Пожалуйста, сохраните файл. Не перезапускайте компьютер."
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "elapsed_seconds": 2.3603021670132875
+}

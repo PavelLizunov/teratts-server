@@ -1,0 +1,18 @@
+{
+  "source_revision": "372b7ef3b555c536a2551b6d84ea4e3e674b202d",
+  "linux_binary_sha256": "3796f0f6a4e23082e653e81c040082c6a47af2eb1240614c21fc6772c1d0f268",
+  "deployed": {"mac_translation": true, "ct221_tts": true, "health_exact_sha_verified": true, "translation_configured": true},
+  "checks": {
+    "python_adapter": {"passed": 4, "failed": 0, "exit_code": 0},
+    "mac_rust_suite": {"passed": 150, "ignored": 4, "failed": 0, "exit_code": 0},
+    "linux_rust_suite": {"passed": 152, "ignored": 4, "failed": 0, "exit_code": 0},
+    "linux_release_build": {"exit_code": 0},
+    "native_translation": {"requests": 4, "http_200": 4, "languages": ["English", "German", "Chinese"], "all_children_reaped": true, "semantic_issue": "First English case added morning to an unspecified time at ten; protocol success is not fidelity."},
+    "public_https": {"health": 200, "unauthorized": 401, "empty_source": 400, "english_voice": 400, "unknown_field": 422},
+    "wav_handoff": "model-free mock HTTP synthesis; exact WAV bytes verified",
+    "production_audio": "not run; available local audio tool does not target this TeraTTS endpoint",
+    "physical_playback": "not verified"
+  },
+  "preservation": {"existing_editor_health": [200, 200], "tts_telemetry": "active and unchanged", "mac_serve": "restored original empty configuration", "linux_worker_reservation": "released", "active_git_branch": "task/preserve-pending-20261009-25", "original_git_index": "unchanged"},
+  "tool_jobs": {"linux_tests_and_build": "bash-e569e531de404752", "activation": "bash-1f3cc5b4fcc54236", "worker_release": "bash-190dc782a07c48a9", "public_http_checks": "bash-6fa12270927c4714", "final_health": "bash-23ccd1f592e14fd4"}
+}

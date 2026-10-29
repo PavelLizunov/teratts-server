@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "model": "lfm3-qad-translate-ru-v1",
+  "loaded": false,
+  "last_runtime": {
+    "child_pid": 11240,
+    "port": 52779,
+    "reaped": true,
+    "seconds": 2.2839409168809652,
+    "sampled_peak_rss_GiB": 1.34771728515625,
+    "min_available_proxy_GiB": 6.821502685546875,
+    "max_swap_growth_GiB": 0.0,
+    "load_seconds": 0.2767275837250054,
+    "native_seconds": 1.93907858338207
+  },
+  "native_timeout_seconds": 6,
+  "max_source_characters": 2400
+}

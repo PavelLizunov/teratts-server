@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "body": {
+    "object": "chat.completion",
+    "model": "lfm3-qad-translate-ru-v1",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Собрание начинается завтра в десять утра. Пожалуйста, не выключайте сервер."
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "elapsed_seconds": 2.43403354100883
+}

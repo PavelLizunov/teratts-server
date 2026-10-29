@@ -1,0 +1,19 @@
+{
+  "source": "The file contains 17 lines. Do not delete the backup.",
+  "status": 200,
+  "body": {
+    "object": "chat.completion",
+    "model": "lfm3-qad-translate-ru-v1",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "В файле 17 строк. Не удаляйте резервную копию."
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "elapsed_seconds": 2.3272834168747067
+}
