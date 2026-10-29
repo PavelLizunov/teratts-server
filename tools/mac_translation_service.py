@@ -13,6 +13,40 @@ from pathlib import Path
 import re
 import signal
 import sys
+import time
+import types
+import urllib.request
+
+
+def translation_transport(guard, base_url, timeout=6):
+    """Validate the full native envelope before the editor transport loses fields."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+
+    def send(body):
+        request = urllib.request.Request(
+            base_url + '/v1/chat/completions', data=json.dumps(body, ensure_ascii=False).encode(),
+            headers={'Content-Type': 'application/json'})
+        started = time.monotonic()
+        with guard.absolute_deadline(timeout):
+            with opener.open(request, timeout=timeout) as response:
+                raw = response.read(128*1024+1)
+        if len(raw) > 128*1024:
+            raise ValueError('Oversized translation response')
+        response = guard.strict_json(raw)
+        choices = response.get('choices')
+        if response.get('model') != body['model'] or type(choices) is not list or len(choices) != 1:
+            raise ValueError('Invalid translation envelope')
+        choice = choices[0]
+        message = choice['message']
+        if any(message.get(field) is not None for field in ('refusal', 'function_call')) or message.get('tool_calls'):
+            raise ValueError('Native refusal or tool call')
+        return dict(content=message.get('content'), finish_reason=choice.get('finish_reason'),
+                    elapsed_seconds=time.monotonic()-started)
+    return send
 
 MODEL_ID = 'lfm3-qad-translate-ru-v1'
 SYSTEM_PROMPT = (
@@ -136,6 +170,12 @@ def main():
     sys.path.insert(0, str(args.runtime_dir.resolve()))
     service = importlib.import_module('guarded_service')
     runtime = importlib.import_module('guarded_runtime')
+    # This separate process substitutes only its native response reader. Existing
+    # editor processes and installed files retain their original transport.
+    original_guard = runtime.guard
+    translation_guard = types.SimpleNamespace(**vars(original_guard))
+    translation_guard.transport = lambda base_url, timeout=6: translation_transport(original_guard, base_url, timeout)
+    runtime.guard = translation_guard
     token = args.token_file.read_text().strip()
     if not 32 <= len(token) <= 512 or not token.isascii() or any(c.isspace() for c in token):
         parser.error('Invalid bearer token')

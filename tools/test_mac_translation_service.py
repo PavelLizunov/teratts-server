@@ -1,5 +1,9 @@
 import copy
 import unittest
+from unittest.mock import patch
+import contextlib
+import json
+from types import SimpleNamespace
 
 import mac_translation_service as translation
 
@@ -45,6 +49,29 @@ class TranslationTests(unittest.TestCase):
         self.assertEqual(len(engine.calls), 1)
         self.assertEqual(engine.calls[0]['model'], 'native-alias')
         self.assertEqual(engine.calls[0]['messages'][1]['content'], 'Do not stop the server.')
+
+    def test_native_envelope_is_validated_before_normalization(self):
+        valid = dict(model='native', choices=[dict(finish_reason='stop', message=dict(content='Привет'))])
+        invalids = []
+        for field, value in [('refusal', 'Refused'), ('function_call', {'name': 'x'}), ('tool_calls', [{'id': 'x'}])]:
+            invalid = copy.deepcopy(valid)
+            invalid['choices'][0]['message'][field] = value
+            invalids.append(invalid)
+        invalid = copy.deepcopy(valid)
+        invalid['choices'].append(copy.deepcopy(invalid['choices'][0]))
+        invalids.append(invalid)
+        for response, accepted in [(valid, True)] + [(x, False) for x in invalids]:
+            raw = json.dumps(response).encode()
+            stream = SimpleNamespace(read=lambda limit: raw)
+            opener = SimpleNamespace(open=lambda *a, **kw: contextlib.nullcontext(stream))
+            guard = SimpleNamespace(absolute_deadline=lambda timeout: contextlib.nullcontext(), strict_json=json.loads)
+            with patch.object(translation.urllib.request, 'build_opener', return_value=opener):
+                send = translation.translation_transport(guard, 'http://127.0.0.1:1')
+                if accepted:
+                    self.assertEqual(send({'model': 'native'})['content'], 'Привет')
+                else:
+                    with self.assertRaises(ValueError):
+                        send({'model': 'native'})
 
     def test_invalid_final_never_falls_back(self):
         for content, reason, tools in [('Не', 'length', []), ('Hello', 'stop', []),

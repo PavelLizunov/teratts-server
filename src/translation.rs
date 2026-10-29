@@ -340,7 +340,13 @@ pub(crate) mod tests {
             parse_translation(&serde_json::to_vec(&completion("Привет, мир!")).unwrap()).unwrap(),
             "Привет, мир!"
         );
-        assert_eq!(parse_translation(&serde_json::to_vec(&completion("Первая строка.\r\nВторая строка.")).unwrap()).unwrap(), "Первая строка.\nВторая строка.");
+        assert_eq!(
+            parse_translation(
+                &serde_json::to_vec(&completion("Первая строка.\r\nВторая строка.")).unwrap()
+            )
+            .unwrap(),
+            "Первая строка.\nВторая строка."
+        );
         for text in [
             "",
             "   ",
