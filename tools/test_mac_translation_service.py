@@ -42,13 +42,16 @@ class TranslationTests(unittest.TestCase):
             translation.source_text(payload)
 
     def test_single_native_call_and_final_only(self):
-        engine = Engine(dict(content='Не останавливайте сервер.', finish_reason='stop', reasoning='private', tool_calls=[]))
+        engine = Engine(dict(content=json.dumps({'translation': 'Не останавливайте сервер.'}),
+                             finish_reason='stop', reasoning='private', tool_calls=[]))
         result = translation.translate(engine, 'native-alias', 'Do not stop the server.')
         self.assertEqual(result['choices'][0]['message']['content'], 'Не останавливайте сервер.')
         self.assertNotIn('reasoning', str(result))
         self.assertEqual(len(engine.calls), 1)
         self.assertEqual(engine.calls[0]['model'], 'native-alias')
-        self.assertEqual(engine.calls[0]['messages'][1]['content'], 'Do not stop the server.')
+        source = engine.calls[0]['messages'][1]['content'].split('\n', 1)[1]
+        self.assertEqual(json.loads(source), {'source_text': 'Do not stop the server.'})
+        self.assertEqual(engine.calls[0]['response_format'], translation.TRANSLATION_FORMAT)
 
     def test_native_envelope_is_validated_before_normalization(self):
         valid = dict(model='native', choices=[dict(finish_reason='stop', message=dict(content='Привет'))])
@@ -77,7 +80,7 @@ class TranslationTests(unittest.TestCase):
         for content, reason, tools in [('Не', 'length', []), ('Hello', 'stop', []),
                                       ('', 'stop', []), ('<think>Да</think>', 'stop', []),
                                       ('я'*2401, 'stop', []), ('Привет', 'stop', ['tool'])]:
-            engine = Engine(dict(content=content, finish_reason=reason, tool_calls=tools))
+            engine = Engine(dict(content=json.dumps({'translation': content}), finish_reason=reason, tool_calls=tools))
             with self.assertRaises(ValueError):
                 translation.translate(engine, 'native-alias', 'Hello')
             self.assertEqual(len(engine.calls), 1)

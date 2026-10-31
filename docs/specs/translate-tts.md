@@ -43,6 +43,53 @@ Source revision `372b7ef3b555c536a2551b6d84ea4e3e674b202d` is published on `chec
 
 Real native translations were checked, and translation-to-WAV byte handoff passed with mock HTTP synthesis. Actual end-to-end production audio and physical playback are not yet verified: this session's available local audio generator targets YuE2/Music3/Drama3 rather than the installed TeraTTS endpoint, and the session requires local audio generation through that tool rather than shell/browser POSTs. Do not substitute an unrelated voice model or label mock WAV as real production speech. Deployed public HTTPS health confirmed exact runtime372b7ef and translation_configured:true; unauthenticated/empty/English-voice/unknown-option requests returned401/400/400/422 respectively. Initial smoke expectation400 for unknown fields was corrected to Axum's actual422; application behavior was not altered to match the test. Receipt: `evidence/translate-tts-20261029/deployed-http.json`. No Omarchy hotkey/provider configuration was changed. Source language is auto-detected but no model can be claimed to support every language from these samples; long text may exceed the retained six-second native deadline.
 
+## Follow-up: native task confusion repair (2026-10-30)
+
+The Omarchy consumer reported HTTP502 for a412-character source after5.2seconds.
+The private source was not read. A synthetic153-character English imperative
+reproduced the root cause through the actual pinned Mac engine: it returned an
+English conversational answer about being unable to modify files, not a Russian
+translation. The adapter correctly rejected that output. This failure was not
+a shortcut conflict, input-size ceiling or confirmed timeout. A plain quoted
+prompt then echoed the original before the translation, which was also not an
+acceptable speech result.
+
+The smallest working repair stays inside `tools/mac_translation_service.py`.
+The native-only Russian instruction labels source text as a JSON field, requests
+the existing native JSON-schema mode, and extracts exactly one `translation`
+string before the existing final-output checks. Public ingress model ID/prompt,
+Rust API, token, native binary/weights, shared lock, six-second deadline, memory
+checks, exact-child cleanup, existing STT/editor and ordinary `/tts` are unchanged.
+Health now reports `native_profile:russian-json-v2`. Existing mock fixtures were
+adjusted for the native envelope but not executed in this task.
+
+The Mac adapter was installed atomically at its existing path; loaded file SHA256
+is `96453911faed3e0faf15498d81560d70299cfee2e08fe9d269fa84cfc5ca22ca`.
+Only `com.localforge.teratts-translation` was reloaded. Authenticated loopback
+health reports the new profile. The existing editor PID76262 was preserved.
+The management path is existing `dsh@harness-test` then its configured `ssh mm4`;
+direct desktop-key access to Mac/server is unavailable. No key was copied.
+
+Observed repair evidence, not a general quality claim:
+
+- The same153-character synthetic passage through production `/translate/tts`
+  returned HTTP200,995122 WAV bytes in4.210seconds. WAV is mono,16bit,44100Hz,
+  497539frames/11.282seconds; SHA256
+  `5a42cfcf6732d75a1e3eab22f2baa3666915dc80d192bd174d6616cbc7a9f2dd`.
+- A426-character synthetic passage through the installed Mac service returned
+  HTTP200 and a complete Russian translation in4.006seconds. It retained17lines
+  and backup/server negations but added morning to ambiguous at ten. This known
+  model-quality limitation remains; the schema is not semantic validation.
+- The installed Omarchy CLI returned exit0 for the426-character passage with
+  real translation/TTS/mpv null output configured. Its old player-state file
+  was not available for a subsequent read, so this alone does not establish
+  completed playback or physical hearing. Existing Super+Alt+T/Y shortcuts
+  were not changed.
+
+No test suite, new tests, lint, scan, backup or independent model review ran.
+The exact private412-character input, physical shortcut and sound, broader
+language coverage, long-text deadline and semantic quality remain unverified.
+
 ## Documentation delivery gate
 
 PASS: no fabricated quality/performance claims; actual tests and native observations are separated. PASS: API, limits, failure behavior and deployment state are explicit. PASS: existing README structure retained, task-specific additions only.

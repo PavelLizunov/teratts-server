@@ -146,10 +146,14 @@ to this route as well.
 
 A separate Mac adapter is provided in `tools/mac_translation_service.py`. It
 reuses an installed QAD runtime's exclusive shared lock, pinned weights, resource
-gates and exact-child cleanup without editing its dictation service. Its retained
-six-second native completion deadline may reject longer selections; this is not
-a claim of unrestricted language coverage or length performance. See the
-[task and verification record](docs/specs/translate-tts.md) for deployment status.
+gates and exact-child cleanup without editing its dictation service. The
+`russian-json-v2` native profile places source text in a quoted JSON field and
+extracts only the schema-constrained `translation` string. This avoids the
+reproduced conversational reply to source instructions; it does not guarantee
+semantic fidelity. The public API and fixed ingress instruction are unchanged.
+Its retained six-second native completion deadline may reject longer selections;
+this is not a claim of unrestricted language coverage or length performance.
+See the [task and verification record](docs/specs/translate-tts.md) for deployment status.
 
 Model-free checks:
 
